@@ -25,19 +25,38 @@
 
 #include "j9.h"
 
+#include "JITBuilderHelper.hpp"
 #include "ilgen/MethodBuilder.hpp"
+#include "ilgen/TypeDictionary.hpp"
 
 class JavaMethodCallbackGen : public TR::MethodBuilder
 {
 /* fields */
-	public:
-	J9VMThread *vmThread;
-
+	private:
+	J9VMThread *_vmThread;
+	J9JavaVM *_vm;
+	jobject _anonInstance;
+	jmethodID _methodID;
+	J9Class * _returnType;
+	J9Class **_paramTypes;
+	UDATA _paramTypeLen;
+	TR::TypeDictionary *_dictionary;
+	U_16 *_paramIdentifiers;
 
 /* methods */
+	private:
+	char* getCallInFunctionName();
+	char* getCallInFunctionLineNumber();
+	void* getCallInFunctionAddress();
+	char* getSignatureFromJ9Class(J9Class *type);
+	TR::IlType* getILTypeFromJ9Class(J9Class *type);
+
 	public:
-	JavaMethodCallbackGen(J9VMThread *vmThread, TR::TypeDictionary *types);
+	JavaMethodCallbackGen(TR::TypeDictionary *typeDictionary);
+	JITBuilderHelperReturnCode init(J9VMThread *vmThread, jobject anonInstance, jmethodID methodID, J9Class *returnType, J9Class **paramTypes, UDATA typeLen);
+	void destroy();
 	virtual bool buildIL();
+
 };
 
 

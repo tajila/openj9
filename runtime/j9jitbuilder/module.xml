@@ -26,6 +26,7 @@
 	<artifact type="shared" name="j9jitbuilder">
 		<include-if condition="spec.flags.J9VM_OPT_PANAMA"/>
 		<phase>core</phase>
+
 		<includes>
 			<include path="j9include"/>
 			<include path="j9oti"/>
@@ -38,7 +39,8 @@
 		<makefilestubs>
 			<makefilestub data="DLL_LD=g++"/>
 			<makefilestub data="UMA_LINK_PATH+=-L$(OMR_DIR)/jitbuilder/release"/>
-			<makefilestub data="CXXFLAGS+=-std=c++0x -fno-rtti -fno-threadsafe-statics"/>		
+			<makefilestub data="CXXFLAGS+=-std=c++0x -fno-rtti -fno-threadsafe-statics"/>
+			<makefilestub data="UMA_J9JIT_BUILDER=1"/>		
 		</makefilestubs>
 		<libraries>
 			<library name="jitbuilder" type="external"/>

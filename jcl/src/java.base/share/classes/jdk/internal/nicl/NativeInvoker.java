@@ -28,6 +28,7 @@ import java.nicl.*;
 import java.nicl.metadata.NativeType;
 import java.nicl.types.*;
 import java.nicl.types.Pointer;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 
 import com.ibm.oti.vm.VMLangInvokeAccess;
@@ -58,6 +59,8 @@ class NativeInvoker {
 	private static MethodHandle getStructAddr;
 
 	private static MethodHandle getStructReturn;
+	
+	private static MethodHandle generateFunctionPointerBinding;
 
 	private String[] layoutStrings = null;
 
@@ -67,6 +70,7 @@ class NativeInvoker {
 			getPtrReturn = LOOKUP.findStatic(NativeInvoker.class, "getPointerReturn", MethodType.methodType(Pointer.class, Type.class, long.class)); //$NON-NLS-1$
 			getStructAddr = LOOKUP.findStatic(NativeInvoker.class, "getStructAddress", MethodType.methodType(long.class, Reference.class)); //$NON-NLS-1$
 			getStructReturn = LOOKUP.findStatic(NativeInvoker.class, "getStructReturn", MethodType.methodType(Reference.class, LayoutType.class, long.class)); //$NON-NLS-1$
+			generateFunctionPointerBinding = LOOKUP.findStatic(NativeInvoker.class, "generateFunctionPointerBinding", MethodType.methodType(long.class, Object.class)); //$NON-NLS-1$
 		} catch (IllegalAccessException | NoSuchMethodException e) {
 			throw new RuntimeException(e);
 		}
@@ -121,6 +125,10 @@ class NativeInvoker {
 				NativeType nativeType = ptype.getAnnotation(java.nicl.metadata.NativeType.class);
 				String argLayoutString = Util.sizeof(ptype) + nativeType.layout();
 				addLayoutString(argLayoutString, i+1);
+			} else if (Util.isFunctionalInterface(ptype)) {
+				ptypes[i] = long.class;
+				filters[i] = generateFunctionPointerBinding;
+				isFilteredArg = true;
 			} else {
 				ptypes[i] = ptype;
 				filters[i] = null;
@@ -174,6 +182,75 @@ class NativeInvoker {
 		/* TODO This is pointing to j9mem_allocate_memory, need to think about how to free it */
 		Pointer<?> ptr = RuntimeSupport.createPtr(addr, returnLayoutType);
 		return (Reference<?>) ptr.deref();
+	}
+	
+	private static long generateFunctionPointerBinding(Object anonInstance) {
+		Class<?> lambdaClass = anonInstance.getClass();
+		Method method = null;
+		Method[] arrayOfMethod;
+		int j = (arrayOfMethod = lambdaClass.getDeclaredMethods()).length;
+		for (int i = 0; i < j; i++) {
+			Method m = arrayOfMethod[i];
+			if (m.getName().contains("fn")) { //$NON-NLS-1$
+				method = m;
+			}
+		}
+		
+		long addr = generateNativeFunctionPointerBinding(MethodType.methodType(long.class, MethodType.class, Class.class, Class[].class, Class.class, Object.class, String.class), 
+													method.getReturnType(), 
+													method.getParameterTypes(), 
+													anonInstance.getClass(),
+													anonInstance,
+													getSignature(method));
+		return addr;
+	}
+	  
+	private final static native long generateNativeFunctionPointerBinding(MethodType mt, Class<?> returnType, Class<?>[] parameterTypes, Class<? extends Object> anonClass, Object anonInstance, String methodSignature);
+	  
+	private static String getSignature(Method method) {
+		String str = "("; //$NON-NLS-1$
+		Class<?>[] parameterTypes = method.getParameterTypes();
+
+		for (int i = 0; i < parameterTypes.length; i++) {
+			Class<?> clazz = parameterTypes[i];
+			str = str + getSignature(clazz);
+		}
+		str = str + ")" + getSignature(method.getReturnType()); //$NON-NLS-1$
+		return str;
+	}
+
+	private static String getSignature(Class<?> clazz) {
+		if ((void.class == clazz) || (Void.class == clazz)) {
+			return "V"; //$NON-NLS-1$
+		}
+		if (byte.class == clazz) {
+			return "B"; //$NON-NLS-1$
+		}
+		if (short.class == clazz) {
+			return "S"; //$NON-NLS-1$
+		}
+		if (int.class == clazz) {
+			return "I"; //$NON-NLS-1$
+		}
+		if (long.class == clazz) {
+			return "J"; //$NON-NLS-1$
+		}
+		if (char.class == clazz) {
+			return "C"; //$NON-NLS-1$
+		}
+		if (boolean.class == clazz) {
+			return "Z"; //$NON-NLS-1$
+		}
+		if (float.class == clazz) {
+			return "F"; //$NON-NLS-1$
+		}
+		if (double.class == clazz) {
+			return "D"; //$NON-NLS-1$
+		}
+		if (clazz.isArray()) {
+			return "[" + getSignature(clazz.getComponentType()); //$NON-NLS-1$
+		}
+		return "L" + clazz.getName(); //$NON-NLS-1$
 	}
 }
 

@@ -60,10 +60,6 @@ typedef union J9GenericJNIID {
 
 #define MAX_LOCAL_CAPACITY (64 * 1024)
 
-#define J9JNIID_METHOD  0
-#define J9JNIID_FIELD  1
-#define J9JNIID_STATIC  2
-
 static void * JNICALL getDirectBufferAddress (JNIEnv *env, jobject buf);
 static jmethodID JNICALL getMethodID (JNIEnv *env, jclass clazz, const char *name, const char *signature);
 static void JNICALL exceptionClear (JNIEnv *env);
@@ -130,7 +126,6 @@ static jbyteArray JNICALL newByteArray (JNIEnv *env, jsize length);
 static jint JNICALL monitorEnter(JNIEnv* env, jobject obj);
 static jint JNICALL monitorExit(JNIEnv* env, jobject obj);
 static jboolean JNICALL isInstanceOf(JNIEnv *env, jobject obj, jclass clazz);
-static void* getMethodOrFieldID(JNIEnv *env, jclass classReference, const char *name, const char *signature, UDATA flags);
 static jobjectRefType JNICALL getObjectRefType(JNIEnv *env, jobject obj);
 
 static void * JNICALL getPrimitiveArrayCritical(JNIEnv *env, jarray array, jboolean *isCopy);
@@ -590,25 +585,25 @@ static UDATA gpProtectedSetCurrentException(void * entryArg)
 
 static jfieldID JNICALL getFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig)
 {
-	return (jfieldID)getMethodOrFieldID(env, clazz, name, sig, J9JNIID_FIELD);
+	return (jfieldID)getMethodOrFieldID(env, clazz, name, sig, J9JNIID_FIELD, TRUE);
 }
 
 
 static jfieldID JNICALL getStaticFieldID(JNIEnv *env, jclass clazz, const char *name, const char *sig)
 {
-	return (jfieldID)getMethodOrFieldID(env, clazz, name, sig, J9JNIID_FIELD | J9JNIID_STATIC);
+	return (jfieldID)getMethodOrFieldID(env, clazz, name, sig, J9JNIID_FIELD | J9JNIID_STATIC, TRUE);
 }
 
 
 static jmethodID JNICALL getStaticMethodID(JNIEnv *env, jclass clazz, const char *name, const char *signature)
 {
-	return (jmethodID)getMethodOrFieldID(env, clazz, name, signature, J9JNIID_METHOD | J9JNIID_STATIC);
+	return (jmethodID)getMethodOrFieldID(env, clazz, name, signature, J9JNIID_METHOD | J9JNIID_STATIC, TRUE);
 }
 
 
 static jmethodID JNICALL getMethodID(JNIEnv *env, jclass clazz, const char *name, const char *signature)
 {
-	return (jmethodID)getMethodOrFieldID(env, clazz, name, signature, J9JNIID_METHOD);
+	return (jmethodID)getMethodOrFieldID(env, clazz, name, signature, J9JNIID_METHOD, TRUE);
 }
 
 
@@ -1622,8 +1617,8 @@ j9jni_deleteLocalRef(JNIEnv *env, jobject localRef)
 	}
 }
 
-static void*
-getMethodOrFieldID(JNIEnv *env, jclass classReference, const char *name, const char *signature, UDATA flags)
+void*
+getMethodOrFieldID(JNIEnv *env, jclass classReference, const char *name, const char *signature, UDATA flags, BOOLEAN requiresAccess)
 {
 	/* TODO: this all needs to be GP protected, since it may throw an exception */
 	J9VMThread* vmThread = (J9VMThread*)env;
@@ -1637,7 +1632,9 @@ getMethodOrFieldID(JNIEnv *env, jclass classReference, const char *name, const c
 
 	Trc_VM_getMethodOrFieldID_Entry(vmThread, name, signature, classReference, isField, isStatic);
 
-	VM_VMAccess::inlineEnterVMFromJNI(vmThread);
+	if (requiresAccess) {
+		VM_VMAccess::inlineEnterVMFromJNI(vmThread);
+	}
 
 	/* TODO: normalize name and signature? */
 
@@ -1729,7 +1726,9 @@ retry:
 		}
 	}
 
-	VM_VMAccess::inlineExitVMToJNI(vmThread);
+	if (requiresAccess) {
+		VM_VMAccess::inlineExitVMToJNI(vmThread);
+	}
 
 	if (id == NULL) {
 		ensurePendingJNIException(env);

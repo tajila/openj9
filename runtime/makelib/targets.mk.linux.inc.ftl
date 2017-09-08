@@ -348,13 +348,17 @@ UMA_DLL_LINK_POSTFLAGS+=-lm -lpthread -lc -Wl,-z,origin,-rpath,\$$ORIGIN,--disab
 <#else>
 UMA_DLL_LINK_FLAGS+=-shared
 ifdef UMA_USING_LD_TO_LINK
+ifndef UMA_J9JIT_BUILDER
   UMA_DLL_LINK_FLAGS+=-Map $(UMA_TARGET_NAME).map
   UMA_DLL_LINK_FLAGS+=--version-script $(UMA_TARGET_NAME).exp
+endif
   UMA_DLL_LINK_FLAGS+=-soname=$(UMA_DLLFILENAME)
   UMA_DLL_LINK_FLAGS+=-z origin -rpath \$$ORIGIN --disable-new-dtags
 else
+ifndef UMA_J9JIT_BUILDER
   UMA_DLL_LINK_FLAGS+=-Wl,-Map=$(UMA_TARGET_NAME).map
   UMA_DLL_LINK_FLAGS+=-Wl,--version-script,$(UMA_TARGET_NAME).exp
+endif
   UMA_DLL_LINK_FLAGS+=-Wl,-soname=$(UMA_DLLFILENAME)
   UMA_DLL_LINK_FLAGS+=-Xlinker -z -Xlinker origin -Xlinker -rpath -Xlinker \$$ORIGIN -Xlinker --disable-new-dtags
 endif

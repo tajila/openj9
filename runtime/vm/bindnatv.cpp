@@ -284,6 +284,7 @@ static J9OutOfLineINLMapping outOfLineINLmappings[] = {
 #if defined(J9VM_OPT_PANAMA)
 	{ "Java_java_lang_invoke_NativeMethodHandle_initJ9NativeCalloutDataRef___3Ljava_lang_String_2", OutOfLineINL_java_lang_invoke_NativeMethodHandle_initJ9NativeCalloutDataRef },
 	{ "Java_java_lang_invoke_NativeMethodHandle_freeJ9NativeCalloutDataRef__", OutOfLineINL_java_lang_invoke_NativeMethodHandle_freeJ9NativeCalloutDataRef },
+	{ "Java_jdk_internal_nicl_NativeInvoker_generateNativeFunctionPointerBinding__Ljava_lang_invoke_MethodType_2Ljava_lang_Class_2_3Ljava_lang_Class_2Ljava_lang_Class_2Ljava_lang_Object_2Ljava_lang_String_2", OutOfLineINL_jdk_internal_nicl_NativeInvoker_generateNativeFunctionPointerBinding },
 #endif /* defined(J9VM_OPT_PANAMA) */
 };
 

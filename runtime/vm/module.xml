@@ -40,7 +40,7 @@
 		<export name="J9_GetDefaultJavaVMInitArgs"/>
 		<export name="J9_GetInterface"/>
 	</exports>
-
+ 
 	<artifact type="shared" name="j9vm" bundle="jvm" loadgroup="">
 		<include-if condition="spec.flags.module_vm" />
 		<options>
@@ -66,11 +66,16 @@
 			<include path="j9util"/>
 			<include path="j9gcinclude"/>
 			<include path="$(OMR_DIR)/gc/include" type="relativepath"/>
+			<include path="$(OMR_DIR)/compiler" type="relativepath"/>
+			<include path="$(OMR_DIR)/jitbuilder/release/include" type="relativepath"/>	
 			<include path="j9shr_include"/>
+			<include path="j9jitbuilder" type="rootpath">
+				<include-if condition="spec.flags.J9VM_OPT_PANAMA"/>
+			</include>	
+			<include path="j9gcgluejava"/>
 			<include path="port/zos390" type="rootpath">
 				<include-if condition="spec.zos_390.*"/>
 			</include>	
-			<include path="j9gcgluejava"/>
 		</includes>
 		<makefilestubs>
 			<makefilestub data="UMA_ENABLE_ALL_WARNINGS=1"/>
@@ -99,6 +104,9 @@
 			<makefilestub data="ifneq ($(OPENJ9_BUILD),true)"/>
 			<makefilestub data="vmprops$(UMA_DOT_O) : CFLAGS += -DJAVA_VENDOR='&quot;IBM Corporation&quot;' -DJAVA_VENDOR_URL='&quot;http://www.ibm.com&quot;' -DJAVA_VM_NAME='&quot;IBM J9 VM&quot;'"/>
 			<makefilestub data="endif"/>
+			<makefilestub data="CXXFLAGS += -std=c++0x">
+				<include-if condition="spec.flags.J9VM_OPT_PANAMA"/>
+			</makefilestub>
 		</makefilestubs>
 		<vpaths>
 			<vpath pattern="stackswap.m4" path="wi32" augmentObjects="true" type="relativepath">

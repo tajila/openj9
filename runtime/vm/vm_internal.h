@@ -384,6 +384,25 @@ int32_t
 j9gs_deinitializeThread(struct J9VMThread *vmThread);
 #endif
 
+#define J9JNIID_METHOD  0
+#define J9JNIID_FIELD  1
+#define J9JNIID_STATIC  2
+
+/**
+ * Returns a JMethod or JField JNI ID
+ *
+ * @param env[in] 				the jni envrionment (currentThread)
+ * @param classReference[in] 	classRef to the class which is being searched
+ * @param name[in]				name of the field or method that is being searched
+ * @param signature[in]			jni signature of the field or method that is being searched
+ * @param flags[in]				search options, J9JNIID_METHOD for method, J9JNIID_FIELD for field and J9JNIID_STATIC static members
+ * @param requiresAccess[in]	flag that indicates whether the caller requires vmAccess or if the caller already has it
+ *
+ * @returns NON-NULL if successful, NULL otherwise
+ */
+void*
+getMethodOrFieldID(JNIEnv *env, jclass classReference, const char *name, const char *signature, UDATA flags, BOOLEAN requiresAccess);
+
 #ifdef __cplusplus
 }
 #endif

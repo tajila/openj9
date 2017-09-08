@@ -20,7 +20,12 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
  *******************************************************************************/
 
+
 #include "OutOfLineINL.hpp"
+
+#include "vm_internal.h"
+#include "vm_api.h"
+#include "stackwalk.h"
 
 #include "BytecodeAction.hpp"
 #include "UnsafeAPI.hpp"
@@ -28,9 +33,15 @@
 
 #ifdef J9VM_OPT_PANAMA
 #include "FFITypeHelpers.hpp"
-#endif /* J9VM_OPT_PANAMA */
+#include "JITBuilderHelper.hpp"
+#endif
+
+
 
 extern "C" {
+
+
+#define SIGNATURE_LENGTH 128
 
 #ifdef J9VM_OPT_PANAMA
 /* java.lang.invoke.NativeMethodHandle: private native void initJ9NativeCalloutDataRef(java.lang.String[] argLayoutStrings); */
@@ -199,6 +210,129 @@ done:
 	VM_OutOfLineINL_Helpers::returnVoid(currentThread, 1);
 	return EXECUTE_BYTECODE;
 }
-#endif /* J9VM_OPT_PANAMA */
+
+/* jdk.internal.nicl.NativeInvoker:
+ * private final static native long generateNativeFunctionPointerBinding(
+ * 																			MethodType mt,
+ * 																			Class<?> returnType,
+ * 																			Class<?>[] parameterTypes,
+ * 																			Class<? extends Object> anonClass,
+ * 																			Object anonInstance,
+ * 																			String methodSignature
+ * 																		)
+ */
+
+VM_BytecodeAction
+OutOfLineINL_jdk_internal_nicl_NativeInvoker_generateNativeFunctionPointerBinding(J9VMThread *currentThread, J9Method *method)
+{
+	J9JavaVM *vm = currentThread->javaVM;
+	j9object_t methodSignatureObj = *(j9object_t*)currentThread->sp;
+	jobject anonInstance = (jobject)(currentThread->sp + 1);
+	jclass anonClassRef = (jclass)(currentThread->sp + 2);
+	j9object_t paramTypeArrayObj = *(j9object_t*)(currentThread->sp + 3);
+	j9object_t returnTypeObj = *(j9object_t*)(currentThread->sp + 4);
+	j9object_t methodType = *(j9object_t*)(currentThread->sp + 5);
+	J9InternalVMFunctions* vmFuncs = vm->internalVMFunctions;
+	VM_BytecodeAction rc = EXECUTE_BYTECODE;
+	I_64 functionAddress = 0;
+	char buf[SIGNATURE_LENGTH];
+	char *signature = buf;
+	U_16 length = 0;
+	jmethodID methodID = NULL;
+	J9Class *typeBuf[17];
+	J9Class **paramTypes = typeBuf;
+	U_32 paramSize = 0;
+	JITBuilderHelperReturnCode retCode = NO_ERROR;
+	UDATA *spPriorToFrameBuild = currentThread->sp;
+	J9SFMethodTypeFrame *frame = buildMethodTypeFrame(currentThread, methodType);
+
+	length = (U_16)vmFuncs->getStringUTF8Length(currentThread, methodSignatureObj);
+	if (length > SIGNATURE_LENGTH) {
+		PORT_ACCESS_FROM_VMC(currentThread);
+		signature = (char *) j9mem_allocate_memory(sizeof(char) * (length + 1) , OMRMEM_CATEGORY_VM);
+		if (NULL == signature) {
+			rc = GOTO_THROW_CURRENT_EXCEPTION;
+			setNativeOutOfMemoryError(currentThread, 0, 0);
+			goto popMethodTypeFrame;
+		}
+	}
+
+	if (UDATA_MAX == vmFuncs->copyStringToUTF8Helper(currentThread, methodSignatureObj, TRUE, J9_STR_NONE, (U_8*) signature, length + 1)) {
+		rc = GOTO_THROW_CURRENT_EXCEPTION;
+		setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		goto popMethodTypeFrame;
+	}
+
+	/* can this release vmAccess ? TODO */
+	methodID = (jmethodID) getMethodOrFieldID((JNIEnv *) currentThread, anonClassRef, "fn", signature, J9JNIID_METHOD, FALSE);
+	if (NULL == methodID) {
+		rc = GOTO_THROW_CURRENT_EXCEPTION;
+		setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		goto freeSignature;
+	}
+
+	paramSize = J9INDEXABLEOBJECT_SIZE(currentThread, paramTypeArrayObj);
+
+	if (paramSize > 16) {
+		PORT_ACCESS_FROM_VMC(currentThread);
+		paramTypes = (J9Class **) j9mem_allocate_memory(sizeof(J9Class *) * paramSize , OMRMEM_CATEGORY_VM);
+		if (NULL == paramTypes) {
+			rc = GOTO_THROW_CURRENT_EXCEPTION;
+			setNativeOutOfMemoryError(currentThread, 0, 0);
+			goto freeSignature;
+		}
+	}
+
+	for (UDATA i = 0; i < paramSize; i++) {
+		paramTypes[i] = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, J9JAVAARRAYOFOBJECT_LOAD(currentThread, paramTypeArrayObj, i));
+	}
+
+	JITBuilderHelper jitHelper;
+	retCode = jitHelper.generateJavaMethodCallback(currentThread,
+										anonInstance,
+										methodID,
+										J9VM_J9CLASS_FROM_HEAPCLASS(vm, returnTypeObj),
+										paramTypes,
+										paramSize,
+										&functionAddress);
+	if (NO_ERROR != retCode) {
+		rc = GOTO_THROW_CURRENT_EXCEPTION;
+		if (OOM == retCode) {
+			setNativeOutOfMemoryError(currentThread, 0, 0);
+		} else {
+			setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		}
+	}
+
+
+goto freeParamTypes;
+
+done:
+	VM_OutOfLineINL_Helpers::returnDouble(currentThread, (I_64) functionAddress, 5);
+	return rc;
+
+freeParamTypes:
+	if (paramTypes != typeBuf) {
+		PORT_ACCESS_FROM_VMC(currentThread);
+		j9mem_free_memory(paramTypes);
+	}
+
+freeSignature:
+	if (buf != signature) {
+		PORT_ACCESS_FROM_VMC(currentThread);
+		j9mem_free_memory(signature);
+	}
+
+popMethodTypeFrame:
+	currentThread->literals = frame->savedCP;
+	currentThread->pc = frame->savedPC;
+	currentThread->arg0EA = UNTAGGED_A0(frame);
+	currentThread->sp = spPriorToFrameBuild;
+	goto done;
 
 }
+#endif /* J9VM_OPT_PANAMA */
+}
+
+
+
