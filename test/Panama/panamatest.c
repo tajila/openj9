@@ -333,3 +333,39 @@ bool checkStructArray(Point *arr) {
 void freeStructArray(Point *arr) {
 	free(arr);
 }
+
+void testFunctionVoid(void (*func)(void)) {
+	func();
+}
+
+char testFunctionByte(char (*func)(char), char val) {
+	return func(val);
+}
+
+short testFunctionShort(short (*func)(short), short val) {
+	return func(val);
+}
+
+int testFunctionInt(int (*func)(int), int val) {
+	return func(val);
+}
+
+long long testFunctionLong(long long (*func)(long long), long long val) {
+	return func(val);
+}
+
+float testFunctionFloat(float (*func)(float), float val) {
+	return func(val);
+}
+
+double testFunctionDouble(double (*func)(double), double val) {
+	return func(val);
+}
+
+long long testSumAllScalar(long long (*func)(char v1, short v2, int v3, long v4), char v1, short v2, int v3, long v4) {
+	return func(v1, v2, v3, v4);
+}
+
+double testSumAllFloatingPoint(double (*func)(float v1, double v2, float v3, double v4), float v1, double v2, float v3, double v4) {
+	return func(v1, v2, v3, v4);
+}

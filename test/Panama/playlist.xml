@@ -82,4 +82,24 @@
 			<subset>Panama</subset>
 		</subsets>
 	</test>
+	
+		<test>
+		<featureIds>
+			<featureId>123991</featureId>
+		</featureIds>
+		<testCaseName>FunctionPointerTest</testCaseName>
+		<command>$(JAVA_COMMAND) $(JVM_OPTIONS) \
+	-cp $(Q)$(RESOURCES_DIR)$(P)$(TESTNG)$(P)$(TEST_RESROOT)$(D)panamatest.jar$(P)$(TEST_RESROOT)$(D)PanamaTests.jar$(Q) \
+	org.testng.TestNG -d $(REPORTDIR) $(Q)$(TEST_RESROOT)$(D)testng.xml$(Q) -testnames FunctionPointerTest \
+	-groups $(TEST_GROUP) \
+	-excludegroups $(DEFAULT_EXCLUDE); \
+	$(TEST_STATUS)</command>
+		<platformRequirements>os.linux,arch.x86,bits.64</platformRequirements>
+		<tags>
+			<tag>sanity</tag>
+		</tags>
+		<subsets>
+			<subset>Panama</subset>
+		</subsets>
+	</test>
 </playlist>

@@ -21,6 +21,7 @@
 
   SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
 -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
 <suite name="Panama suite" parallel="none" verbose="2">
 	<listeners>
@@ -44,4 +45,11 @@
 			<class name="org.openj9.test.panama.CustomFFINativeMethodHandleTest" />
 		</classes>
 	</test>
+		<test name="FunctionPointerTest">
+		<parameter name="path" value="${JVM_TEST_ROOT}/Panama/Panama"/>
+		<classes>
+			<class name="org.openj9.test.panama.FunctionPointerTest" />
+		</classes>
+	</test>
 </suite> <!-- Suite -->
+
