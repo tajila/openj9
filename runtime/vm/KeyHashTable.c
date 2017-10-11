@@ -467,7 +467,7 @@ hashPkgTableIDFor(J9VMThread *vmThread, J9ClassLoader *classLoader, J9ROMClass* 
 
 	key.tag = (UDATA)romClass | TAG_ROM_CLASS;
 
-	if (isSystemClassLoader && (LOAD_LOCATION_UNKNOWN == locationType)) {
+	if (isSystemClassLoader && (J9ROMCLASS_IS_UNSAFE(romClass) || (LOAD_LOCATION_UNKNOWN == locationType))) {
 		key.tag |= TAG_GENERATED_PACKAGE;
 	}
 
@@ -653,6 +653,8 @@ addLocationGeneratedClass(J9VMThread *vmThread, J9ClassLoader *classLoader, clas
 		} else {
 			/* In case of multi-threaded class loading, we must avoid adding an entry if it already exists. But, we
 			 * should make sure that the existing entry has locationType for non-generated class i.e. (locationType < 0).
+			 *
+			 * If the first class in the package was an Unsafe class, then the classLocation would not be NULL.
 			 */
 			Assert_VM_true(classLocation->locationType < 0);
 		}
