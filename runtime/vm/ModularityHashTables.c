@@ -23,6 +23,7 @@
 #include "j9.h"
 #include "j9protos.h"
 #include "ut_j9vm.h"
+#include "j9java8packages.h"
 
 static j9object_t moduleHashGetName(const void* entry);
 static UDATA packageHashFn(void *key, void *userData);
@@ -61,6 +62,16 @@ packageHashFn(void *key, void *userData)
 	return javaVM->internalVMFunctions->computeHashForUTF8(J9UTF8_DATA(entry->packageName), J9UTF8_LENGTH(entry->packageName));
 }
 
+
+static UDATA
+java8PackageHashFn(void *key, void *userData)
+{
+	J9JavaVM* javaVM = (J9JavaVM*) userData;
+	J9UTF8 *entry = *(J9UTF8**) key;
+
+	return javaVM->internalVMFunctions->computeHashForUTF8(J9UTF8_DATA(entry), J9UTF8_LENGTH(entry));
+}
+
 static UDATA
 moduleExtraInfoHashFn(void *key, void *userData)
 {
@@ -92,6 +103,17 @@ packageHashEqualFn(void *tableNode, void *queryNode, void *userData)
 
 	return J9UTF8_EQUALS(tableNodePackage->packageName, queryNodePackage->packageName) && (tableNodePackage->classLoader == queryNodePackage->classLoader);
 }
+
+
+static UDATA
+java8PackageHashEqualFn(void *tableNode, void *queryNode, void *userData)
+{
+	const J9UTF8* const tableNodePackage = *((J9UTF8**)tableNode);
+	const J9UTF8* const queryNodePackage = *((J9UTF8**)queryNode);
+
+	return J9UTF8_EQUALS(tableNodePackage, queryNodePackage);
+}
+
 
 static UDATA
 moduleExtraInfoHashEqualFn(void *tableNode, void *queryNode, void *userData)
@@ -188,4 +210,55 @@ findModuleInfoForModule(J9VMThread *currentThread, J9ClassLoader *classLoader, J
 
 	targetPtr = (J9ModuleExtraInfo *)hashTableFind(classLoader->moduleExtraInfoHashTable, (void *)&moduleInfo);
 	return targetPtr;
+}
+
+BOOLEAN
+didPackageExistInJAVA8(J9VMThread *currentThread, J9UTF8 *pkgName)
+{
+	J9JavaVM *vm = currentThread->javaVM;
+	BOOLEAN noFail = TRUE;
+	BOOLEAN result = FALSE;
+
+	/* check to see if we have loaded the java8 packages table */
+	if (J9_ARE_NO_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_JAVA8_PACKAGES_TABLE_LOADED)) {
+		/* lazily add a new table because we may not always need it, it is only required in
+		 * cases where an un-named module attempts to reflectively access non-exported package
+		 * that existed in java8
+		 */
+		omrthread_monitor_enter(vm->java8PackagesTableMutex);
+		if (J9_ARE_NO_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_JAVA8_PACKAGES_TABLE_LOADED)) {
+			U_32 flags = J9HASH_TABLE_ALLOW_SIZE_OPTIMIZATION | J9HASH_TABLE_DO_NOT_GROW;
+
+			vm->java8PackagesTable = hashTableNew(OMRPORT_FROM_J9PORT(vm->portLibrary), J9_GET_CALLSITE(), JAVA8_PACKAGES_LEN, sizeof(void*), sizeof(void*), flags, J9MEM_CATEGORY_MODULES, java8PackageHashFn, java8PackageHashEqualFn, NULL, vm);
+			if (NULL != vm->java8PackagesTable) {
+				U_32 count = 0;
+				J9UTF8 *currentElement = (J9UTF8*) &java8packages;
+				for (; count < JAVA8_PACKAGES_LEN; count++) {
+					hashTableAdd(vm->java8PackagesTable, &currentElement);
+					currentElement = J9_CONSTANT_UTF8_NEXT_ELEMENT(currentElement);
+				}
+			} else {
+				noFail = FALSE;
+			}
+		}
+		if (noFail) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_JAVA8_PACKAGES_TABLE_LOADED;
+		} else {
+			vm->internalVMFunctions->setNativeOutOfMemoryError(currentThread, 0 ,0);
+		}
+		omrthread_monitor_exit(vm->java8PackagesTableMutex);
+	}
+
+	if (noFail) {
+		/* did package exist in Java8 */
+		J9Package ** targetPtr = NULL;
+
+		targetPtr = hashTableFind(vm->java8PackagesTable, &pkgName);
+
+		if (NULL != targetPtr) {
+			result = TRUE;
+		}
+	}
+
+	return result;
 }

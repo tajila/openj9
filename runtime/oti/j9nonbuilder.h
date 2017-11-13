@@ -4735,6 +4735,7 @@ typedef struct J9InternalVMFunctions {
 #if defined(J9VM_RAS_EYECATCHERS)
 	void (*rasSetServiceLevel)(struct J9JavaVM *vm, const char *runtimeVersion);
 #endif /* J9VM_RAS_EYECATCHERS */
+	BOOLEAN (*didPackageExistInJAVA8)(struct J9VMThread *currentThread, struct J9UTF8 *pkgName);
 } J9InternalVMFunctions;
 
 
@@ -5409,6 +5410,8 @@ typedef struct J9JavaVM {
 	UDATA safePointState;
 	UDATA safePointResponseCount;
 	struct J9VMRuntimeStateListener vmRuntimeStateListener;
+	struct J9HashTable *java8PackagesTable;
+	omrthread_monitor_t java8PackagesTableMutex;
 } J9JavaVM;
 
 #define J9VM_PHASE_NOT_STARTUP  2

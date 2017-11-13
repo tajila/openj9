@@ -1798,6 +1798,18 @@ findModuleForPackage(J9VMThread *currentThread, J9ClassLoader *classLoader, U_8 
 J9ModuleExtraInfo *
 findModuleInfoForModule(J9VMThread *currentThread, J9ClassLoader *classLoader, J9Module *j9module);
 
+
+/**
+ * @brief Queries java8 packages to see if pkgName exists in the list
+ *
+ * @param currentThread current thread pointer
+ * @param pkgName name of package to search for
+ *
+ * @return BOOLEAN, true if package found, false if not
+ */
+BOOLEAN
+didPackageExistInJAVA8(J9VMThread *currentThread, J9UTF8 *pkgName);
+
 /* ---------------- lookupmethod.c ---------------- */
 
 /**

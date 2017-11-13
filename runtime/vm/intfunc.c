@@ -362,4 +362,5 @@ J9InternalVMFunctions J9InternalFunctions = {
 #if defined(J9VM_RAS_EYECATCHERS)
 	j9rasSetServiceLevel,
 #endif /* J9VM_RAS_EYECATCHERS */
+	didPackageExistInJAVA8,
 };

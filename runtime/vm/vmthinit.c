@@ -80,6 +80,8 @@ UDATA initializeVMThreading(J9JavaVM *vm)
 
 		omrthread_monitor_init_with_name(&vm->vmRuntimeStateListener.runtimeStateListenerMutex, 0, "VM state notification mutex") ||
 
+		omrthread_monitor_init_with_name(&vm->java8PackagesTableMutex, 0, "Java8 packages table mutex") ||
+
 		initializeMonitorTable(vm)
 	)
 	{
@@ -156,6 +158,7 @@ void terminateVMThreading(J9JavaVM *vm)
 	if (vm->nativeLibraryMonitor) omrthread_monitor_destroy(vm->nativeLibraryMonitor);
 	if (vm->jlmModulesInitMutex) omrthread_monitor_destroy(vm->jlmModulesInitMutex);
 	if (vm->vmRuntimeStateListener.runtimeStateListenerMutex) omrthread_monitor_destroy(vm->vmRuntimeStateListener.runtimeStateListenerMutex);
+	if (vm->java8PackagesTableMutex) omrthread_monitor_destroy(vm->java8PackagesTableMutex);
 
 	destroyMonitorTable(vm);
 }
