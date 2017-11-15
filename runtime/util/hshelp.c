@@ -2780,13 +2780,18 @@ verifyMethodsAreSame(J9VMThread * currentThread, J9JVMTIClassPair * classPair, U
 	J9ROMClass * originalROMClass;
 	J9ROMClass * replacementROMClass = classPair->replacementClass.romClass;
 
+
+
 	oldestRAMClass = getOldestClassVersion(classPair->originalRAMClass);
 	if (oldestRAMClass == NULL) {
 		oldestRAMClass = classPair->originalRAMClass;
 	}
 
+	printf("verifyMethodsAreSame get oldest1 old=%p::%s \n", oldestRAMClass->romClass, J9ROMCLASS_CLASSNAME(oldestRAMClass->romClass));
+
 	originalROMClass = oldestRAMClass->romClass;
 
+	printf("verifyMethodsAreSame oldRom=%p,%p::%s newRom=%p,%p::%s \n", oldestRAMClass, originalROMClass, J9ROMCLASS_CLASSNAME(originalROMClass), classPair->replacementClass, replacementROMClass, J9ROMCLASS_CLASSNAME(replacementROMClass));
 
 	/* Verify that the methods are the same */
 
@@ -2885,6 +2890,7 @@ verifyMethodsAreSame(J9VMThread * currentThread, J9JVMTIClassPair * classPair, U
 	} else {
 		if (originalROMClass->romMethodCount < replacementROMClass->romMethodCount) {
 			rc = JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_ADDED;
+			printf("JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_ADDED %d=%p %d=%p \n", originalROMClass->romMethodCount, originalROMClass, replacementROMClass->romMethodCount, replacementROMClass);
 		} else {
 			rc = JVMTI_ERROR_UNSUPPORTED_REDEFINITION_METHOD_DELETED;
 		}
