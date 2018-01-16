@@ -279,6 +279,7 @@ ROMClassBuilder::handleAnonClassName(J9CfrClassFile *classfile)
 			}
 		}
 	}
+	stringOrNASReferenceToClassName = TRUE;
 
 
 	if (!stringOrNASReferenceToClassName) {
