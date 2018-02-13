@@ -256,4 +256,23 @@ def build_pr_compile_only() {
     archive()
     git_clean()
 }
+
+
+def build_experimental() {
+
+	// Experimental build
+	stage('Build OpenJDK build') {
+		timestamps {
+			//sh "rm -rf $OPENJDK_PROJECT_DIR" //clean ${WORKSPACE} didnt work
+			//sh "hg clone $OPENJDK_REPO $OPENJDK_PROJECT_DIR"
+			checkout clean: false, changelog: false, poll: false, scm: [$class: 'MercurialSCM', credentialsId: '', source: "${OPENJDK_REPO}", revision: "${OPENJDK_BRANCH}", subdir: 'openjdk_panama']
+			dir("${WORKSPACE}/${OPENJDK_PROJECT_DIR}") {
+				sh "hg checkout $OPENJDK_BRANCH"
+				sh "bash ./configure --with-boot-jdk=$BOOT_JDK --disable-warnings-as-errors"
+				sh "make all"
+			}
+		}
+	}
+}
+
 return this
