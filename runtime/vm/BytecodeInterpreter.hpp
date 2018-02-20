@@ -7101,7 +7101,11 @@ retry:
 		J9ConstantPool *ramConstantPool = J9_CP_FROM_METHOD(_literals);
 		J9RAMClassRef *ramCPEntry = ((J9RAMClassRef*)ramConstantPool) + index;
 		J9Class* volatile resolvedClass = ramCPEntry->value;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+		if ((NULL != resolvedClass) && (resolvedClass->romClass->modifiers & (J9AccAbstract | J9AccInterface | J9AccValueType)) == 0) {
+#else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 		if ((NULL != resolvedClass) && (resolvedClass->romClass->modifiers & (J9AccAbstract | J9AccInterface)) == 0) {
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 			if (!VM_VMHelpers::classRequiresInitialization(_currentThread, resolvedClass)) {
 				j9object_t instance = _objectAllocate.inlineAllocateObject(_currentThread, resolvedClass);
 				if (NULL == instance) {
@@ -7955,8 +7959,57 @@ done:
 	VMINLINE VM_BytecodeAction
 	defaultvalue(REGISTER_ARGS_LIST)
 	{
+retry:
+		j9object_t newObject = NULL;
 		VM_BytecodeAction rc = EXECUTE_BYTECODE;
-		// TODO: Implement bytecode
+		const U_16 index = *(U_16*)(_pc + 1);
+		J9ConstantPool * const ramConstantPool = J9_CP_FROM_METHOD(_literals);
+		J9RAMClassRef * const ramCPEntry = ((J9RAMClassRef*)ramConstantPool) + index;
+		J9Class * volatile resolvedClass = ramCPEntry->value;
+		bool doInitializeClass = FALSE;
+
+		if ((NULL != resolvedClass) && J9_ARE_ALL_BITS_SET(resolvedClass->romClass->modifiers, J9AccValueType)) {
+			if (!VM_VMHelpers::classRequiresInitialization(_currentThread, resolvedClass)) {
+				j9object_t instance = _objectAllocate.inlineAllocateObject(_currentThread, resolvedClass);
+				if (NULL == instance) {
+					updateVMStruct(REGISTER_ARGS);
+					instance = _vm->memoryManagerFunctions->J9AllocateObject(_currentThread, resolvedClass, J9_GC_ALLOCATE_OBJECT_INSTRUMENTABLE);
+					VMStructHasBeenUpdated(REGISTER_ARGS);
+					if (J9_UNEXPECTED(NULL == instance)) {
+						rc = THROW_HEAP_OOM;
+						goto done;
+					}
+				}
+				newObject = instance;
+				goto done;
+			}
+			doInitializeClass = TRUE;
+		}
+
+		buildGenericSpecialStackFrame(REGISTER_ARGS, 0);
+		updateVMStruct(REGISTER_ARGS);
+		if (doInitializeClass) {
+			/* Class requires initialization */
+			initializeClass(_currentThread, resolvedClass);
+		} else {
+			/* Class is unresolved */
+			resolveClassRef(_currentThread, ramConstantPool, index, J9_RESOLVE_FLAG_RUNTIME_RESOLVE | J9_RESOLVE_FLAG_INIT_CLASS | J9_RESOLVE_FLAG_INSTANTIABLE | J9_RESOLVE_FLAG_CHECK_VALUE_CLASS);
+		}
+		VMStructHasBeenUpdated(REGISTER_ARGS);
+		restoreGenericSpecialStackFrame(REGISTER_ARGS);
+		if (immediateAsyncPending()) {
+			rc = GOTO_ASYNC_CHECK;
+			goto done;
+		} else if (VM_VMHelpers::exceptionPending(_currentThread)) {
+			rc = GOTO_THROW_CURRENT_EXCEPTION;
+			goto done;
+		}
+		goto retry;
+done:
+		if (EXECUTE_BYTECODE == rc) {
+			_pc += 3;
+			*(j9object_t*)--_sp = newObject;
+		}
 		return rc;
 	}
 
