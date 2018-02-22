@@ -8016,8 +8016,90 @@ done:
 	VMINLINE VM_BytecodeAction
 	withfield(REGISTER_ARGS_LIST)
 	{
+retry:
 		VM_BytecodeAction rc = EXECUTE_BYTECODE;
-		// TODO: Implement bytecode
+		const U_16 index = *(U_16 *)(_pc + 1);
+		J9ConstantPool * const ramConstantPool = J9_CP_FROM_METHOD(_literals);
+		J9RAMFieldRef * const ramFieldRef = ((J9RAMFieldRef *)ramConstantPool) + index;
+		const UDATA flags = ramFieldRef->flags;
+		const bool isVolatile = (0 != (flags & J9AccVolatile));
+		const UDATA valueOffset = ramFieldRef->valueOffset;
+		const UDATA newValueOffset = valueOffset + J9_OBJECT_HEADER_SIZE;
+		j9object_t original = *(j9object_t *)(_sp + (J9_ARE_ALL_BITS_SET(flags, J9FieldSizeDouble) ? 2 : 1));
+		j9object_t copy = NULL;
+		J9Class *objectClass = NULL;
+		if (NULL == original) {
+			rc = THROW_NPE;
+			goto done;
+		}
+		objectClass = J9OBJECT_CLAZZ(_currentThread, original);
+
+		/* In a resolved field, flags will have the J9FieldFlagResolved bit set, thus
+		 * having a higher value than any valid valueOffset.
+		 *
+		 * This check avoids the need for a barrier, as it will only succeed if flags
+		 * and valueOffset have both been updated. It is crucial that we do not treat
+		 * a field ref as resolved if only one of the two values has been set (by
+		 * another thread that is in the middle of a resolve).
+		 */
+		if (J9_UNEXPECTED((flags <= valueOffset) || J9_ARE_NO_BITS_SET(flags, J9FieldFlagPutResolved))) {
+			/* Field is unresolved */
+			J9Method *method = _literals;
+			buildGenericSpecialStackFrame(REGISTER_ARGS, 0);
+			updateVMStruct(REGISTER_ARGS);
+			resolveInstanceFieldRef(_currentThread, method, ramConstantPool, index, J9_RESOLVE_FLAG_RUNTIME_RESOLVE | J9_RESOLVE_FLAG_FIELD_SETTER | J9_RESOLVE_FLAG_CHECK_VALUE_CLASS, NULL);
+			VMStructHasBeenUpdated(REGISTER_ARGS);
+			restoreGenericSpecialStackFrame(REGISTER_ARGS);
+			if (immediateAsyncPending()) {
+				rc = GOTO_ASYNC_CHECK;
+				goto done;
+			} else if (VM_VMHelpers::exceptionPending(_currentThread)) {
+				rc = GOTO_THROW_CURRENT_EXCEPTION;
+				goto done;
+			}
+			goto retry;
+		}
+
+		buildInternalNativeStackFrame(REGISTER_ARGS);
+
+		/* Allocate new object */
+		copy = _objectAllocate.inlineAllocateObject(_currentThread, objectClass, false, false);
+		if (NULL == copy) {
+			pushObjectInSpecialFrame(REGISTER_ARGS, original);
+			updateVMStruct(REGISTER_ARGS);
+			copy = _vm->memoryManagerFunctions->J9AllocateObject(_currentThread, objectClass, J9_GC_ALLOCATE_OBJECT_NON_INSTRUMENTABLE);
+			VMStructHasBeenUpdated(REGISTER_ARGS);
+			original = popObjectInSpecialFrame(REGISTER_ARGS);
+			if (J9_UNEXPECTED(NULL == copy)) {
+				rc = THROW_HEAP_OOM;
+				goto done;
+			}
+			objectClass = VM_VMHelpers::currentClass(objectClass);
+		}
+
+		/* Clone original object into new object */
+		_objectAccessBarrier.cloneObject(_currentThread, original, copy, objectClass);
+
+		restoreInternalNativeStackFrame(REGISTER_ARGS);
+
+		if (NULL == copy) {
+			rc = THROW_NPE;
+			goto done;
+		}
+		/* Store new value into field */
+		if (J9_ARE_ALL_BITS_SET(flags, J9FieldSizeDouble)) {
+			_objectAccessBarrier.inlineMixedObjectStoreU64(_currentThread, copy, newValueOffset, *(U_64*)_sp, isVolatile);
+			_sp += 2;
+		} else if (J9_ARE_ALL_BITS_SET(flags, J9FieldFlagObject)) {
+			_objectAccessBarrier.inlineMixedObjectStoreObject(_currentThread, copy, newValueOffset, *(j9object_t*)_sp, isVolatile);
+			_sp += 1;
+		} else {
+			_objectAccessBarrier.inlineMixedObjectStoreU32(_currentThread, copy, newValueOffset, *(U_32*)_sp, isVolatile);
+			_sp += 1;
+		}
+		*(j9object_t *)_sp = copy;
+		_pc += 3;
+done:
 		return rc;
 	}
 #endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
