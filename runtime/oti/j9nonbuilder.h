@@ -163,8 +163,9 @@
 #define J9ClassContainsMethodsPresentInMCCHash 0x10
 #define J9ClassGCScanned 0x20
 #define J9ClassIsAnonymous 0x40
-#define J9ClassIsDerivedValueType 0x80
 #define J9ClassHasWatchedFields 0x100
+#define J9ClassLargestAlignmentDouble 0x200
+#define J9ClassLargestAlignmentObject 0x400
 
 /* @ddr_namespace: map_to_type=J9FieldFlags */
 
@@ -4694,7 +4695,11 @@ typedef struct J9InternalVMFunctions {
 	UDATA  ( *structuredSignalHandler)(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, void* userData) ;
 	UDATA  ( *structuredSignalHandlerVM)(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, void* userData) ;
 	UDATA  ( *addHiddenInstanceField)(struct J9JavaVM *vm, const char *className, const char *fieldName, const char *fieldSignature, UDATA *offsetReturn) ;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	struct J9ROMFieldOffsetWalkResult*  ( *fieldOffsetsStartDo)(struct J9JavaVM *vm, struct J9ClassLoader *classLoader, struct J9ROMClass *romClass, struct J9Class *superClazz, struct J9ROMFieldOffsetWalkState *state, U_32 flags) ;
+#else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 	struct J9ROMFieldOffsetWalkResult*  ( *fieldOffsetsStartDo)(struct J9JavaVM *vm, struct J9ROMClass *romClass, struct J9Class *superClazz, struct J9ROMFieldOffsetWalkState *state, U_32 flags) ;
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 	struct J9ROMFieldOffsetWalkResult*  ( *fieldOffsetsNextDo)(struct J9ROMFieldOffsetWalkState *state) ;
 	struct J9ROMFieldShape*  ( *fullTraversalFieldOffsetsStartDo)(struct J9JavaVM *vm, struct J9Class *clazz, struct J9ROMFullTraversalFieldOffsetWalkState *state, U_32 flags) ;
 	struct J9ROMFieldShape*  ( *fullTraversalFieldOffsetsNextDo)(struct J9ROMFullTraversalFieldOffsetWalkState *state) ;
