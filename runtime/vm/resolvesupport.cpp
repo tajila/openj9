@@ -261,7 +261,7 @@ tryAgain:
 		findClassFlags = J9_FINDCLASS_FLAG_EXISTING_ONLY;
 	}
 
-	if (ramClassRefWrapper->modifiers == (UDATA)-1) {
+	if (ramClassRefWrapper->unused == (UDATA)-1) {
 		if ((findClassFlags & J9_FINDCLASS_FLAG_THROW_ON_FAIL) == J9_FINDCLASS_FLAG_THROW_ON_FAIL) {
 			detailString = vm->memoryManagerFunctions->j9gc_createJavaLangString(vmStruct, classNameData, classNameLength, 0);
 			if (NULL == vmStruct->currentException) {
@@ -300,7 +300,7 @@ tryAgain:
 		/* Class not found - if NoClassDefFoundError was thrown, mark this ref as permanently unresolveable */
 		if (NULL != exception) {
 			if (instanceOfOrCheckCast(J9OBJECT_CLAZZ(vmStruct, exception), J9VMJAVALANGLINKAGEERROR_OR_NULL(vm))) {
-				ramClassRefWrapper->modifiers = -1;
+				ramClassRefWrapper->unused = -1;
 			}
 		}
 		goto done;
@@ -405,7 +405,7 @@ tryAgain:
 
 updateCP:
 	ramClassRefWrapper->value = resolvedClass;
-	ramClassRefWrapper->modifiers = accessModifiers;
+	ramClassRefWrapper->unused = accessModifiers;
 
 done:
 	Trc_VM_resolveClassRef_Exit(vmStruct, resolvedClass);

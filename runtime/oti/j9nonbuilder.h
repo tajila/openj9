@@ -2197,7 +2197,7 @@ typedef struct J9RAMConstantPoolItem {
 
 typedef struct J9RAMClassRef {
 	struct J9Class* value;
-	UDATA modifiers;
+	UDATA unused;
 } J9RAMClassRef;
 
 typedef struct J9RAMConstantRef {

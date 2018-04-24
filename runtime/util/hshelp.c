@@ -1652,7 +1652,7 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 							result = hashTableFind(classHashTable, &exemplar);
 							if (NULL != result) {
 								((J9RAMClassRef *) ramConstantPool)[i].value = result->replacementClass.ramClass;
-								((J9RAMClassRef *) ramConstantPool)[i].modifiers = result->replacementClass.romClass->modifiers;
+								((J9RAMClassRef *) ramConstantPool)[i].unused = result->replacementClass.romClass->modifiers;
 							}
 						}
 					}
