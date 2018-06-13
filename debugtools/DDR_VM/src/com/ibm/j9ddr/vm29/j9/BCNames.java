@@ -243,6 +243,8 @@ public class BCNames {
 	public static final int JBiincw = 213;
 	public static final int JBaload0getfield = 215;
 	public static final int JBnewdup = 216;
+	public static final int JBdefaultvalue = 224;
+	public static final int JBwithfield = 226;
 	public static final int JBreturnFromConstructor = 228;
 	public static final int JBgenericReturn = 229;
 	public static final int JBinvokeinterface2 = 231;
