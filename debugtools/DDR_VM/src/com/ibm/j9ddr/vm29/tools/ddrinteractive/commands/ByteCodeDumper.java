@@ -21,75 +21,7 @@
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.tools.ddrinteractive.commands;
 
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokedynamic;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBaload;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBaloadw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBanewarray;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBastore;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBastorew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBbipush;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBcheckcast;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBdload;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBdloadw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBdstore;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBdstorew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBfload;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBfloadw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBfstore;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBfstorew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBgetfield;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBgetstatic;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBgoto;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBgotow;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifacmpeq;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifacmpne;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifeq;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifge;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifgt;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmpeq;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmpge;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmpgt;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmple;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmplt;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBificmpne;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifle;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBiflt;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifne;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifnonnull;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBifnull;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBiinc;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBiincw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBiload;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBiloadw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinstanceof;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokehandle;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokehandlegeneric;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokeinterface;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokeinterface2;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokespecial;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokespecialsplit;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokestatic;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokestaticsplit;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBinvokevirtual;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBistore;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBistorew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBldc;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBldc2dw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBldc2lw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBldcw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBlload;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBlloadw;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBlookupswitch;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBlstore;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBlstorew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBmultianewarray;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBnew;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBnewdup;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBnewarray;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBputfield;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBputstatic;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBsipush;
-import static com.ibm.j9ddr.vm29.j9.BCNames.JBtableswitch;
+import static com.ibm.j9ddr.vm29.j9.BCNames.*;
 import static com.ibm.j9ddr.vm29.structure.J9BCTranslationData.BCT_BigEndianOutput;
 import static com.ibm.j9ddr.vm29.structure.J9BCTranslationData.BCT_DumpMaps;
 import static com.ibm.j9ddr.vm29.structure.J9BCTranslationData.BCT_J9DescriptionCpTypeClass;
@@ -436,6 +368,7 @@ public class ByteCodeDumper {
 			case JBputstatic:
 			case JBgetfield:
 			case JBputfield:
+			case JBwithfield:
 				index = new UDATA(_GETNEXT_U16());
 				info = constantPool.add(index);
 				out.append(String.format("%d ", index.intValue()));
@@ -520,6 +453,7 @@ public class ByteCodeDumper {
 				break;
 
 			case JBnew:
+			case JBdefaultvalue:
 			case JBnewdup:
 			case JBanewarray:
 			case JBcheckcast:
