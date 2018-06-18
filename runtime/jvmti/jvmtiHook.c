@@ -1118,7 +1118,11 @@ findFieldIndexFromOffset(J9VMThread *currentThread, J9Class *clazz, UDATA offset
 		J9ROMClass * const romClass = clazz->romClass;
 		J9Class * const superclazz = GET_SUPERCLASS(clazz);
 		J9ROMFieldOffsetWalkState state;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+		J9ROMFieldOffsetWalkResult *result = vmFuncs->fieldOffsetsStartDo(vm, clazz->classLoader, romClass, superclazz, &state, walkFlags);
+#else
 		J9ROMFieldOffsetWalkResult *result = vmFuncs->fieldOffsetsStartDo(vm, romClass, superclazz, &state, walkFlags);
+#endif
 		while (NULL != result->field) {
 			if (staticBit == (result->field->modifiers & J9AccStatic)) {
 				if (offset == result->offset) {
