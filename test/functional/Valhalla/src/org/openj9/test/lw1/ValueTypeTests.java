@@ -15,8 +15,6 @@ public class ValueTypeTests {
 	static Lookup lookup = MethodHandles.lookup();
 	static Class point2DClass = null;
 	static Method makePoint2D = null;
-	static Class line2DRefClass = null;
-	static Method makeLine2D = null;
 	static MethodHandle getX = null;
 	static MethodHandle getY = null;
 	/*
@@ -60,14 +58,56 @@ public class ValueTypeTests {
 	 * 
 	 */
 	@Test(priority=2)
-	static public void testCreateLine2D() throws Throwable {
+	static public void testCreateLine2DRef() throws Throwable {
 		String fields[] = {"st:LPoint2D;:value", "en:LPoint2D;:value"};
-		line2DRefClass = ValueTypeGenerator.defineClass("Line2DRef", ValueTypeGenerator.generateRefObject("Line2DRef", fields), ValueTypeTests.class.getClassLoader(), ValueTypeTests.class.getProtectionDomain());
-		makeLine2D = line2DRefClass.getDeclaredMethod("makeRef", new Class[] {point2DClass, point2DClass});
+		Class line2DRefClass = ValueTypeGenerator.defineClass("Line2DRef", ValueTypeGenerator.generateRefObject("Line2DRef", fields), ValueTypeTests.class.getClassLoader(), ValueTypeTests.class.getProtectionDomain());
+		Method makeLine2DRef = line2DRefClass.getDeclaredMethod("makeRef", new Class[] {point2DClass, point2DClass});
 		MethodHandle getSt = generateGetter(line2DRefClass, "st", point2DClass);
 		MethodHandle setSt = generateSetter(line2DRefClass, "st", point2DClass);
 		MethodHandle getEn = generateGetter(line2DRefClass, "en", point2DClass);
 		MethodHandle setEn = generateSetter(line2DRefClass, "en", point2DClass);
+		
+		Object st = makePoint2D.invoke(null, 1 ,1);
+		Object en = makePoint2D.invoke(null, 4 ,4);
+		
+		Object line2DRef = makeLine2DRef.invoke(null, st, en);
+				
+		assertEquals(getX.invoke(st), getX.invoke(getSt.invoke(line2DRef)));
+		assertEquals(getY.invoke(st), getY.invoke(getSt.invoke(line2DRef)));
+		assertEquals(getX.invoke(en), getX.invoke(getEn.invoke(line2DRef)));
+		assertEquals(getY.invoke(en), getY.invoke(getEn.invoke(line2DRef)));
+		
+		Object st2 = makePoint2D.invoke(null, 2 ,2);
+		Object en2 = makePoint2D.invoke(null, 3 ,3);
+		
+		setSt.invoke(line2DRef, st2);
+		setEn.invoke(line2DRef, en2);
+		
+		assertEquals(getX.invoke(st2), getX.invoke(getSt.invoke(line2DRef)));
+		assertEquals(getY.invoke(st2), getY.invoke(getSt.invoke(line2DRef)));
+		assertEquals(getX.invoke(en2), getX.invoke(getEn.invoke(line2DRef)));
+		assertEquals(getY.invoke(en2), getY.invoke(getEn.invoke(line2DRef)));
+		
+	}
+	
+	/*
+	 * Test with nested values
+	 * 
+	 * value Line2D {
+	 * 	Point2D st;
+	 * 	Point2D en;
+	 * }
+	 * 
+	 */
+	@Test(priority=2)
+	static public void testCreateLine2D() throws Throwable {
+		String fields[] = {"st:LPoint2D;:value", "en:LPoint2D;:value"};
+		Class line2DClass = ValueTypeGenerator.defineClass("Line2D", ValueTypeGenerator.generateValue("Line2D", fields), ValueTypeTests.class.getClassLoader(), ValueTypeTests.class.getProtectionDomain());
+		Method makeLine2D = line2DClass.getDeclaredMethod("makeValue", new Class[] {point2DClass, point2DClass});
+		MethodHandle getSt = generateGetter(line2DClass, "st", point2DClass);
+		MethodHandle setSt = generateSetter(line2DClass, "st", point2DClass);
+		MethodHandle getEn = generateGetter(line2DClass, "en", point2DClass);
+		MethodHandle setEn = generateSetter(line2DClass, "en", point2DClass);
 		
 		Object st = makePoint2D.invoke(null, 1 ,1);
 		Object en = makePoint2D.invoke(null, 4 ,4);
