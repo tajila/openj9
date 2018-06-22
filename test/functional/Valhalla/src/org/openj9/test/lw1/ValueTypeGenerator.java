@@ -44,6 +44,7 @@ public class ValueTypeGenerator {
 
 		cw.visitSource(valueName + ".java", null);
 		
+		valueTypesList.add("L" + valueName + ";");
 
 		String makeValueSig = "";
 		for (String s : fields) {
