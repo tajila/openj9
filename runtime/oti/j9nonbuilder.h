@@ -3255,6 +3255,11 @@ typedef struct J9ROMClass {
 	J9SRP staticSplitMethodRefIndexes;
 	J9SRP specialSplitMethodRefIndexes;
 	J9SRP varHandleMethodTypeLookupTable;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	U_16 valueTypeClassCount;
+	U_16 valueTypePadding;
+	J9SRP valueTypeClasses;
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 #if defined(J9VM_ENV_DATA64)
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	U_32 padding;
@@ -3332,6 +3337,11 @@ typedef struct J9ROMArrayClass {
 	J9SRP staticSplitMethodRefIndexes;
 	J9SRP specialSplitMethodRefIndexes;
 	J9SRP varHandleMethodTypeLookupTable;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	U_16 valueTypeClassCount;
+	U_16 valueTypePadding;
+	J9SRP valueTypeClasses;
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 #if defined(J9VM_ENV_DATA64)
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	U_32 padding;
@@ -3404,6 +3414,11 @@ typedef struct J9ROMReflectClass {
 	J9SRP staticSplitMethodRefIndexes;
 	J9SRP specialSplitMethodRefIndexes;
 	J9SRP varHandleMethodTypeLookupTable;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	U_16 valueTypeClassCount;
+	U_16 valueTypePadding;
+	J9SRP valueTypeClasses;
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 #if defined(J9VM_ENV_DATA64)
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	U_32 padding;
