@@ -61,7 +61,11 @@
 #define OSCACHE_LOWEST_ACTIVE_GEN 1
 
 /* Always increment this value by 2. For testing we use the (current generation - 1) and expect the cache contents to be compatible. */
+#ifdef J9VM_OPT_VALHALLA_NESTMATES
+#define OSCACHE_CURRENT_CACHE_GEN 37
+#else
 #define OSCACHE_CURRENT_CACHE_GEN 35
+#endif /* J9VM_OPT_VALHALLA_NESTMATES */
 
 #define J9SH_VERSION(versionMajor, versionMinor) (versionMajor*100 + versionMinor)
 
