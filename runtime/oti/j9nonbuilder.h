@@ -3087,6 +3087,9 @@ typedef struct J9Class {
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	struct J9Class* nestHost;
 #endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	struct J9Class** valueTypeClasses;
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 } J9Class;
 
 typedef struct J9ArrayClass {
@@ -3279,6 +3282,9 @@ typedef struct J9ROMClass {
 #define J9ROMCLASS_NESTHOSTNAME(base) SRP_GET((base)->nestHost, struct J9UTF8*)
 #define J9ROMCLASS_NESTMEMBERS(base) SRP_GET((base)->nestMembers, J9SRP*)
 #endif /* J9VM_OPT_VALHALLA_NESTMATES */
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+#define J9ROMCLASS_VALUETYPECLASSES(base) SRP_GET((base)->valueTypeClasses, J9SRP*)
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 #define J9ROMCLASS_OPTIONALINFO(base) SRP_GET((base)->optionalInfo, U_32*)
 #define J9ROMCLASS_CALLSITEDATA(base) SRP_GET((base)->callSiteData, U_8*)
 #define J9ROMCLASS_STATICSPLITMETHODREFINDEXES(base) SRP_GET((base)->staticSplitMethodRefIndexes, U_16*)

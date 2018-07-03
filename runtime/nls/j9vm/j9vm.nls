@@ -1852,4 +1852,23 @@ J9NLS_VM_ERROR_TEMPLATE_VALUE_TYPE_SUPERCLASS.sample_input_2=Foo
 J9NLS_VM_ERROR_TEMPLATE_VALUE_TYPE_SUPERCLASS.explanation=Value type classes cannot inherit from classes other than java.lang.Object.
 J9NLS_VM_ERROR_TEMPLATE_VALUE_TYPE_SUPERCLASS.system_action=The JVM will throw a verification or classloading related exception such as java.lang.VerifyError.
 J9NLS_VM_ERROR_TEMPLATE_VALUE_TYPE_SUPERCLASS.user_response=Contact the provider of the classfile for a corrected version.
+
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE=bad class %2$.*1$s: flattenable field is not a value type
+# START NON-TRANSLATABLE
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE.sample_input_1=3
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE.sample_input_2=Foo
+
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE.explanation=The class has a field marked flattenable which is not a value type.
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE.system_action=The JVM will throw a IncompatibleClassChangeError.
+J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE.user_response=Contact the provider of the classfile for a corrected version.
+# END NON-TRANSLATABLE
+
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE=bad class %2$.*1$s: value type field missing from ValueTypes attribute
+# START NON-TRANSLATABLE
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE.sample_input_1=3
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE.sample_input_2=Foo
+
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE.explanation=The class has a value types field which is missing from its ValueType attribute. 
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE.system_action=The JVM will throw a ClassFileError.
+J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE.user_response=Contact the provider of the classfile for a corrected version.
 # END NON-TRANSLATABLE
