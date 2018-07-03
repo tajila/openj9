@@ -59,6 +59,8 @@ static char const *statusNames[] = {
 
 #define STATE_NAME(state) (J9_ARE_ANY_BITS_SET(state, ~(UDATA)J9ClassInitStatusMask) ? "IN_PROGRESS" : statusNames[state])
 
+#define VALUE_TYPE_INSTANCE_FIELD_TAG 1
+
 static j9object_t setInitStatus(J9VMThread *currentThread, J9Class *clazz, UDATA status, j9object_t initializationLock);
 static void classInitStateMachine(J9VMThread *currentThread, J9Class *clazz, J9ClassInitState desiredState);
 
@@ -444,9 +446,48 @@ doVerify:
 					}
 					iTable = iTable->next;
 				}
+				
+				clazz = VM_VMHelpers::currentClass(clazz);
+				
+				/* iterate over fields and load classes of fields marked flattenable and static*/
+				J9SRP *romValueTypeClasses = J9ROMCLASS_VALUETYPECLASSES(clazz->romClass);
+				J9Class **valueTypeClasses = clazz->valueTypeClasses;
+				UDATA valueTypeClassCount = clazz->romClass->valueTypeClassCount;
+				for (UDATA index = 0; (index < valueTypeClassCount) && (NULL != valueTypeClasses[index]); index++) {
+					if (J9_ARE_NO_BITS_SET((uintptr_t) valueTypeClasses[index], VALUE_TYPE_INSTANCE_FIELD_TAG)) {
+						J9UTF8 *signature = (J9UTF8 *) valueTypeClasses[index];
+						J9Class *currentClass = internalFindClassUTF8(currentThread, &J9UTF8_DATA(signature)[1], J9UTF8_LENGTH(signature)-2, clazz->classLoader, J9_FINDCLASS_FLAG_THROW_ON_FAIL);
+						if (J9_ARE_NO_BITS_SET(currentClass->romClass->modifiers, J9AccValueType)) {
+							J9UTF8 *badClass = NNSRP_GET(clazz->romClass->className, J9UTF8*);
+							setCurrentExceptionNLSWithArgs(currentThread, J9NLS_VM_ERROR_FLATTENABLE_NOT_VALUE_TYPE, J9VMCONSTANTPOOL_JAVALANGINCOMPATIBLECLASSCHANGEERROR, J9UTF8_LENGTH(badClass), J9UTF8_DATA(badClass));
+							goto done;
+						}
+
+						J9UTF8 *valueTypeClassName;
+						BOOLEAN found = FALSE;
+						for (UDATA i = 0; i < valueTypeClassCount; i++) {
+							valueTypeClassName = NNSRP_GET(romValueTypeClasses[i], J9UTF8*);
+							if (J9UTF8_EQUALS(signature, valueTypeClassName)) {
+								valueTypeClasses[index] = currentClass;
+								found = TRUE;
+								break;
+							}
+						}
+						if (!found) {
+							J9UTF8 *badClass = NNSRP_GET(clazz->romClass->className, J9UTF8*);
+							setCurrentExceptionNLSWithArgs(currentThread, J9NLS_VM_ERROR_VALUE_TYPE_FIELD_MISSING_ATTRIBUTE, J9VMCONSTANTPOOL_JAVALANGCLASSFORMATERROR, J9UTF8_LENGTH(badClass), J9UTF8_DATA(badClass));
+							goto done;
+						}
+					} else {
+						/* Unset the flagged bit  */
+						valueTypeClasses[index] = (J9Class *)(((uintptr_t) valueTypeClasses[index]) ^ VALUE_TYPE_INSTANCE_FIELD_TAG);
+					}
+				}
+
 				/* Prepare this class */
 				initializationLock = enterInitializationLock(currentThread, initializationLock);
 				clazz = VM_VMHelpers::currentClass(clazz);
+
 				if (NULL == initializationLock) {
 					goto done;
 				}
