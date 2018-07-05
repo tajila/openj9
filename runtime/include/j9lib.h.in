@@ -38,6 +38,7 @@ extern"C"{
 #define J9_SHARED_DLL_NAME "j9shr29"
 #define J9_JAVA_SE_10_DLL_NAME "jclse10_29"
 #define J9_JAVA_SE_11_DLL_NAME "jclse11_29"
+#define J9_JAVA_SE_12_DLL_NAME "jclse11_29"
 #define J9_JAVA_SE_9_DLL_NAME "jclse9_29"
 #define J9_TOOLS_MIGRATION_DLL_NAME "migration"
 #define J9_BCUTIL_TEST_NATIVES_DLL_NAME "bcuwhite"
