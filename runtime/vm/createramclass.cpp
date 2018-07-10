@@ -34,6 +34,7 @@
 #undef UT_MODULE_UNLOADED
 #include "ut_j9vm.h"
 #include "j9bcvnls.h"
+#include "j9vmnls.h"
 #include "j2sever.h"
 #include "vm_internal.h"
 
@@ -1529,17 +1530,33 @@ loadSuperClassAndInterfaces(J9VMThread *vmThread, J9ClassLoader *classLoader, J9
 				return FALSE;
 			}
 
+			UDATA superclassModifiers = superclass->romClass->modifiers;
 			/* ensure that the superclass isn't an interface or final */
-			if ((superclass->romClass->modifiers & J9_JAVA_FINAL) != 0) {
+			if (J9_ARE_ALL_BITS_SET(superclassModifiers, J9AccFinal)) {
 				Trc_VM_CreateRAMClassFromROMClass_superclassIsFinal(vmThread, superclass);
 				setCurrentExceptionForBadClass(vmThread, superclassName, J9VMCONSTANTPOOL_JAVALANGVERIFYERROR);
 				return FALSE;
 			}
-			if ((superclass->romClass->modifiers & J9_JAVA_INTERFACE) != 0) {
+			if (J9_ARE_ALL_BITS_SET(superclassModifiers, J9AccInterface)) {
 				Trc_VM_CreateRAMClassFromROMClass_superclassIsInterface(vmThread, superclass);
 				setCurrentExceptionForBadClass(vmThread, superclassName, J9VMCONSTANTPOOL_JAVALANGINCOMPATIBLECLASSCHANGEERROR);
 				return FALSE;
 			}
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+			/* ensure that the superclass isn't a value type */
+			if (J9_ARE_ALL_BITS_SET(superclassModifiers, J9AccValueType)) {
+				Trc_VM_CreateRAMClassFromROMClass_superclassIsValueType(vmThread, superclass);
+				setCurrentExceptionNLSWithArgs(vmThread, J9NLS_VM_ERROR_TEMPLATE_SUPERCLASS_IS_VALUE_TYPE, J9VMCONSTANTPOOL_JAVALANGINCOMPATIBLECLASSCHANGEERROR, J9UTF8_LENGTH(superclassName), J9UTF8_DATA(superclassName));
+				return FALSE;
+			}
+
+			/* ensure that value type classes inherit from j.l.Object */
+			if (J9_ARE_ALL_BITS_SET(romClass->modifiers, J9AccValueType) && (J9VMJAVALANGOBJECT_OR_NULL(vm) != superclass)) {
+				Trc_VM_CreateRAMClassFromROMClass_valueTypesBadSuperclass(vmThread, className);
+				setCurrentExceptionNLSWithArgs(vmThread, J9NLS_VM_ERROR_TEMPLATE_VALUE_TYPE_SUPERCLASS, J9VMCONSTANTPOOL_JAVALANGINCOMPATIBLECLASSCHANGEERROR, J9UTF8_LENGTH(className), J9UTF8_DATA(className));
+				return FALSE;
+			}
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 			/* ensure that the superclass is visible */
 			if (!isROMClassUnsafe) {
@@ -1551,7 +1568,7 @@ loadSuperClassAndInterfaces(J9VMThread *vmThread, J9ClassLoader *classLoader, J9
 				 * belongs to a module that doesn't have access to the module that
 				 * owns the superClass class.
 				 */
-				bool superClassIsPublic = J9_ARE_ALL_BITS_SET(superclass->romClass->modifiers, J9_JAVA_PUBLIC);
+				bool superClassIsPublic = J9_ARE_ALL_BITS_SET(superclassModifiers, J9AccPublic);
 				if ((!superClassIsPublic && (packageID != superclass->packageID))
 					|| (superClassIsPublic && (J9_VISIBILITY_ALLOWED != checkModuleAccess(vmThread, vm, romClass, module, superclass->romClass, superclass->module, superclass->packageID, 0)))
 				) {
@@ -1580,7 +1597,7 @@ loadSuperClassAndInterfaces(J9VMThread *vmThread, J9ClassLoader *classLoader, J9
 						return FALSE;
 					}
 					/* ensure that the interface is in fact an interface */
-					if ((interfaceClass->romClass->modifiers & J9_JAVA_INTERFACE) != J9_JAVA_INTERFACE) {
+					if (J9_ARE_NO_BITS_SET(interfaceClass->romClass->modifiers, J9AccInterface)) {
 						Trc_VM_CreateRAMClassFromROMClass_interfaceIsNotAnInterface(vmThread, interfaceClass);
 						setCurrentExceptionForBadClass(vmThread, J9ROMCLASS_CLASSNAME(interfaceClass->romClass), J9VMCONSTANTPOOL_JAVALANGINCOMPATIBLECLASSCHANGEERROR);
 						return FALSE;
@@ -1594,7 +1611,7 @@ loadSuperClassAndInterfaces(J9VMThread *vmThread, J9ClassLoader *classLoader, J9
 						 * belongs to a module that doesn't have access to the module that
 						 * owns the interface class.
 						 */
-						bool interfaceIsPublic = J9_ARE_ALL_BITS_SET(interfaceClass->romClass->modifiers, J9_JAVA_PUBLIC);
+						bool interfaceIsPublic = J9_ARE_ALL_BITS_SET(interfaceClass->romClass->modifiers, J9AccPublic);
 						if ((!interfaceIsPublic && (packageID != interfaceClass->packageID))
 							|| (interfaceIsPublic && (J9_VISIBILITY_ALLOWED != checkModuleAccess(vmThread, vm, romClass, module, interfaceClass->romClass, interfaceClass->module, interfaceClass->packageID, 0)))
 						) {
