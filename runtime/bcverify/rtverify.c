@@ -1343,8 +1343,8 @@ _illegalPrimitiveReturn:
 
 			receiver = BCV_BASE_TYPE_NULL; /* makes class compare work with statics */
 
-			if (bc & 1) {
-				/* JBputfield/JBpustatic - odd bc's */
+			if (bc & 1 || bc == JBwithfield) {
+				/* JBputfield/JBputstatic/JBwithfield - odd bc's and JBwithfield*/
 				type = POP;
 				if ((*J9UTF8_DATA(utf8string) == 'D') || (*J9UTF8_DATA(utf8string) == 'J')) {
 					inconsistentStack |= (type != BCV_BASE_TYPE_TOP);
@@ -1388,7 +1388,8 @@ _illegalPrimitiveReturn:
 					goto _inconsistentStack;
 				}
 
-				if (bc == JBputfield) {
+				if (bc != JBputstatic) {
+					/* JBputfield/JBwithfield */
 					receiver = POP;
 					/* Jazz 82615: Save the location of receiver */
 					receiverPtr = stackTop;
@@ -1439,6 +1440,9 @@ _illegalPrimitiveReturn:
 					/* Jazz 82615: Set the error code when error occurs in checking the protected member access. */
 					verboseErrorCode = BCV_ERR_BAD_ACCESS_PROTECTED;
 					goto _miscError;
+				}
+				if (bc == JBwithfield) {
+					stackTop = pushClassType(verifyData, utf8string, stackTop);
 				}
 			}
 			break;
@@ -1741,6 +1745,14 @@ _illegalPrimitiveReturn:
 			case JBnewdup:
 				/* put a uninitialized object of the correct type on the stack */
 				PUSH(BCV_SPECIAL_NEW | (start << BCV_CLASS_INDEX_SHIFT));
+				break;
+
+			case JBdefaultvalue:
+				index = PARAM_16(bcIndex, 1);
+				info = &constantPool[index];
+				utf8string = J9ROMSTRINGREF_UTF8DATA((J9ROMStringRef *) info);
+
+				stackTop = pushClassType(verifyData, utf8string, stackTop);
 				break;
 
 			case JBnewarray:

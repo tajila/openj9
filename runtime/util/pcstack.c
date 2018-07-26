@@ -227,7 +227,7 @@ const unsigned char J9JavaInstructionSizeAndBranchActionTable[] = {
 0x00 /* JBunimplemented = 201 */,
 0x71 /* JBbreakpoint = 202 */,
 #if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
-0x01 /* JBdefaultvalue = 203 */ ,
+0x03 /* JBdefaultvalue = 203 */ ,
 0x03 /* JBwithfield = 204 */ ,
 #else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 0x00 /* JBunimplemented = 203 */,
@@ -497,8 +497,8 @@ const unsigned char JavaStackActionTable[] = {
 0x00 /* JBunimplemented = 201  -- pops: 0 pushes: 0*/ ,
 0x00 /* JBbreakpoint = 202  -- pops: 0 pushes: 0*/ ,
 #if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
-0x01 /* JBdefaultvalue = 203 -- pops: 0 pushes: 1 */ ,
-0x80 /* JBwithfield = 204 -- pops: 2 pushes: 1 */ ,
+0x50 /* JBdefaultvalue = 203 -- pops: 0 pushes: 1 */ ,
+0x52 /* JBwithfield = 204 -- pops: 2 pushes: 1 */ ,
 #else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 0x00 /* JBunimplemented = 203  -- pops: 0 pushes: 0*/ ,
 0x00 /* JBunimplemented = 204  -- pops: 0 pushes: 0*/ ,
