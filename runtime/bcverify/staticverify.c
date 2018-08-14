@@ -122,7 +122,7 @@ buildInstructionMap (J9CfrClassFile * classfile, J9CfrAttributeCode * code, U_8 
 			break;
 
 		default:
-			if (bc > CFR_BC_jsr_w) {
+			if (bc > CFR_BC_withfield) {
 				errorType = J9NLS_CFR_ERR_BC_UNKNOWN__ID;
 				goto _leaveProc;
 			}
@@ -787,6 +787,7 @@ checkBytecodeStructure (J9CfrClassFile * classfile, UDATA methodIndex, UDATA len
 		case CFR_BC_putstatic:
 		case CFR_BC_getfield:
 		case CFR_BC_putfield:
+		case CFR_BC_withfield:
 			NEXT_U16(index, bcIndex);
 			if ((!index) || (index >= cpCount)) {
 				errorType = J9NLS_CFR_ERR_BAD_INDEX__ID;
@@ -795,6 +796,7 @@ checkBytecodeStructure (J9CfrClassFile * classfile, UDATA methodIndex, UDATA len
 				goto _verifyError;
 			}
 			info = &(classfile->constantPool[index]);
+			
 			if (info->tag != CFR_CONSTANT_Fieldref) {
 				errorType = J9NLS_CFR_ERR_BC_NOT_FIELDREF__ID;
 				/* Jazz 82615: Set the constant pool index to show up in the error message framework */
@@ -917,6 +919,7 @@ checkBytecodeStructure (J9CfrClassFile * classfile, UDATA methodIndex, UDATA len
 			}
 			break;
 
+		case CFR_BC_defaultvalue:
 		case CFR_BC_new:
 			NEXT_U16(index, bcIndex);
 			if ((!index) || (index >= cpCount)) {
