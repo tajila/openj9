@@ -1366,6 +1366,16 @@ _illegalPrimitiveReturn:
 					}
 					type = POP;
 				}
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				if (bc != JBwithfield) {
+					if ((type == BCV_BASE_TYPE_NULL) && (NULL != hashTableFind(valueTypesTable, &utf8string))) {
+						/* cannot set value type to null */
+						errorType = J9NLS_BCV_ERR_NULL_VALUE_TYPE_ATTEMPT__ID;
+						verboseErrorCode = BCV_ERR_NULL_VALUE_TYPE_ATTEMPT;
+						goto _miscError;
+					}
+				}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 				/* HACK: Pushes the return type without moving the stack pointer */
 				pushFieldType(verifyData, utf8string, stackTop);
 				if (*stackTop & BCV_TAG_BASE_TYPE_OR_TOP) {

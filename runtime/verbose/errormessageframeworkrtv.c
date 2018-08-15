@@ -940,6 +940,9 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 	case BCV_ERR_UNEXPECTED_EOF:
 		printMessage(&msgBuf, "Unexpected EOF is detected in the class file.");
 		break;
+	case BCV_ERR_NULL_VALUE_TYPE_ATTEMPT:
+		printMessage(&msgBuf, "Setting value type field to null is not permitted.");
+		break;
 	default:
 		Assert_VRB_ShouldNeverHappen();
 		break;
