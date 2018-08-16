@@ -772,3 +772,6 @@ TraceException=Trc_VM_registerPredefinedHandler_invalidPortlibSignalFlag NoEnv O
 TraceEvent=Trc_VM_signalDispatch_signalValue Overhead=1 Level=3 Template="signalDispatch - signal value: %d"
 
 TraceException=Trc_VM_registerOSHandler_invalidPortlibSignalFlag NoEnv Overhead=1 Level=1 Template="registerOSHandler - invalid portlib signal flag: %zu"
+
+TraceException=Trc_VM_CreateRAMClassFromROMClass_superclassIsValueType Overhead=1 Level=1 Template="Superclass (RAM class=%p) is value type. Throw IncompatibleClassChangeError"
+TraceException=Trc_VM_CreateRAMClassFromROMClass_valueTypesBadSuperclass Overhead=1 Level=1 Template="Value type class (RAM class=%p) does not inherit from java.lang.Object. Throw IncompatibleClassChangeError"
