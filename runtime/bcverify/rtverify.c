@@ -390,7 +390,6 @@ _errorLocation:
 	goto _finished;
 }
 
-
 /* 
 	Walk the bytceodes linearly and verify that the recorded stack maps match.
 
@@ -461,6 +460,9 @@ verifyBytecodes (J9BytecodeVerificationData * verifyData)
 	UDATA errorStackIndex = (UDATA)-1;
 	UDATA errorTempData = (UDATA)-1;
 	BOOLEAN isNextStack = FALSE;
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	J9HashTable* valueTypesTable = verifyData->valueTypesTable;
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 	Trc_RTV_verifyBytecodes_Entry(verifyData->vmStruct, 
 			(UDATA) J9UTF8_LENGTH(J9ROMMETHOD_GET_NAME(romClass, romMethod)),
@@ -1343,8 +1345,13 @@ _illegalPrimitiveReturn:
 
 			receiver = BCV_BASE_TYPE_NULL; /* makes class compare work with statics */
 
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
 			if (bc & 1 || bc == JBwithfield) {
 				/* JBputfield/JBputstatic/JBwithfield - odd bc's and JBwithfield*/
+#else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+			if (bc & 1) {
+				/* JBputfield/JBputstatic - odd bc's */
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 				type = POP;
 				if ((*J9UTF8_DATA(utf8string) == 'D') || (*J9UTF8_DATA(utf8string) == 'J')) {
 					inconsistentStack |= (type != BCV_BASE_TYPE_TOP);
@@ -1359,6 +1366,16 @@ _illegalPrimitiveReturn:
 					}
 					type = POP;
 				}
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				if (bc != JBwithfield) {
+					if ((type == BCV_BASE_TYPE_NULL) && (NULL != hashTableFind(valueTypesTable, &utf8string))) {
+						/* cannot set value type to null */
+						errorType = J9NLS_BCV_ERR_NULL_VALUE_TYPE_ATTEMPT__ID;
+						verboseErrorCode = BCV_ERR_NULL_VALUE_TYPE_ATTEMPT;
+						goto _miscError;
+					}
+				}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 				/* HACK: Pushes the return type without moving the stack pointer */
 				pushFieldType(verifyData, utf8string, stackTop);
 				if (*stackTop & BCV_TAG_BASE_TYPE_OR_TOP) {
@@ -1441,9 +1458,24 @@ _illegalPrimitiveReturn:
 					verboseErrorCode = BCV_ERR_BAD_ACCESS_PROTECTED;
 					goto _miscError;
 				}
-				if (bc == JBwithfield) {
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				if (bc == JBputfield) {
+					if (NULL != hashTableFind(valueTypesTable, &utf8string)) {
+						/* only JBwithfield can be used to set a value type's instance fields */
+						errorType = J9NLS_BCV_ERR_BAD_PUTFIELD_TARGET__ID;
+						verboseErrorCode = BCV_ERR_BAD_PUTFIELD_TARGET;
+						goto _miscError;
+					}
+				} else if (bc == JBwithfield) {
+					if (NULL == hashTableFind(valueTypesTable, &utf8string)) {
+						/* JBwithfield must operate on a value type class's field */
+						errorType = J9NLS_BCV_ERR_BAD_WITHFIELD_TARGET__ID;
+						verboseErrorCode = BCV_ERR_BAD_WITHFIELD_TARGET;
+						goto _miscError;
+					}
 					stackTop = pushClassType(verifyData, utf8string, stackTop);
 				}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 			}
 			break;
 		}
@@ -2322,7 +2354,6 @@ _newStack:
 		verboseErrorCode = BCV_ERR_DEAD_CODE;
 		goto _miscError;
 	}
-
 	Trc_RTV_verifyBytecodes_Exit(verifyData->vmStruct);
 	
 	return BCV_SUCCESS;

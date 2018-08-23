@@ -940,6 +940,15 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 	case BCV_ERR_UNEXPECTED_EOF:
 		printMessage(&msgBuf, "Unexpected EOF is detected in the class file.");
 		break;
+	case BCV_ERR_NULL_VALUE_TYPE_ATTEMPT:
+		printMessage(&msgBuf, "Setting value type field to null is not permitted.");
+		break;
+	case BCV_ERR_BAD_PUTFIELD_TARGET:
+		printMessage(&msgBuf, "Putfield cannot mutate a value type class instance field.");
+		break;
+	case BCV_ERR_BAD_WITHFIELD_TARGET:
+		printMessage(&msgBuf, "Withfield can only operate on value type class instance field.");
+		break;
 	default:
 		Assert_VRB_ShouldNeverHappen();
 		break;

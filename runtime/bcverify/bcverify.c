@@ -45,6 +45,9 @@
 
 #include "bcverify.h"
 
+/* TODO: Perform profiling and find optimal value */
+#define VALUE_TYPE_TABLE_INITIAL_SIZE 8
+
 /* Define for debug
 #define DEBUG_BCV
 */
@@ -2352,6 +2355,46 @@ error_no_memory:
 		name##Size = needed; \
 	}
 
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+static UDATA
+valueTypesHashFn(void *key, void *userData)
+{
+	J9JavaVM* javaVM = (J9JavaVM*) userData;
+	UDATA length = J9UTF8_LENGTH(*(J9UTF8**)key);
+	U_8 *data = J9UTF8_DATA(*(J9UTF8**)key);
+	if (2 < length && ';' == data[length-1]) {
+		return javaVM->internalVMFunctions->computeHashForUTF8(&data[1], length-2);
+	}
+	return javaVM->internalVMFunctions->computeHashForUTF8(data, length);
+}
+
+static UDATA
+valueTypesHashEqualFn(void *tableNode, void *queryNode, void *userData)
+{
+	UDATA length = J9UTF8_LENGTH(*(J9UTF8**)queryNode);
+	U_8 *data = J9UTF8_DATA(*(J9UTF8**)queryNode);
+	if (2 < length && ';' == data[length-1]) {
+		return J9UTF8_DATA_EQUALS(J9UTF8_DATA(*(J9UTF8**)tableNode), J9UTF8_LENGTH(*(J9UTF8**)tableNode), &data[1], length-2);
+	}
+	return J9UTF8_EQUALS(*(J9UTF8**)tableNode, *(J9UTF8**)queryNode);
+}
+
+static void
+initializeValueTypeTable(J9BytecodeVerificationData *verifyData) {
+	U_32 flags = J9HASH_TABLE_ALLOW_SIZE_OPTIMIZATION;
+	J9ROMClass *romClass = verifyData->romClass;
+	J9HashTable* valueTypesTable = hashTableNew(OMRPORT_FROM_J9PORT(verifyData->javaVM->portLibrary), J9_GET_CALLSITE(), VALUE_TYPE_TABLE_INITIAL_SIZE, sizeof(void*),
+					sizeof(void*), flags, J9MEM_CATEGORY_MODULES, valueTypesHashFn, valueTypesHashEqualFn, NULL, verifyData->javaVM);
+	J9SRP *valueTypeClasses = J9ROMCLASS_VALUETYPECLASSES(romClass);
+	J9UTF8 *valueTypeClassName;
+	for (UDATA i = 0; i < romClass->valueTypeClassCount; i++) {
+		valueTypeClassName = NNSRP_GET(valueTypeClasses[i], J9UTF8*);
+		hashTableAdd(valueTypesTable, &valueTypeClassName);
+	}
+	verifyData->valueTypesTable = valueTypesTable;
+}
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
+
 /* 
  * Sequence the 2 verification passes - flow based type inference stack map generation
  * and linear stack map verification
@@ -2401,6 +2444,9 @@ j9bcv_verifyBytecodes (J9PortLibrary * portLib, J9Class * clazz, J9ROMClass * ro
 	/* List is used for the whole class */
 	initializeClassNameList(verifyData);
 
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	initializeValueTypeTable(verifyData);
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 	romMethod = (J9ROMMethod *) J9ROMCLASS_ROMMETHODS(romClass);
 
@@ -2607,6 +2653,7 @@ _fallBack:
 	}
 
 _done:
+	hashTableFree(verifyData->valueTypesTable);
 	verifyData->vmStruct->omrVMThread->vmState = oldState;
 	if (result == BCV_ERR_INSUFFICIENT_MEMORY) {
 		Trc_BCV_j9bcv_verifyBytecodes_OutOfMemory(verifyData->vmStruct, 
