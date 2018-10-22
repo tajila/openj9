@@ -37,6 +37,7 @@ import static com.ibm.j9ddr.vm29.j9.BCNames.JBfload;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBfloadw;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBfstore;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBfstorew;
+import static com.ibm.j9ddr.vm29.j9.BCNames.JBwithfield;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBgetfield;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBgetstatic;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBgoto;
@@ -83,6 +84,7 @@ import static com.ibm.j9ddr.vm29.j9.BCNames.JBlookupswitch;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBlstore;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBlstorew;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBmultianewarray;
+import static com.ibm.j9ddr.vm29.j9.BCNames.JBdefaultvalue;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBnew;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBnewdup;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBnewarray;
@@ -435,6 +437,7 @@ public class ByteCodeDumper {
 			case JBgetstatic:
 			case JBputstatic:
 			case JBgetfield:
+			case JBwithfield:
 			case JBputfield:
 				index = new UDATA(_GETNEXT_U16());
 				info = constantPool.add(index);
@@ -521,6 +524,7 @@ public class ByteCodeDumper {
 
 			case JBnew:
 			case JBnewdup:
+			case JBdefaultvalue:
 			case JBanewarray:
 			case JBcheckcast:
 			case JBinstanceof:

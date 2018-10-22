@@ -462,12 +462,14 @@ public class RomClassWalker extends ClassWalker {
 				case BCNames.JBputstatic:
 				case BCNames.JBgetfield:
 				case BCNames.JBputfield:
+				case BCNames.JBwithfield:
 				case BCNames.JBinvokevirtual:
 				case BCNames.JBinvokespecial:
 				case BCNames.JBinvokestatic:
 				case BCNames.JBinvokehandle:
 				case BCNames.JBinvokehandlegeneric:
 				case BCNames.JBnew:
+				case BCNames.JBdefaultvalue:
 				case BCNames.JBnewdup:
 				case BCNames.JBanewarray:
 				case BCNames.JBcheckcast:
