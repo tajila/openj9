@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018, 2019 IBM Corp. and others
+ * Copyright (c) 2018, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,7 +20,186 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
+/*
+ * Represents a single build spec ie. platform it
+ */
+class Buildspec {
+    private List parents;
+    private my_def;
+
+    /*
+     * Helper function to check if a variable is a map.
+     * This is needed because .isMap() is not on the default jenkins whitelist
+     */
+    private static boolean isMap(x){
+        switch(x){
+        case Map:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /*
+     * If x can be converted to integer, return the result.
+     * else return x
+     */
+    private static toKey(x){
+        def key = x
+        try{
+            key = x as int
+        } catch (def e){ }
+        return key
+    }
+
+    /* perform a repeated map lookup of a given '.' separated name in my def
+     * eg. getNestedField('foo.bar.baz') is equivilent to
+     * my_def['foo']['bar']['baz'], with the added benefit that if any lookup
+     * along the path fails, null is returned rather than throwing an exception
+     */
+    private getNestedField(String full_name){
+        def names = full_name.split("\\.")
+        def value = my_def
+        // note we don't really want to find, but we use this as a verson of .each which we can abort
+        if (names.size() == 0){
+            return null
+        }
+        names.find { element_name ->
+            if (value.containsKey(element_name)){
+                value = value[element_name]
+                return false // continue iterating the list
+            } else {
+                value = null
+                return true // abort processing
+            }
+        }
+        return value
+    }
+
+    /*
+     * look up a scalar field for the first field in this list to have a value:
+     * if <name> is a map:
+     *    - <name>.<sdk_ver>
+     *    - <name>.all
+     * else:
+     *    - <name>
+     *  - <parent>.getScalarField()
+     *  with the parents being evaluated in the the order they are listed in the yaml file
+     */
+    public getScalarField(name, sdk_ver){
+        def sdk_key = toKey(sdk_ver)
+        def field = getNestedField(name)
+        if(field == null){
+            field = parents.findResult {it.getScalarField(name, sdk_ver)}
+        }
+
+        // Does this entry specify different values for different sdk versions?
+        if (null != field && isMap(field)){
+            // If we have an sdk specific value use that
+            if (field.containsKey(sdk_key)){
+                field = field[sdk_key]
+            } else {
+                // else fall back to the "all" key
+                field = field['all']
+            }
+        }
+        return field
+    }
+
+
+    /* Get a list of values composed by concatinating the values of the
+     * following fields in order:
+     * - <parent>.getVectorField()
+     * if <name> is a map:
+     *   - <name>.all
+     *   - <name>.sdk
+     * else:
+     *   - <name>
+     * with parents being evaluated in the order they are listed in the yaml file.
+     * - Note: any list elements which are themselves list ar flattened.
+     */
+    public List getVectorField(name, sdk_ver) {
+        // Yaml will use an integer key if possible, otherwise it falls back to string
+        def sdk_key = toKey(sdk_ver)
+
+        def field_value = []
+        parents.each { parent ->
+            field_value += parent.getVectorField(name, sdk_ver);
+        }
+        def my_value = getNestedField(name)
+        if (my_value != null){
+            // Do we specify different values for different SDK versions?
+            if (isMap(my_value)){
+                // If there is an "all" definition put that first
+                if (my_value.containsKey('all')){
+                    field_value += my_value['all']
+                }
+                // If we have an SDK specific value, add that as well
+                if (my_value.containsKey(sdk_key)) {
+                    def sdk_val = my_value[sdk_key]
+                    // Special case handling for old style variables where
+                    // excluded tests are stored as a map rather than a list
+                    if(isMap(sdk_val)){
+                        field_value += sdk_val.keySet()
+                    } else {
+                        field_value += sdk_val
+                    }
+                }
+            } else {
+                field_value += my_value
+            }
+        }
+        return field_value.flatten()
+    }
+
+    /* Construct a build spec
+     * mgr - reference to the BuildspecManager used to cache Buildspecs
+     * cfg - Collection returned from yaml corresponding to this buildspec.
+     *       Typically this would be VARIABLES[<build_spec_name>]
+     */
+    public Buildspec(mgr, cfg){
+        my_def = cfg
+        parents = []
+        if(my_def.containsKey('extends')) {
+            my_def['extends'].each { parent_name ->
+                parents << mgr.getSpec(parent_name)
+            }
+        }
+    }
+}
+
+/*
+ * Used to cache a map of names -> Builspecs
+ */
+class BuildspecManager {
+
+    private buildspecs
+    private vars
+
+    /*
+     * vars_ - Collection that the buildspec info should be pulled from
+     *         Typically this would be VARIABLES.
+     */
+    public BuildspecManager(vars_){
+        vars = vars_
+        buildspecs = [:]
+    }
+
+
+    /*
+     * Get a Buildspec for a given name.
+     */
+    @NonCPS
+    public getSpec(name){
+        if(!buildspecs.containsKey(name)){
+            buildspecs[name] = new Buildspec(this, vars[name])
+        }
+        return buildspecs[name]
+    }
+}
+
 def VARIABLES
+def buildspec_manager
 pipelineFunctions = load 'buildenv/jenkins/common/pipeline-functions.groovy'
 
 /*
@@ -46,6 +225,7 @@ def parse_variables_file(){
 
     echo "Using variables file: ${VARIABLE_FILE}"
     VARIABLES = readYaml file: "${VARIABLE_FILE}"
+    buildspec_manager = new BuildspecManager(VARIABLES)
 }
 
 /*
@@ -165,6 +345,7 @@ def get_openjdk_info(SDK_VERSION, SPECS, MULTI_RELEASE) {
     }
 
     for (build_spec in SPECS) {
+
         // default values from variables file
         def repo = default_openjdk_info.get('default').get('repoUrl')
         def branch = default_openjdk_info.get('default').get('branch')
@@ -362,10 +543,11 @@ def set_node(job_type) {
 
     if (!NODE) {
         // fetch from variables file
-        NODE = get_value(VARIABLES."${SPEC}".node_labels."${job_type}", SDK_VERSION)
+        NODE = buildspec_manager.getSpec(SPEC).getScalarField("node_labels.${job_type}", SDK_VERSION)
         if (!NODE) {
             error("Missing ${job_type} NODE!")
         }
+
     }
 }
 
@@ -373,14 +555,14 @@ def set_node(job_type) {
 * Set the RELEASE variable with the value provided in the variables file.
 */
 def set_release() {
-    RELEASE = get_value(VARIABLES."${SPEC}".release, SDK_VERSION)
+    RELEASE = buildspec_manager.getSpec(SPEC).getScalarField("release", SDK_VERSION)
 }
 
 /*
 * Set the JDK_FOLDER variable with the value provided in the variables file.
 */
 def set_jdk_folder() {
-    JDK_FOLDER = get_value(VARIABLES.jdk_image_dir, SDK_VERSION)
+    JDK_FOLDER = buildspec_manager.getSpec('misc').getScalarField("jdk_image_dir", SDK_VERSION)
 }
 
 /*
@@ -390,10 +572,12 @@ def set_jdk_folder() {
 def set_build_variables() {
     set_repos_variables()
 
+    def buildspec = buildspec_manager.getSpec(SPEC)
+
     // fetch values per spec and Java version from the variables file
-    BOOT_JDK = get_value(VARIABLES."${SPEC}".boot_jdk, SDK_VERSION)
-    FREEMARKER = VARIABLES."${SPEC}".freemarker
-    OPENJDK_REFERENCE_REPO = VARIABLES."${SPEC}".openjdk_reference_repo
+    BOOT_JDK = buildspec.getScalarField("boot_jdk", SDK_VERSION)
+    FREEMARKER = buildspec.getScalarField("freemarker", SDK_VERSION)
+    OPENJDK_REFERENCE_REPO = buildspec.getScalarField("openjdk_reference_repo", SDK_VERSION)
     set_release()
     set_jdk_folder()
     set_build_extra_options()
@@ -401,8 +585,8 @@ def set_build_variables() {
     // set variables for the build environment configuration
     // check job parameters, if not provided default to variables file
     BUILD_ENV_VARS = params.BUILD_ENV_VARS
-    if (!BUILD_ENV_VARS && VARIABLES."${SPEC}".build_env) {
-        BUILD_ENV_VARS = get_value(VARIABLES."${SPEC}".build_env.vars, SDK_VERSION)
+    if (!BUILD_ENV_VARS) {
+        BUILD_ENV_VARS = buildspec.getVectorField("build_env.vars", SDK_VERSION).join(" ")
     }
 
     BUILD_ENV_VARS_LIST = []
@@ -419,8 +603,8 @@ def set_build_variables() {
     }
 
     BUILD_ENV_CMD = params.BUILD_ENV_CMD
-    if (!BUILD_ENV_CMD && VARIABLES."${SPEC}".build_env) {
-        BUILD_ENV_CMD = get_value(VARIABLES."${SPEC}".build_env.cmd, SDK_VERSION)
+    if (!BUILD_ENV_CMD) {
+        BUILD_ENV_CMD = buildspec.getScalarField("build_env.cmd", SDK_VERSION)
     }
 
     if (BUILD_ENV_CMD) {
@@ -453,6 +637,16 @@ def get_date() {
 }
 
 /*
+* Sets variables for a test job on a given platform.
+*/
+def set_test_variables() {
+    set_release()
+    set_jdk_folder()
+    JAVA_VERSION = "SE" + "${SDK_VERSION}" + "0"
+    TEST_DEPENDENCIES_JOB_NAME = VARIABLES.test_dependencies_job_name
+}
+
+/*
 * Set TESTS_TARGETS, indicating the level of testing
 * and sets TEST_FLAG for all targets if defined in variable file
 */
@@ -464,11 +658,10 @@ def set_test_targets() {
     }
 
     EXCLUDED_TESTS = []
-    if (VARIABLES."${SPEC}".excluded_tests) {
-        def excludedTests = get_value(VARIABLES."${SPEC}".excluded_tests, SDK_VERSION)
-        if (excludedTests) {
-            EXCLUDED_TESTS.addAll(excludedTests.keySet())
-        }
+    def buildspec = buildspec_manager.getSpec(SPEC)
+    def excludedTests = buildspec.getVectorField("excluded_tests", SDK_VERSION)
+    if (excludedTests) {
+        EXCLUDED_TESTS.addAll(excludedTests)
     }
 
     TEST_FLAG = ''
@@ -483,8 +676,7 @@ def set_test_targets() {
 
 def get_default_test_targets() {
     if (VARIABLES.tests_targets && VARIABLES.tests_targets.default) {
-        // VARIABLES.tests_targets.default is a map where all values are null
-        return VARIABLES.tests_targets.default.keySet().join(',')
+        return VARIABLES.tests_targets.default.join(',')
     }
 
     return ''
@@ -606,6 +798,15 @@ def set_job_variables(job_type) {
             set_sdk_variables()
             set_artifactory_config()
             add_pr_to_description()
+            break
+        case "pullRequest":
+            // set the node the pull request job would run on
+            set_node('build')
+            // set variables for a pull request job that builds an SDK
+            set_build_variables()
+            set_sdk_variables()
+            set_test_variables()
+            set_artifactory_config()
             break
         case "pipeline":
             // set variables for a pipeline job
@@ -883,20 +1084,21 @@ def get_specs(SUPPORTED_SPECS) {
 */
 def set_build_extra_options(build_specs=null) {
     if (!build_specs) {
+        buildspec = buildspec_manager.getSpec(SPEC)
         // single release
         EXTRA_GETSOURCE_OPTIONS = params.EXTRA_GETSOURCE_OPTIONS
         if (!EXTRA_GETSOURCE_OPTIONS) {
-            EXTRA_GETSOURCE_OPTIONS = get_value(VARIABLES."${SPEC}".extra_getsource_options, SDK_VERSION)
+            EXTRA_GETSOURCE_OPTIONS = buildspec.getVectorField("extra_getsource_options", SDK_VERSION).join(" ")
         }
 
         EXTRA_CONFIGURE_OPTIONS = params.EXTRA_CONFIGURE_OPTIONS
         if (!EXTRA_CONFIGURE_OPTIONS) {
-            EXTRA_CONFIGURE_OPTIONS = get_value(VARIABLES."${SPEC}".extra_configure_options, SDK_VERSION)
+            EXTRA_CONFIGURE_OPTIONS = buildspec.getVectorField("extra_configure_options", SDK_VERSION).join(" ")
         }
 
         EXTRA_MAKE_OPTIONS = params.EXTRA_MAKE_OPTIONS
         if (!EXTRA_MAKE_OPTIONS) {
-            EXTRA_MAKE_OPTIONS = get_value(VARIABLES."${SPEC}".extra_make_options, SDK_VERSION)
+            EXTRA_MAKE_OPTIONS = buildspec.getVectorField("extra_make_options", SDK_VERSION).join(" ")
         }
 
         OPENJDK_CLONE_DIR = params.OPENJDK_CLONE_DIR
@@ -920,13 +1122,14 @@ def set_build_extra_options(build_specs=null) {
             build_specs.each { spec, releases ->
                 if (releases.contains(release)) {
                     ['EXTRA_GETSOURCE_OPTIONS', 'EXTRA_CONFIGURE_OPTIONS', 'EXTRA_MAKE_OPTIONS'].each { it ->
+                        buildspec = buildspec_manager.getSpec(spec)
                         // look up extra options by release and spec/platform provided as build parameters:
                         // e.g. EXTRA_GETSOURCE_OPTIONS_JDK<release>_<spec>
                         //      EXTRA_CONFIGURE_OPTIONS_JDK<release>_<spec>
                         //      EXTRA_MAKE_OPTIONS_JDK<release>_<spec>
                         def extraOptions = params."${it}_JDK${release}_${spec}"
-                        if (!extraOptions && VARIABLES."${spec}") {
-                            extraOptions = get_value(VARIABLES."${spec}"."${it.toLowerCase()}", release)
+                        if (!extraOptions && buildspec) {
+                            extraOptions = buildspec.getVectorField("${it.toLowerCase()}", release).join(" ")
                         }
 
                         if (extraOptions) {

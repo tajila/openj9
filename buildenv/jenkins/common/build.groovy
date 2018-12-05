@@ -86,7 +86,7 @@ def get_sources() {
 
     // Check if this build is a PR
     // Only PR builds (old and new) pass ghprbPullId
-    if (params.ghprbPullId) {
+    if (false) {
         // Look for dependent changes and checkout PR(s)
         checkout_pullrequest()
     } else {
@@ -256,6 +256,20 @@ def checkoutRef (REF) {
 
 
 def build() {
+
+	stage('Check source version') {
+		timestamps {
+			sh "cd openj9 && git branch -v"
+			sh "cd omr && git branch -v"
+		}
+	}
+	stage('Modify header files for Valhalla') {
+		timestamps {
+			sh "sed -i '65 a #define J9VM_OPT_VALHALLA_VALUE_TYPES' openj9/runtime/include/j9cfg.h.ftl"
+			sh "cat openj9/runtime/include/j9cfg.h.ftl"
+		}
+	}
+
     stage('Compile') {
         // 'all' target dependencies broken for zos, use 'images test-image-openj9'
         def make_target = SPEC.contains('zos') ? 'images test-image-openj9' : 'all'
@@ -466,6 +480,16 @@ def build_all() {
             // disableDeferredWipeout also requires deleteDirs. See https://issues.jenkins-ci.org/browse/JENKINS-54225
             cleanWs notFailBuild: true, disableDeferredWipeout: true, deleteDirs: true
         }
+    }
+}
+
+def build_pr() {
+
+    // Called by PR Compile & Test jobs
+    // Does not cleanup as it is expected testing will occur, followed by cleanup
+    timeout(time: 6, unit: 'HOURS') {
+        get_source()
+        build()
     }
 }
 
