@@ -25,7 +25,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+
+import jdk.internal.misc.Unsafe;
 
 import org.testng.Assert;
 import static org.testng.Assert.*;
@@ -48,6 +50,7 @@ import org.testng.annotations.Test;
 
 @Test(groups = { "level.sanity" })
 public class ValueTypeTests {
+	static Unsafe unsafe = null;
 	static Lookup lookup = MethodHandles.lookup();
 	static Class point2DClass = null;
 	static Class line2DClass = null;
@@ -55,7 +58,26 @@ public class ValueTypeTests {
 	static MethodHandle makeLine2D = null;
 	static MethodHandle getX = null;
 	static MethodHandle getY = null;
-
+	static MethodHandle makeFlattenedTriangle2D = null;
+	static MethodHandle makeFlattenedLine2D = null;
+	static Class flattenedLine2DClass = null;
+	static Class flattenedTriangle2DClass = null;
+	static MethodHandle getFlatSt = null;
+	static MethodHandle withFlatSt = null;
+	static MethodHandle getFlatEn = null;
+	static MethodHandle withFlatEn = null;
+	
+	static {
+		try {
+			Field f = Unsafe.class.getDeclaredField("theUnsafe");
+			f.setAccessible(true);
+			unsafe = (Unsafe) f.get(null);
+		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
 	/*
 	 * Create a value type
 	 * 
@@ -208,14 +230,14 @@ public class ValueTypeTests {
 	@Test(priority=2)
 	static public void testCreateFlattenedLine2D() throws Throwable {
 		String fields[] = {"st:QPoint2D;:value", "en:QPoint2D;:value"};
-		Class flattenedLine2DClass = ValueTypeGenerator.generateValueClass("FlattenedLine2D", fields);
+		flattenedLine2DClass = ValueTypeGenerator.generateValueClass("FlattenedLine2D", fields);
 				
-		MethodHandle makeFlattenedLine2D = lookup.findStatic(flattenedLine2DClass, "makeValueGeneric", MethodType.methodType(flattenedLine2DClass, Object.class, Object.class));
+		makeFlattenedLine2D = lookup.findStatic(flattenedLine2DClass, "makeValueGeneric", MethodType.methodType(flattenedLine2DClass, Object.class, Object.class));
 		
-		MethodHandle getSt = generateGenericGetter(flattenedLine2DClass, "st");
- 		MethodHandle withSt = generateGenericWither(flattenedLine2DClass, "st");
- 		MethodHandle getEn = generateGenericGetter(flattenedLine2DClass, "en");
- 		MethodHandle withEn = generateGenericWither(flattenedLine2DClass, "en");
+		getFlatSt = generateGenericGetter(flattenedLine2DClass, "st");
+ 		withFlatSt = generateGenericWither(flattenedLine2DClass, "st");
+ 		getFlatEn = generateGenericGetter(flattenedLine2DClass, "en");
+ 		withFlatEn = generateGenericWither(flattenedLine2DClass, "en");
  		
 		int x = 0xFFEEFFEE;
 		int y = 0xAABBAABB;
@@ -236,22 +258,224 @@ public class ValueTypeTests {
 		
 		Object line2D = makeFlattenedLine2D.invoke(st, en);
 		
-		assertEquals(getX.invoke(getSt.invoke(line2D)), x);
-		assertEquals(getY.invoke(getSt.invoke(line2D)), y);
-		assertEquals(getX.invoke(getEn.invoke(line2D)), x2);
-		assertEquals(getY.invoke(getEn.invoke(line2D)), y2);
+		assertEquals(getX.invoke(getFlatSt.invoke(line2D)), x);
+		assertEquals(getY.invoke(getFlatSt.invoke(line2D)), y);
+		assertEquals(getX.invoke(getFlatEn.invoke(line2D)), x2);
+		assertEquals(getY.invoke(getFlatEn.invoke(line2D)), y2);
 		
 		Object stNew = makePoint2D.invoke(xNew, yNew);
 		Object enNew = makePoint2D.invoke(x2New, y2New);
 		
-		line2D = withSt.invoke(line2D, stNew);
-		line2D = withEn.invoke(line2D, enNew);
+		line2D = withFlatSt.invoke(line2D, stNew);
+		line2D = withFlatEn.invoke(line2D, enNew);
 		
-		assertEquals(getX.invoke(getSt.invoke(line2D)), xNew);
-		assertEquals(getY.invoke(getSt.invoke(line2D)), yNew);
-		assertEquals(getX.invoke(getEn.invoke(line2D)), x2New);
-		assertEquals(getY.invoke(getEn.invoke(line2D)), y2New);
+		assertEquals(getX.invoke(getFlatSt.invoke(line2D)), xNew);
+		assertEquals(getY.invoke(getFlatSt.invoke(line2D)), yNew);
+		assertEquals(getX.invoke(getFlatEn.invoke(line2D)), x2New);
+		assertEquals(getY.invoke(getFlatEn.invoke(line2D)), y2New);
 	}
+	
+	@Test(priority=3)
+	static public void testCreateFlattenedTriangle2D() throws Throwable {
+		String fields[] = {"ll:J", "l1:QFlattenedLine2D;:value", "l2:QFlattenedLine2D;:value", "l3:QFlattenedLine2D;:value"};
+		flattenedTriangle2DClass = ValueTypeGenerator.generateValueClass("FlattenedTriangle2D", fields);
+		
+		makeFlattenedTriangle2D = lookup.findStatic(flattenedTriangle2DClass, "makeValueGeneric", MethodType.methodType(flattenedTriangle2DClass, Object.class, Object.class, Object.class, Object.class));
+		
+		MethodHandle getl1 = generateGenericGetter(flattenedTriangle2DClass, "l1");
+ 		MethodHandle withl1 = generateGenericWither(flattenedTriangle2DClass, "l1");
+ 		MethodHandle getl2 = generateGenericGetter(flattenedTriangle2DClass, "l2");
+ 		MethodHandle withl2 = generateGenericWither(flattenedTriangle2DClass, "l2");
+ 		MethodHandle getl3 = generateGenericGetter(flattenedTriangle2DClass, "l3");
+ 		MethodHandle withl3 = generateGenericWither(flattenedTriangle2DClass, "l3");
+ 		MethodHandle getll = generateGetter(flattenedTriangle2DClass, "ll", long.class);
+ 		
+		int x = 0xFFEEFFEE;
+		int y = 0xAABBAABB;
+		int xNew = 0x11223344;
+		int yNew = 0x99887766;
+		int x2 = 0xCCDDCCDD;
+		int y2 = 0xAAFFAAFF;
+		int x2New = 0x55337799;
+		int y2New = 0x88662244;
+		int x3 = 0x11221122;
+		int y3 = 0xAABBAABB;
+		
+		Object v1 = makePoint2D.invoke(x, y);
+		Object v2 = makePoint2D.invoke(x2, y2);
+		Object v3 = makePoint2D.invoke(x3, y3);
+		
+		Object line1 = makeFlattenedLine2D.invoke(v1, v2);
+		Object line2 = makeFlattenedLine2D.invoke(v2, v3);
+		Object line3 = makeFlattenedLine2D.invoke(v3, v1);
+		
+		Object triangle = makeFlattenedTriangle2D.invoke(new Long(0x1234500054321000L), line1, line2, line3);
+		
+		assertEquals(getll.invoke(triangle), 0x1234500054321000L);
+		
+		//checkValue(triangle);
+		
+		assertEquals(getX.invoke(getFlatSt.invoke(getl3.invoke(triangle))), x3);
+		assertEquals(getX.invoke(getFlatEn.invoke(getl3.invoke(triangle))), x);
+		assertEquals(getY.invoke(getFlatSt.invoke(getl3.invoke(triangle))), y3);
+		assertEquals(getY.invoke(getFlatEn.invoke(getl3.invoke(triangle))), y);
+		
+		Object v2New = makePoint2D.invoke(x2New, y2New);
+		Object line2New = makeFlattenedLine2D.invoke(v2New, v3);
+		
+		triangle = withl3.invoke(triangle, line2New);
+		
+		assertEquals(getX.invoke(getFlatSt.invoke(getl3.invoke(triangle))), x2New);
+		assertEquals(getX.invoke(getFlatEn.invoke(getl3.invoke(triangle))), x3);
+		assertEquals(getY.invoke(getFlatSt.invoke(getl3.invoke(triangle))), y2New);
+		assertEquals(getY.invoke(getFlatEn.invoke(getl3.invoke(triangle))), y3);
+		
+		assertEquals(getFieldOffset(flattenedTriangle2DClass, "ll"), 8);
+		assertEquals(getFieldOffset(flattenedTriangle2DClass, "l1"), 16);
+		assertEquals(getFieldOffset(flattenedTriangle2DClass, "l2"), 32);
+		assertEquals(getFieldOffset(flattenedTriangle2DClass, "l3"), 48);
+	}
+	
+	/*
+	 * Test with nested values in reference type
+	 * 
+	 * value LargeValueWithObjects {
+	 * 	flattened FlattenedTriangle2D l1;
+	 * 	flattened FlattenedTriangle2D l2;
+	 *  flattened FlattenedTriangle2D l3;
+	 *  Object o;
+	 *  flattened FlattenedTriangle2D l4;
+	 *  Object o2;
+	 * }
+	 * 
+	 */
+	@Test(priority=4)
+	static public void testCreateLargeValueWithObjects() throws Throwable {
+		Class valObjectClass = ValueTypeGenerator.generateValueClass("ValObject", new String[] {"o:Ljava/lang/Object;"});
+		MethodHandle makeValObject = lookup.findStatic(valObjectClass, "makeValue", MethodType.methodType(valObjectClass, Object.class));
+		
+		String fields2[] = {"o1:QValObject;", "o2:QValObject;", "o3:QValObject;", "o4:QValObject;", "o5:QValObject;", "o6:QValObject;", "o7:QValObject;", "o8:QValObject;", "o9:QValObject;", "o10:QValObject;", "o11:QValObject;", "o12:QValObject;", "o13:QValObject;", "o14:QValObject;", "o15:QValObject;", "o16:QValObject;"};
+		
+		Class bigValObjectClass = ValueTypeGenerator.generateValueClass("BigValObject", fields2);
+		MethodHandle makeBigValObject = lookup.findStatic(bigValObjectClass, "makeValueGeneric", MethodType.methodType(bigValObjectClass, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class));
+		
+		assertEquals(getFieldOffset(bigValObjectClass, "o1"), 4);
+		assertEquals(getFieldOffset(bigValObjectClass, "o2"), 8);
+		assertEquals(getFieldOffset(bigValObjectClass, "o3"), 12);
+		assertEquals(getFieldOffset(bigValObjectClass, "o4"), 16);
+		assertEquals(getFieldOffset(bigValObjectClass, "o5"), 20);
+		assertEquals(getFieldOffset(bigValObjectClass, "o6"), 24);
+		assertEquals(getFieldOffset(bigValObjectClass, "o7"), 28);
+		assertEquals(getFieldOffset(bigValObjectClass, "o8"), 32);
+		assertEquals(getFieldOffset(bigValObjectClass, "o9"), 36);
+		assertEquals(getFieldOffset(bigValObjectClass, "o10"), 40);
+		assertEquals(getFieldOffset(bigValObjectClass, "o11"), 44);
+		assertEquals(getFieldOffset(bigValObjectClass, "o12"), 48);
+		assertEquals(getFieldOffset(bigValObjectClass, "o13"), 52);
+		assertEquals(getFieldOffset(bigValObjectClass, "o14"), 56);
+		assertEquals(getFieldOffset(bigValObjectClass, "o15"), 60);
+		assertEquals(getFieldOffset(bigValObjectClass, "o16"), 64);
+		
+		String fields3[] = {"o1:QBigValObject;", "o2:QBigValObject;", "o3:QBigValObject;", "o4:QBigValObject;", "o5:QBigValObject;", "o6:QBigValObject;", "o7:QBigValObject;", "o8:QBigValObject;"};
+		Class megaValObjectClass = ValueTypeGenerator.generateValueClass("MegaValObject", fields3);
+		MethodHandle makeMegaValObject = lookup.findStatic(megaValObjectClass, "makeValueGeneric", MethodType.methodType(megaValObjectClass, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class));
+		
+		assertEquals(getFieldOffset(megaValObjectClass, "o1"), 4);
+		assertEquals(getFieldOffset(megaValObjectClass, "o2"), 68);
+		assertEquals(getFieldOffset(megaValObjectClass, "o3"), 132);
+		assertEquals(getFieldOffset(megaValObjectClass, "o4"), 196);
+		assertEquals(getFieldOffset(megaValObjectClass, "o5"), 260);
+		assertEquals(getFieldOffset(megaValObjectClass, "o6"), 324);
+		assertEquals(getFieldOffset(megaValObjectClass, "o7"), 388);
+		assertEquals(getFieldOffset(megaValObjectClass, "o8"), 452);
+		
+		String fields[] = {"l1:QFlattenedTriangle2D;:value","ll:J", "l2:QFlattenedTriangle2D;:value", "l3:QFlattenedTriangle2D;:value", "o:Ljava/lang/Object;", "l4:QFlattenedTriangle2D;:value", "o2:Ljava/lang/Object;", "big:QBigValObject;", "mega:QMegaValObject;"};
+		Class largeValueWithObjectsClass = ValueTypeGenerator.generateValueClass("LargeValueWithObjects", fields);
+		MethodHandle makeLargeValueWithObjects = lookup.findStatic(largeValueWithObjectsClass, "makeValueGeneric", MethodType.methodType(largeValueWithObjectsClass, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class, Object.class));
+		
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "l1"), 8);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "l2"), 60);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "l3"), 112);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "l4"), 164);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "ll"), 216);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "big"), 224);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "mega"), 288);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "o"), 800);
+//		assertEquals(getFieldOffset(largeValueWithObjectsClass, "o2"), 804);
+		
+		String fields4[] = {"ll:J", "l1:QFlattenedTriangle2D;:value", "o2:QBigValObject;"};
+		Class largeRefClass = ValueTypeGenerator.generateRefClass("LargeRef", fields4);
+		MethodHandle makeLargeRef = lookup.findStatic(largeRefClass, "makeRefGeneric", MethodType.methodType(largeRefClass, Object.class, Object.class, Object.class));
+		
+		assertEquals(getFieldOffset(largeRefClass, "l1"), 4);
+		assertEquals(getFieldOffset(largeRefClass, "ll"), 64);
+		assertEquals(getFieldOffset(largeRefClass, "o2"), 72);
+		
+		MethodHandle getll = generateGetter(largeValueWithObjectsClass, "ll", long.class);
+		MethodHandle getl2 = generateGenericGetter(largeValueWithObjectsClass, "l2");
+		MethodHandle geto = generateGetter(largeValueWithObjectsClass, "o", Object.class);
+		MethodHandle geto2 = generateGetter(largeValueWithObjectsClass, "o2", Object.class);
+		
+		int x = 0xFFEEFFEE;
+		int y = 0xAABBAABB;
+		int xNew = 0x11223344;
+		int yNew = 0x99887766;
+		int x2 = 0xCCDDCCDD;
+		int y2 = 0xAAFFAAFF;
+		int x2New = 0x55337799;
+		int y2New = 0x88662244;
+		int x3 = 0x11221122;
+		int y3 = 0xAABBAABB;
+		
+		Object v1 = makePoint2D.invoke(x, y);
+		Object v2 = makePoint2D.invoke(x2, y2);
+		Object v3 = makePoint2D.invoke(x3, y3);
+		
+		Object line1 = makeFlattenedLine2D.invoke(v1, v2);
+		Object line2 = makeFlattenedLine2D.invoke(v2, v3);
+		Object line3 = makeFlattenedLine2D.invoke(v3, v1);
+		
+		Object triangle = makeFlattenedTriangle2D.invoke(new Long(0x98796543211234L), line1, line2, line3);
+		
+		Object valObject = makeValObject.invoke(new Object());
+		
+		Object bigVal = makeBigValObject.invoke(makeValObject.invoke(new Object()), valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, valObject, makeValObject.invoke(new Object()));
+		
+		Object regObject = new Object();
+		
+		Object megaObject = makeMegaValObject.invoke(bigVal, bigVal, bigVal, bigVal, bigVal, bigVal, bigVal, bigVal);
+		
+		Object largeObject = makeLargeValueWithObjects.invoke(triangle, new Long(0x123456787654321L), triangle, triangle, "hello", triangle, "goodbye", bigVal, megaObject);
+		
+		Object largeRef = makeLargeRef.invoke(new Long(0x123456787654321L), triangle, bigVal);
+		
+		checkValue(largeObject, bigVal, regObject, largeRef, triangle, line1, v1);
+		
+		
+		assertEquals(getll.invoke(largeObject), 0x123456787654321L);
+		assertEquals(geto.invoke(largeObject), "hello");
+		assertEquals(geto2.invoke(largeObject), "goodbye");
+		triangle = getl2.invoke(largeObject);
+		
+		MethodHandle getl2t = generateGenericGetter(flattenedTriangle2DClass, "l2");
+		
+		assertEquals(getX.invoke(getFlatSt.invoke(getl2t.invoke(triangle))), x2);
+		assertEquals(getX.invoke(getFlatEn.invoke(getl2t.invoke(triangle))), x3);
+		assertEquals(getY.invoke(getFlatSt.invoke(getl2t.invoke(triangle))), y2);
+		assertEquals(getY.invoke(getFlatEn.invoke(getl2t.invoke(triangle))), y3);
+		
+		Class valLongClass = ValueTypeGenerator.generateValueClass("ValLong", new String[] {"l:J"});
+		MethodHandle makeValLong = lookup.findStatic(valLongClass, "makeValue", MethodType.methodType(valLongClass, long.class));
+		
+		Class long256Class = ValueTypeGenerator.generateValueClass("Long256", new String[] {"l:QValLong;", "l:QValLong;","l:QValLong;","l:QValLong;"});
+		MethodHandle makeLong256 = lookup.findStatic(long256Class, "makeValueGeneric", MethodType.methodType(long256Class, Object.class, Object.class, Object.class, Object.class));
+		
+	}
+
+	static void checkValue(Object ... o) {
+		com.ibm.jvm.Dump.SystemDump();
+	}
+	
 
 	/*
 	 * Test with nested values
@@ -451,6 +675,15 @@ public class ValueTypeTests {
 			e.printStackTrace();
 		}
 		return null;
+	}
+	
+	static long getFieldOffset(Class clazz, String field) {
+		try {
+			Field f = clazz.getDeclaredField(field);
+			return unsafe.objectFieldOffset(f);
+		} catch (Throwable t) {
+			throw new RuntimeException(t);
+		}
 	}
 
 }

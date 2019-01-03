@@ -250,8 +250,8 @@ public class ValueTypeGenerator extends ClassLoader {
 				mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Float", "floatValue", "()F", false);
 				break;
 			case "J":
-				mv.visitTypeInsn(CHECKCAST, "java/lang/Double");
-				mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()J", false);
+				mv.visitTypeInsn(CHECKCAST, "java/lang/Long");
+				mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Long", "longValue", "()J", false);
 				break;
 			default:
 				break;
@@ -305,7 +305,7 @@ public class ValueTypeGenerator extends ClassLoader {
 			}
 			mv.visitFieldInsn(PUTFIELD, className, nameAndSigValue[0], nameAndSigValue[1]);
 		}
-		mv.visitVarInsn(ALOAD, fields.length);
+		mv.visitVarInsn(ALOAD, makeMaxLocal);
 		mv.visitInsn(ARETURN);
 		
 		int maxStack = (doubleDetected) ? 3 : 2;

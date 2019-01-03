@@ -61,6 +61,7 @@ private:
 	U_32 _totalFlatFieldDoubleBytes;
 	U_32 _totalFlatFieldRefBytes;
 	U_32 _totalFlatFieldSingleBytes;
+	bool _valueTypeContainingDouble;
 #endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 	bool _hiddenFieldOffsetResolutionRequired;
@@ -118,6 +119,7 @@ public:
 		_totalFlatFieldDoubleBytes(0),
 		_totalFlatFieldRefBytes(0),
 		_totalFlatFieldSingleBytes(0),
+		_valueTypeContainingDouble(false),
 #endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 		_hiddenFieldOffsetResolutionRequired(false),
 		_instanceFieldBackfillEligible(false),
@@ -343,10 +345,10 @@ public:
 		U_32 fieldDataStart = 0;
 		if (!isContendedClassLayout()) {
 			fieldDataStart = getSuperclassFieldsSize();
-
+			bool doubleAlignment = (_totalDoubleCount > 0) ||
 			if (
 					((getSuperclassObjectSize() % OBJECT_SIZE_INCREMENT_IN_BYTES) != 0) && /* superclass is not end-aligned */
-					((_totalDoubleCount > 0) || (!_objectCanUseBackfill && (_totalObjectCount > 0)))
+					(doubleAlignment || (!_objectCanUseBackfill && (_totalObjectCount > 0)))
 			){ /* our fields start on a 8-byte boundary */
 				fieldDataStart += BACKFILL_SIZE;
 			}
