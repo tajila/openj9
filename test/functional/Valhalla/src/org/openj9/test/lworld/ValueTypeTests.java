@@ -477,117 +477,117 @@ public class ValueTypeTests {
 	}
 	
 
-	/*
-	 * Test with nested values
-	 * 
-	 * value InvalidField {
-	 * 	flattened Point2D st;
-	 * 	flattened Invalid x;
-	 * }
-	 * 
-	 */
-	@Test(priority=3)
-	static public void testInvalidNestedField() throws Throwable {
-		String fields[] = {"st:QPoint2D;:value", "x:QInvalid;:value"};
-
-		try {
-			Class<?> invalidField = ValueTypeGenerator.generateValueClass("InvalidField", fields);
-			Assert.fail("should throw error. Nested class doesn't exist!");
-		} catch (NoClassDefFoundError e) {}
-	}
-	
-	/*
-	 * Test with none value Qtype
-	 * 
-	 * value NoneValueQType {
-	 * 	flattened Point2D st;
-	 * 	flattened Object o;
-	 * }
-	 * 
-	 */
-	@Test(priority=3)
-	static public void testNoneValueQTypeAsNestedField() throws Throwable {
-		String fields[] = {"st:QPoint2D;:value", "o:Qjava/lang/Object;:value"};
-		try {
-			Class<?> noneValueQType = ValueTypeGenerator.generateValueClass("NoneValueQType", fields);
-			Assert.fail("should throw error. j.l.Object is not a qtype!");
-		} catch (IncompatibleClassChangeError e) {}
-	}
-	
-	/*
-	 * Test defaultValue with ref type
-	 * 
-	 * class DefaultValueWithNoneValueType {
-	 * 	Object f1;
-	 * 	Object f1;
-	 * }
-	 * 
-	 */
-	@Test(priority=3)
-	static public void testDefaultValueWithNonValueType() throws Throwable {
-		String fields[] = {"f1:Ljava/lang/Object;:value", "f2:Ljava/lang/Object;:value"};
-		Class<?> defaultValueWithNonValueType = ValueTypeGenerator.generateRefClass("DefaultValueWithNonValueType", fields);
-		MethodHandle makeDefaultValueWithNonValueType = lookup.findStatic(defaultValueWithNonValueType, "makeValue", MethodType.methodType(defaultValueWithNonValueType, Object.class, Object.class));
-		try {
-			makeDefaultValueWithNonValueType.invoke(null, null);
-			Assert.fail("should throw error. Default value must be used with ValueType");
-		} catch (IncompatibleClassChangeError e) {}
-	}
-	
-	/*
-	 * Test withField on non Value Type
-	 * 
-	 * class TestWithFieldOnNonValueType {
-	 *  long longField
-	 * }
-	 */
-	@Test(priority=1)
-	static public void testWithFieldOnNonValueType() throws Throwable {
-		String fields[] = {"longField:J"};
-		Class<?> testWithFieldOnNonValueType = ValueTypeGenerator.generateRefClass("TestWithFieldOnNonValueType", fields);
-		MethodHandle withFieldOnNonValueType = lookup.findStatic(testWithFieldOnNonValueType, "testWithFieldOnNonValueType", MethodType.methodType(Object.class));
-		try {
-			withFieldOnNonValueType.invoke();
-			Assert.fail("should throw error. WithField must be used with ValueType");
-		} catch (IncompatibleClassChangeError e) {}
-	}
-	
-	/*
-	 * Test withField on non Null type
-	 * 
-	 * class TestWithFieldOnNull {
-	 *  long longField
-	 * }
-	 */
-	@Test(priority=1)
-	static public void testWithFieldOnNull() throws Throwable {
-		String fields[] = {"longField:J"};
-		Class<?> testWithFieldOnNull = ValueTypeGenerator.generateRefClass("TestWithFieldOnNull", fields);
-		
-		MethodHandle withFieldOnNull = lookup.findStatic(testWithFieldOnNull, "testWithFieldOnNull", MethodType.methodType(Object.class));
-		try {
-			withFieldOnNull.invoke();
-			Assert.fail("should throw error. Objectref cannot be null");
-		} catch (NullPointerException e) {}
-	}
-	
-	/*
-	 * Test withField on non existent class
-	 * 
-	 * class TestWithFieldOnNonExistentClass {
-	 *  long longField
-	 * }
-	 */
-	@Test(priority=1)
-	static public void testWithFieldOnNonExistentClass() throws Throwable {
-		String fields[] = {"longField:J"};
-		Class<?> testWithFieldOnNonExistentClass = ValueTypeGenerator.generateRefClass("TestWithFieldOnNonExistentClass", fields);
-		MethodHandle withFieldOnNonExistentClass = lookup.findStatic(testWithFieldOnNonExistentClass, "testWithFieldOnNonExistentClass", MethodType.methodType(Object.class));
-		try {
-			withFieldOnNonExistentClass.invoke();
-			Assert.fail("should throw error. Class does not exist");
-		} catch (NoClassDefFoundError e) {}
-	}
+//	/*
+//	 * Test with nested values
+//	 * 
+//	 * value InvalidField {
+//	 * 	flattened Point2D st;
+//	 * 	flattened Invalid x;
+//	 * }
+//	 * 
+//	 */
+//	@Test(priority=3)
+//	static public void testInvalidNestedField() throws Throwable {
+//		String fields[] = {"st:QPoint2D;:value", "x:QInvalid;:value"};
+//
+//		try {
+//			Class<?> invalidField = ValueTypeGenerator.generateValueClass("InvalidField", fields);
+//			Assert.fail("should throw error. Nested class doesn't exist!");
+//		} catch (NoClassDefFoundError e) {}
+//	}
+//	
+//	/*
+//	 * Test with none value Qtype
+//	 * 
+//	 * value NoneValueQType {
+//	 * 	flattened Point2D st;
+//	 * 	flattened Object o;
+//	 * }
+//	 * 
+//	 */
+//	@Test(priority=3)
+//	static public void testNoneValueQTypeAsNestedField() throws Throwable {
+//		String fields[] = {"st:QPoint2D;:value", "o:Qjava/lang/Object;:value"};
+//		try {
+//			Class<?> noneValueQType = ValueTypeGenerator.generateValueClass("NoneValueQType", fields);
+//			Assert.fail("should throw error. j.l.Object is not a qtype!");
+//		} catch (IncompatibleClassChangeError e) {}
+//	}
+//	
+//	/*
+//	 * Test defaultValue with ref type
+//	 * 
+//	 * class DefaultValueWithNoneValueType {
+//	 * 	Object f1;
+//	 * 	Object f1;
+//	 * }
+//	 * 
+//	 */
+//	@Test(priority=3)
+//	static public void testDefaultValueWithNonValueType() throws Throwable {
+//		String fields[] = {"f1:Ljava/lang/Object;:value", "f2:Ljava/lang/Object;:value"};
+//		Class<?> defaultValueWithNonValueType = ValueTypeGenerator.generateRefClass("DefaultValueWithNonValueType", fields);
+//		MethodHandle makeDefaultValueWithNonValueType = lookup.findStatic(defaultValueWithNonValueType, "makeValue", MethodType.methodType(defaultValueWithNonValueType, Object.class, Object.class));
+//		try {
+//			makeDefaultValueWithNonValueType.invoke(null, null);
+//			Assert.fail("should throw error. Default value must be used with ValueType");
+//		} catch (IncompatibleClassChangeError e) {}
+//	}
+//	
+//	/*
+//	 * Test withField on non Value Type
+//	 * 
+//	 * class TestWithFieldOnNonValueType {
+//	 *  long longField
+//	 * }
+//	 */
+//	@Test(priority=1)
+//	static public void testWithFieldOnNonValueType() throws Throwable {
+//		String fields[] = {"longField:J"};
+//		Class<?> testWithFieldOnNonValueType = ValueTypeGenerator.generateRefClass("TestWithFieldOnNonValueType", fields);
+//		MethodHandle withFieldOnNonValueType = lookup.findStatic(testWithFieldOnNonValueType, "testWithFieldOnNonValueType", MethodType.methodType(Object.class));
+//		try {
+//			withFieldOnNonValueType.invoke();
+//			Assert.fail("should throw error. WithField must be used with ValueType");
+//		} catch (IncompatibleClassChangeError e) {}
+//	}
+//	
+//	/*
+//	 * Test withField on non Null type
+//	 * 
+//	 * class TestWithFieldOnNull {
+//	 *  long longField
+//	 * }
+//	 */
+//	@Test(priority=1)
+//	static public void testWithFieldOnNull() throws Throwable {
+//		String fields[] = {"longField:J"};
+//		Class<?> testWithFieldOnNull = ValueTypeGenerator.generateRefClass("TestWithFieldOnNull", fields);
+//		
+//		MethodHandle withFieldOnNull = lookup.findStatic(testWithFieldOnNull, "testWithFieldOnNull", MethodType.methodType(Object.class));
+//		try {
+//			withFieldOnNull.invoke();
+//			Assert.fail("should throw error. Objectref cannot be null");
+//		} catch (NullPointerException e) {}
+//	}
+//	
+//	/*
+//	 * Test withField on non existent class
+//	 * 
+//	 * class TestWithFieldOnNonExistentClass {
+//	 *  long longField
+//	 * }
+//	 */
+//	@Test(priority=1)
+//	static public void testWithFieldOnNonExistentClass() throws Throwable {
+//		String fields[] = {"longField:J"};
+//		Class<?> testWithFieldOnNonExistentClass = ValueTypeGenerator.generateRefClass("TestWithFieldOnNonExistentClass", fields);
+//		MethodHandle withFieldOnNonExistentClass = lookup.findStatic(testWithFieldOnNonExistentClass, "testWithFieldOnNonExistentClass", MethodType.methodType(Object.class));
+//		try {
+//			withFieldOnNonExistentClass.invoke();
+//			Assert.fail("should throw error. Class does not exist");
+//		} catch (NoClassDefFoundError e) {}
+//	}
 
 	/*
 	 * TODO: behaviour of the test between two valueTypes will depend on the new spec(not finialized)
