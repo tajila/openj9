@@ -273,6 +273,22 @@ resolveNativeAddress(J9VMThread *currentThread, J9Method *nativeMethod, UDATA ru
 
 /* ---------------- classallocation.c ---------------- */
 
+#ifdef J9VM_THR_PREEMPTIVE
+#define ACQUIRE_CLASS_LOADER_BLOCKS_MUTEX(javaVM) (omrthread_monitor_enter((javaVM)->classLoaderBlocksMutex))
+#define RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM) (omrthread_monitor_exit((javaVM)->classLoaderBlocksMutex))
+#else
+#define ACQUIRE_CLASS_LOADER_BLOCKS_MUTEX(javaVM)
+#define RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM)
+#endif
+
+#define INITIAL_CLASSHASHTABLE_SIZE	16
+#define INITIAL_MODULE_HASHTABLE_SIZE	1
+#define INITIAL_PACKAGE_HASHTABLE_SIZE	1
+#define INITIAL_CLASSLOCATION_HASHTABLE_SIZE 64
+#define J9STATIC_ONUNLOAD               "JNI_OnUnload_"
+#define J9STATIC_ONUNLOAD_LENGTH        sizeof(J9STATIC_ONUNLOAD)
+#define J9DYNAMIC_ONUNLOAD              "JNI_OnUnload"
+
 /**
 * @brief Get Package ID for the ROM class. NOTE: You must own the class table mutex before calling this function.
 * @param *classLoader Classloader for the class
@@ -4268,6 +4284,15 @@ void
 throwNativeOOMError(JNIEnv *env, U_32 moduleName, U_32 messageNumber);
 void
 throwNewJavaIoIOException(JNIEnv *env, const char *message);
+
+
+/* escc */
+
+BOOLEAN
+saveRAMState(J9JavaVM *vm);
+
+BOOLEAN
+restoreRAMState(J9JavaVM *vm);
 
 #ifdef __cplusplus
 }

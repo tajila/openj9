@@ -774,6 +774,10 @@ freeJavaVM(J9JavaVM * vm)
 	j9mem_free_memory(vm->osrGlobalBuffer);
 	vm->osrGlobalBuffer = NULL;
 
+	j9mem_free_memory(vm->esccName);
+	vm->esccName = NULL;
+
+
 #if defined(COUNT_BYTECODE_PAIRS)
 	freeBytecodePairs(vm);
 #endif /* COUNT_BYTECODE_PAIRS */
@@ -2192,10 +2196,15 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 		case SYSTEM_CLASSLOADER_SET :
 
 			loadInfo = FIND_DLL_TABLE_ENTRY( FUNCTION_VM_INIT );
-			if (NULL == (vm->systemClassLoader = allocateClassLoader(vm))) {
-				loadInfo->fatalErrorStr = "cannot allocate system classloader";
-				goto _error;
+
+			/* system loader is resoterd */
+			if (J9_ARE_NO_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ESCC_WARM_RUN)) {
+				if (NULL == (vm->systemClassLoader = allocateClassLoader(vm))) {
+					loadInfo->fatalErrorStr = "cannot allocate system classloader";
+					goto _error;
+				}
 			}
+
 
 			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				BOOLEAN patchPathResult = FALSE;
@@ -3196,6 +3205,46 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 			return JNI_ERR;
 		}
 	}
+
+	/* parse ESCC options */
+	{
+		IDATA argIndex = 0;
+		char *optionValue = NULL;
+		if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XCREATEESCC_COLON, NULL)) >= 0) {
+			GET_OPTION_VALUE(argIndex, ':', &optionValue);
+			if (NULL != optionValue) {
+				PORT_ACCESS_FROM_JAVAVM(vm);
+				U_16 len = (U_16) strlen(optionValue);
+				vm->esccName = (char*) j9mem_allocate_memory(len + 1, OMRMEM_CATEGORY_VM);
+				if (NULL == vm->esccName) {
+					return JNI_ERR;
+				}
+				vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ESCC_COLD_RUN;
+				strncpy((char*) vm->esccName, optionValue, len);
+				vm->esccName[len] = '\0';
+			}
+		}
+	}
+
+	{
+		IDATA argIndex = 0;
+		char *optionValue = NULL;
+		if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XLOADFROMESCC_COLON, NULL)) >= 0) {
+			GET_OPTION_VALUE(argIndex, ':', &optionValue);
+			if (NULL != optionValue) {
+				PORT_ACCESS_FROM_JAVAVM(vm);
+				U_16 len = (U_16) strlen(optionValue);
+				vm->esccName = (char *)j9mem_allocate_memory(len + 1, OMRMEM_CATEGORY_VM);
+				if (NULL == vm->esccName) {
+					return JNI_ERR;
+				}
+				vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ESCC_WARM_RUN;
+				strncpy((char*) vm->esccName, optionValue, len);
+				vm->esccName[len] = '\0';
+			}
+		}
+	}
+
 
 	return JNI_OK;
 }
@@ -5891,6 +5940,10 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		goto error;
 	}
 
+	if (J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ESCC_WARM_RUN)) {
+		restoreRAMState(vm);
+	}
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, SYSTEM_CLASSLOADER_SET))) {
 		goto error;
 	}
@@ -5988,7 +6041,7 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		}
 	}
 #endif
-	
+
 	initializeInitialMethods(vm);
 
 	if (JNI_OK != (stageRC = runInitializationStage(vm, ABOUT_TO_BOOTSTRAP))) {

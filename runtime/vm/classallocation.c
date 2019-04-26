@@ -33,22 +33,6 @@
 
 #include <string.h>
 
-#ifdef J9VM_THR_PREEMPTIVE
-#define ACQUIRE_CLASS_LOADER_BLOCKS_MUTEX(javaVM) (omrthread_monitor_enter((javaVM)->classLoaderBlocksMutex))
-#define RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM) (omrthread_monitor_exit((javaVM)->classLoaderBlocksMutex))
-#else
-#define ACQUIRE_CLASS_LOADER_BLOCKS_MUTEX(javaVM)
-#define RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM)
-#endif
-
-#define INITIAL_CLASSHASHTABLE_SIZE	16
-#define INITIAL_MODULE_HASHTABLE_SIZE	1
-#define INITIAL_PACKAGE_HASHTABLE_SIZE	1
-#define INITIAL_CLASSLOCATION_HASHTABLE_SIZE 64
-#define J9STATIC_ONUNLOAD               "JNI_OnUnload_"
-#define J9STATIC_ONUNLOAD_LENGTH        sizeof(J9STATIC_ONUNLOAD)
-#define J9DYNAMIC_ONUNLOAD              "JNI_OnUnload"
-
 static void cleanPackage(J9Package *package);
 
 UDATA

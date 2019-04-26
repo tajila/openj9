@@ -410,6 +410,13 @@ protectedDestroyJavaVM(J9PortLibrary* portLibrary, void * userData)
 			vm->exitHook(0);
 		}
 
+		if (J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ESCC_COLD_RUN)) {
+			if (FALSE == saveRAMState(vm)) {
+				printf("failed to save ramState \n");
+				return JNI_ERR;
+			}
+		}
+
 		return JNI_ERR;
 	}
 
