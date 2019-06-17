@@ -163,18 +163,25 @@ public:
 	inlineAllocateIndexableObject(J9VMThread *currentThread, J9Class *arrayClass, U_32 size, bool initializeSlots = true, bool memoryBarrier = true, bool sizeCheck = true)
 	{
 		j9object_t instance = NULL;
-
+		bool inlineAllocate = true;
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP) || defined(J9VM_GC_SEGREGATED_HEAP)
 		if (0 != size) {
 			/* Contiguous Array */
-
-
+			UDATA scale = ((J9ROMArrayClass*)(arrayClass->romClass))->arrayShape;
 #if !defined(J9VM_ENV_DATA64)
-			if (!sizeCheck || (size < ((U_32)J9_MAXIMUM_INDEXABLE_DATA_SIZE / J9ARRAYCLASS_GET_STRIDE(arrayClass))))
+			inlineAllocate = !sizeCheck || (size < ((U_32)J9_MAXIMUM_INDEXABLE_DATA_SIZE >> scale));
+			if (	J9_IS_J9CLASS_FLATTENED(arrayClass)) {
+				inlineAllocate = (!sizeCheck || (size < ((U_32)J9_MAXIMUM_INDEXABLE_DATA_SIZE / J9ARRAYCLASS_GET_STRIDE(arrayClass))));
+			}
 #endif /* J9VM_ENV_DATA64 */
-			{
+			if (inlineAllocate) {
 				/* Calculate the size of the object */
-				UDATA dataSize = ((UDATA)size) * J9ARRAYCLASS_GET_STRIDE(arrayClass);
+				UDATA dataSize = ((UDATA)size) << scale;
+
+				if (	J9_IS_J9CLASS_FLATTENED(arrayClass)) {
+					dataSize = ((UDATA)size) * J9ARRAYCLASS_GET_STRIDE(arrayClass);
+				}
+
 				UDATA allocateSize = (dataSize + sizeof(J9IndexableObjectContiguous) + _objectAlignmentInBytes - 1) & ~(UDATA)(_objectAlignmentInBytes - 1);
 				if (allocateSize < J9_GC_MINIMUM_OBJECT_SIZE) {
 					allocateSize = J9_GC_MINIMUM_OBJECT_SIZE;
