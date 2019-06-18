@@ -174,7 +174,8 @@ public:
 #endif /* J9VM_ENV_DATA64 */
 			{
 				/* Calculate the size of the object */
-				UDATA dataSize = ((UDATA)size) * J9ARRAYCLASS_GET_STRIDE(arrayClass);
+				UDATA scale = ((J9ROMArrayClass*)(arrayClass->romClass))->arrayShape;
+				UDATA dataSize = ((UDATA)size) << scale;
 				UDATA allocateSize = (dataSize + sizeof(J9IndexableObjectContiguous) + _objectAlignmentInBytes - 1) & ~(UDATA)(_objectAlignmentInBytes - 1);
 				if (allocateSize < J9_GC_MINIMUM_OBJECT_SIZE) {
 					allocateSize = J9_GC_MINIMUM_OBJECT_SIZE;
