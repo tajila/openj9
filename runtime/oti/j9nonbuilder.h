@@ -2895,7 +2895,7 @@ typedef struct J9ClassLocation {
 #define LOAD_LOCATION_MODULE 3
 
 typedef struct J9Class {
-	UDATA eyecatcher;
+	struct J9FlattenedClassCache* flattenedClassCache;
 	struct J9ROMClass* romClass;
 	struct J9Class** superclasses;
 	UDATA classDepthAndFlags;
@@ -2944,7 +2944,7 @@ typedef struct J9Class {
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	struct J9Class* nestHost;
 #endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
-	struct J9FlattenedClassCache* flattenedClassCache;
+	UDATA eyecatcher;
 } J9Class;
 
 /* Interface classes can never be instantiated - overload the totalInstanceSize slot to hold the iTable method count */
@@ -2955,7 +2955,7 @@ typedef struct J9Class {
 #define J9ARRAYCLASS_GET_STRIDE(clazz) ((UDATA)((clazz)->flattenedClassCache))
 
 typedef struct J9ArrayClass {
-	UDATA eyecatcher;
+	UDATA flattenedElementSize;
 	struct J9ROMClass* romClass;
 	struct J9Class** superclasses;
 	UDATA classDepthAndFlags;
@@ -3003,10 +3003,7 @@ typedef struct J9ArrayClass {
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	struct J9Class* nestHost;
 #endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
-#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
-	/* Added temporarily for consistency */
-	UDATA flattenedElementSize;
-#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+	UDATA eyecatcher;
 } J9ArrayClass;
 
 typedef struct J9HookedNative {
