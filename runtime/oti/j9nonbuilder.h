@@ -3003,10 +3003,7 @@ typedef struct J9ArrayClass {
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
 	struct J9Class* nestHost;
 #endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
-#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
-	/* Added temporarily for consistency */
 	UDATA flattenedElementSize;
-#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 } J9ArrayClass;
 
 typedef struct J9HookedNative {

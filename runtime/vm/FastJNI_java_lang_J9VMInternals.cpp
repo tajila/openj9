@@ -69,7 +69,13 @@ Fast_java_lang_J9VMInternals_primitiveClone(J9VMThread *currentThread, j9object_
 	}
 	if (flags & J9AccClassArray) {
 		U_32 size = J9INDEXABLEOBJECT_SIZE(currentThread, original);
-		copy = objectAllocate.inlineAllocateIndexableObject(currentThread, objectClass, size, false, false, false);
+
+		if (J9_IS_J9CLASS_FLATTENED(objectClass)) {
+			copy = objectAllocate.inlineAllocateIndexableValueTypeObject(currentThread, objectClass, (U_32)size);
+		} else {
+			copy = objectAllocate.inlineAllocateIndexableObject(currentThread, objectClass, (U_32)size);
+		}
+
 		if (NULL == copy) {
 			VM_VMHelpers::pushObjectInSpecialFrame(currentThread, original);
 			copy = currentThread->javaVM->memoryManagerFunctions->J9AllocateIndexableObject(currentThread, objectClass, size, J9_GC_ALLOCATE_OBJECT_NON_INSTRUMENTABLE);
