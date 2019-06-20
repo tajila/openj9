@@ -374,6 +374,24 @@ doVerify:
 				/* Verify this class */
 				PUSH_OBJECT_IN_SPECIAL_FRAME(currentThread, initializationLock);
 				performVerification(currentThread, clazz);
+				if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER)) {
+					Trc_VM_classInitStateMachine_classRelationshipValidationEnabled(currentThread);
+					if (VM_VMHelpers::exceptionPending(currentThread)) {
+						initializationLock = setInitStatus(currentThread, clazz, J9ClassInitUnverified, initializationLock);
+						clazz = VM_VMHelpers::currentClass(clazz);
+						goto done;
+					}
+					/* Validate class loading relationships for this class */
+					U_8 *clazzName = J9UTF8_DATA(J9ROMCLASS_CLASSNAME(clazz->romClass));
+					UDATA clazzNameLength = J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(clazz->romClass));
+					J9Class *validateResult = j9bcv_validateClassRelationships (currentThread, clazz->classLoader, clazzName, clazzNameLength, clazz);
+					if (NULL != validateResult) {
+						U_8 *resultName = J9UTF8_DATA(J9ROMCLASS_CLASSNAME(validateResult->romClass));
+						UDATA resultNameLength = J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(validateResult->romClass));
+						Trc_VM_classInitStateMachine_classRelationshipValidationFailed(currentThread, clazzNameLength, clazzName, resultNameLength, resultName);
+						setCurrentExceptionNLSWithArgs(currentThread, J9NLS_VM_CLASS_LOADING_RELATIONSHIP_INVALID, J9VMCONSTANTPOOL_JAVALANGVERIFYERROR, clazzNameLength, clazzName, resultNameLength, resultName);
+					}
+				}
 				initializationLock = POP_OBJECT_IN_SPECIAL_FRAME(currentThread);
 				clazz = VM_VMHelpers::currentClass(clazz);
 				if (VM_VMHelpers::exceptionPending(currentThread)) {

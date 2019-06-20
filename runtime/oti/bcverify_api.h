@@ -206,6 +206,50 @@ j9bcv_satisfyClassLoadingConstraint (J9VMThread* vmThread, J9ClassLoader* loader
 void 
 unlinkClassLoadingConstraints (J9JavaVM* jvm);
 
+/* ---------------- classrelationships.c ---------------- */
+
+/**
+* @brief
+* @param *vmThread
+* @param *classLoader
+* @param *childName
+* @param childNameLength
+* @param *parentName
+* @param parentNameLength
+* @param *reasonCode
+* @return IDATA
+ */
+IDATA
+j9bcv_recordClassRelationship (J9VMThread *vmThread, J9ClassLoader *classLoader, U_8 *childName, UDATA childNameLength, U_8 *parentName, UDATA parentNameLength, IDATA *reasonCode);
+
+/**
+* @brief
+* @param *vmThread
+* @param *classLoader
+* @param *childName
+* @param childNameLength
+* @param childClass
+* @return J9Class
+ */
+J9Class *
+j9bcv_validateClassRelationships (J9VMThread *vmThread, J9ClassLoader *classLoader, U_8 *childName, UDATA childNameLength, J9Class *childClass);
+
+/**
+* @brief
+* @param *vm
+* @return J9HashTable
+ */
+J9HashTable *
+j9bcv_hashClassRelationshipTableNew (J9JavaVM *vm);
+
+/**
+* @brief
+* @param *vmThread
+* @param *classLoader
+* @return
+ */
+void
+j9bcv_hashClassRelationshipTableFree (J9VMThread *vmThread, J9ClassLoader *classLoader);
 
 /* ---------------- rtverify.c ---------------- */
 
@@ -420,7 +464,6 @@ isProtectedAccessPermitted(J9BytecodeVerificationData *verifyData, J9UTF8* decla
 */
 UDATA 
 parseObjectOrArrayName(J9BytecodeVerificationData *verifyData, U_8 *signature);
-
 
 /**
 * @brief

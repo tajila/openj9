@@ -187,3 +187,26 @@ TraceException=Trc_RTV_j9rtv_verifyArguments_OutOfMemoryException Overhead=1 Lev
 TraceException=Trc_RTV_j9rtv_verifyArguments_InaccessibleClass Overhead=1 Level=1 Template="j9rtv_verifyArguments - %.*s %.*s%.*s - Inaccessible class"
 
 TraceException=Trc_RTV_j9rtv_verifyBytecodes_Unreachable Overhead=1 Level=1 Template="j9rtv_verifyBytecodes - %.*s %.*s%.*s Unreachable error %i occurred"
+
+TraceEntry=Trc_RTV_recordClassRelationship_Entry Overhead=1 Level=3 Template="recordClassRelationship - child: %.*s, parent: %.*s"
+TraceException=Trc_RTV_recordClassRelationship_EntryAllocationFailedChild Overhead=1 Level=3 Template="recordClassRelationship - failed to allocate child entry"
+TraceException=Trc_RTV_recordClassRelationship_NodeAllocationFailedParent Overhead=1 Level=3 Template="recordClassRelationship - failed to allocate parent node"
+TraceEvent=Trc_RTV_recordClassRelationship_AllocatedEntry Overhead=1 Level=3 Template="recordClassRelationship - recorded class loading relationship for child: %.*s, %p and parent: %.*s, %p"
+TraceExit=Trc_RTV_recordClassRelationship_Exit Overhead=1 Level=3 Template="recordClassRelationship - returning %p"
+
+TraceEntry=Trc_RTV_validateClassRelationships_Entry Overhead=1 Level=3 Template="validateClassRelationships - child class: %.*s"
+TraceException=Trc_RTV_validateClassRelationships_ParentNotLoaded Overhead=1 Level=3 Template="validateClassRelationships - parent class: %.*s, %p not loaded"
+TraceEvent=Trc_RTV_validateClassRelationships_ParentIsInterface Overhead=1 Level=3 Template="validateClassRelationships - parent class: %.*s, %p is interface"
+TraceException=Trc_RTV_validateClassRelationships_ParentInterfaceNotFound Overhead=1 Level=3 Template="validateClassRelationships - parent interface not found in child class iTable"
+TraceEvent=Trc_RTV_validateClassRelationships_ParentIsSuperClass Overhead=1 Level=3 Template="validateClassRelationships - parent class: %.*s, %p is superclass"
+TraceException=Trc_RTV_validateClassRelationships_InvalidRelationship Overhead=1 Level=3 Template="validateClassRelationships - invalid relationship with parent: %.*s"
+TraceExit=Trc_RTV_validateClassRelationships_Exit Overhead=1 Level=3 Template="validateClassRelationships - returning %p"
+
+TraceEntry=Trc_RTV_findClassRelationship_Entry Overhead=1 Level=3 Template="findClassRelationship - class: %.*s"
+TraceExit=Trc_RTV_findClassRelationship_Exit Overhead=1 Level=3 Template="findClassRelationship - returning %p"
+
+TraceEntry=Trc_RTV_removeClassRelationship_Entry Overhead=1 Level=3 Template="removeClassRelationship - class: %.*s"
+TraceEvent=Trc_RTV_removeClassRelationship_Parent Overhead=1 Level=3 Template="removeClassRelationship - parent: %.*s"
+TraceExit=Trc_RTV_removeClassRelationship_Exit Overhead=1 Level=3 Template="removeClassRelationship - returning"
+
+TraceEvent=Trc_RTV_isProtectedAccessPermitted_RecordRelationship Overhead=1 Level=3 Template="isProtectedAccessPermitted - record class relationship"

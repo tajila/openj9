@@ -195,6 +195,12 @@ allocateClassLoader(J9JavaVM *javaVM)
 		} else {
 			TRIGGER_J9HOOK_VM_CLASS_LOADER_CREATED(javaVM->hookInterface, javaVM, classLoader);
 		}
+
+		/* Allocate classRelationshipsHashTable if -XX:+ClassRelationshipVerifier is used */
+		if (J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER)) {
+			classLoader->classRelationshipsHashTable = j9bcv_hashClassRelationshipTableNew(javaVM);
+		}
+
 	}
 
 	RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM);
@@ -400,6 +406,11 @@ freeClassLoader(J9ClassLoader *classLoader, J9JavaVM *javaVM, J9VMThread *vmThre
 	if (NULL != classLoader->romClassOrphansHashTable) {
 		hashTableFree(classLoader->romClassOrphansHashTable);
 		classLoader->romClassOrphansHashTable = NULL;
+	}
+
+	/* Free the class relationships hash table if -XX:+ClassRelationshipVerifier is used */
+	if (J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER)) {
+		j9bcv_hashClassRelationshipTableFree(vmThread, classLoader);
 	}
 
 	TRIGGER_J9HOOK_VM_CLASS_LOADER_DESTROY(javaVM->hookInterface, javaVM, classLoader);

@@ -3244,6 +3244,16 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 	}
 #endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
 
+	{
+		IDATA enableClassRelationshipVerifier = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXCLASSRELATIONSHIPVERIFIER, NULL);
+		IDATA disableClassRelationshipVerifier = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOCLASSRELATIONSHIPVERIFIER, NULL);
+		if (enableClassRelationshipVerifier > disableClassRelationshipVerifier) {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER;
+		} else if (enableClassRelationshipVerifier < disableClassRelationshipVerifier) {
+			vm->extendedRuntimeFlags2 &= ~(UDATA)J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER;
+		}
+	}
+
 	return JNI_OK;
 }
 

@@ -26,6 +26,7 @@ add_tracegen(j9bcverify.tdf)
 
 add_library(j9bcv STATIC
 	bcverify.c
+	classrelationships.c
 	clconstraints.c
 	rtverify.c
 	staticverify.c

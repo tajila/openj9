@@ -62,6 +62,7 @@
 		<objects>
 			<object name="bcvnatives"/>
 			<object name="bcverify"/>
+			<object name="classrelationships"/>
 			<object name="clconstraints"/>
 			<object name="rtverify"/>
 			<object name="staticverify"/>

@@ -455,6 +455,9 @@ isClassCompatible(J9BytecodeVerificationData *verifyData, UDATA sourceClass, UDA
 	U_8 *sourceName, *targetName;
 	UDATA sourceLength, targetLength;
 
+	/* Only record class relationships if -XX:+ClassRelationshipVerifier is used */
+	BOOLEAN classRelationshipVerifierEnabled = J9_ARE_ANY_BITS_SET(verifyData->vmStruct->javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER);
+
 	*reasonCode = 0;
 
 	/* if they are identical, then we're done */
@@ -510,6 +513,14 @@ isClassCompatible(J9BytecodeVerificationData *verifyData, UDATA sourceClass, UDA
 
 		getNameAndLengthFromClassNameList (verifyData, targetIndex, &targetName, &targetLength);
 
+		/* if the target is an interface, be permissive */
+		rc = isInterfaceClass(verifyData, targetName, targetLength, reasonCode);
+
+		if ((classRelationshipVerifierEnabled) && (BCV_ERR_CLASS_RELATIONSHIP_RECORD_REQUIRED == *reasonCode)) {
+			getNameAndLengthFromClassNameList (verifyData, sourceIndex, &sourceName, &sourceLength);
+			rc = j9bcv_recordClassRelationship (verifyData->vmStruct, verifyData->classLoader, sourceName, sourceLength, targetName, targetLength, reasonCode);
+		}
+
 		/* Jazz 109803: Java 8 VM Spec at 4.10.1.2 Verification Type System says:
 		 * For assignments, interfaces are treated like Object.
 		 * isJavaAssignable(class(_, _), class(To, L)) :- loadedClass(To, L, ToClass), classIsInterface(ToClass).
@@ -530,7 +541,7 @@ isClassCompatible(J9BytecodeVerificationData *verifyData, UDATA sourceClass, UDA
 		 *    except Object (already checked above), java/lang/Cloneable and java/io/Serializable,
 		 *    which means targetClass must be one/array of Object, java/lang/Cloneable and java/io/Serializable.
 		 */
-		if ((IDATA) TRUE == isInterfaceClass(verifyData, targetName, targetLength, reasonCode)) {
+		if ((IDATA) TRUE == rc) {
 			/* targetClass must be either java/lang/Cloneable or java/io/Serializable
 			 * in the case when sourceClass is an array type (sourceArity > 0).
 			 */
@@ -557,7 +568,14 @@ isClassCompatible(J9BytecodeVerificationData *verifyData, UDATA sourceClass, UDA
 
 	/* if the target is an interface, be permissive */
 	rc = isInterfaceClass(verifyData, targetName, targetLength, reasonCode);
-	if (rc != (IDATA) FALSE) {
+
+	getNameAndLengthFromClassNameList (verifyData, sourceIndex, &sourceName, &sourceLength);
+
+	if ((classRelationshipVerifierEnabled) && (BCV_ERR_CLASS_RELATIONSHIP_RECORD_REQUIRED == *reasonCode)) {
+		rc = j9bcv_recordClassRelationship (verifyData->vmStruct, verifyData->classLoader, sourceName, sourceLength, targetName, targetLength, reasonCode);
+	}
+
+	if ((IDATA) FALSE != rc) {
 		return rc;
 	}
 
@@ -565,9 +583,13 @@ isClassCompatible(J9BytecodeVerificationData *verifyData, UDATA sourceClass, UDA
 		return (IDATA) FALSE;
 	}
 
-	getNameAndLengthFromClassNameList (verifyData, sourceIndex, &sourceName, &sourceLength);
+	rc = isRAMClassCompatible(verifyData, targetName, targetLength , sourceName, sourceLength, reasonCode);
 
-	return isRAMClassCompatible(verifyData, targetName, targetLength , sourceName, sourceLength, reasonCode);
+	if ((classRelationshipVerifierEnabled) && (BCV_ERR_CLASS_RELATIONSHIP_RECORD_REQUIRED == *reasonCode)) {
+		rc = j9bcv_recordClassRelationship (verifyData->vmStruct, verifyData->classLoader, sourceName, sourceLength, targetName, targetLength, reasonCode);
+	}
+
+	return rc;
 }
 
 /*
@@ -921,6 +943,20 @@ isProtectedAccessPermitted(J9BytecodeVerificationData *verifyData, J9UTF8* decla
 	) {
 		return TRUE;
 	}
+
+	// /* If -XX:+ClassRelationshipVerifier is used, record class relationships */
+	// if (J9_ARE_ANY_BITS_SET(verifyData->vmStruct->javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER)) {
+	// 	Trc_RTV_isProtectedAccessPermitted_RecordRelationship(verifyData->vmStruct);
+	// 	/* currentClass is the child class */
+	// 	U_8 *childName = J9UTF8_DATA(J9ROMCLASS_CLASSNAME(verifyData->romClass));
+	// 	UDATA childNameLength = J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(verifyData->romClass));
+
+	// 	/* declaringClass is the parent class */
+	// 	U_8 *parentName = J9UTF8_DATA(declaringClassName);
+	// 	UDATA parentNameLength = J9UTF8_LENGTH(declaringClassName);
+
+	// 	return (UDATA) j9bcv_recordClassRelationship(verifyData->vmStruct, verifyData->classLoader, childName, childNameLength, parentName, parentNameLength, reasonCode);
+	// }
 
 	/* Skip protection checks for arrays, they are in the NULL package */
 	if (J9CLASS_ARITY_FROM_CLASS_ENTRY(targetClass) == 0) {
