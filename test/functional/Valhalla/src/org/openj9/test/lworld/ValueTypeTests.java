@@ -906,6 +906,7 @@ public class ValueTypeTests {
 		 */
 		MethodHandle[][] getterAndSetter = generateGenericGetterAndSetter(assortedRefWithLongAlignmentClass, fields);
 		Object assortedRefWithLongAlignment = createAssorted(makeAssortedRefWithLongAlignment, fields);
+		checkObject(assortedRefWithLongAlignment);
 		checkFieldAccessMHOfAssortedType(getterAndSetter, assortedRefWithLongAlignment, fields, false);
 	}
 
@@ -983,6 +984,7 @@ public class ValueTypeTests {
 		MethodHandle[][] getterAndSetter = generateGenericGetterAndSetter(assortedRefWithObjectAlignmentClass, fields);
 
 		Object assortedRefWithObjectAlignment = createAssorted(makeAssortedRefWithObjectAlignment, fields);
+		checkObject(assortedRefWithObjectAlignment);
 		checkFieldAccessMHOfAssortedType(getterAndSetter, assortedRefWithObjectAlignment, fields, false);
 	}
 
