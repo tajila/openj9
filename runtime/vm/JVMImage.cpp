@@ -40,7 +40,7 @@ JVMImage::~JVMImage()
 {
 	PORT_ACCESS_FROM_JAVAVM(_vm);
 
-	j9mem_free_memory((void*)_jvmImageHeader);
+	j9mem_free_memory((void *)_jvmImageHeader);
 }
 
 bool
@@ -122,6 +122,7 @@ JVMImage::allocateImageMemory(UDATA size)
 	}
 
 	_jvmImageHeader->imageSize = size;
+	_jvmImageHeader->imageAddress = (uintptr_t)_jvmImageHeader;
 
 	return _jvmImageHeader;
 }
@@ -142,8 +143,6 @@ JVMImage::initializeHeap(void)
 	if (NULL == _heap) {
 		return NULL;
 	}
-
-	_jvmImageHeader->heapAddress = (uintptr_t)_heap;
 
 	return _heap;
 }
@@ -329,15 +328,17 @@ JVMImage::readImageFromFile(void)
 	}
 
 	/* Read image header then mmap the rest of the image (heap) into memory */
-	omrfile_read(fileDescriptor, (void *)_jvmImageHeader, sizeof(JVMImageHeader));
+	/* TODO: Should only read imageAddress and size because that is the only data we need for mmap */
+	JVMImageHeader imageHeaderBuffer;
+	omrfile_read(fileDescriptor, (void *)&imageHeaderBuffer, sizeof(JVMImageHeader));
 	uint64_t fileSize = omrfile_flength(fileDescriptor);
-	if (_jvmImageHeader->imageSize != fileSize) {
+	if (imageHeaderBuffer.imageSize != fileSize) {
 		return false;
 	}
 
 	_jvmImageHeader = (JVMImageHeader *)mmap(
-		(void *)_jvmImageHeader->heapAddress,
-		_jvmImageHeader->imageSize,
+		(void *)imageHeaderBuffer.imageAddress,
+		imageHeaderBuffer.imageSize,
 		PROT_READ, MAP_PRIVATE, fileDescriptor, 0);
 	_heap = (J9Heap *)(_jvmImageHeader + 1);
 
