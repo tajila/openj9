@@ -35,7 +35,6 @@ JVMImage::JVMImage(J9JavaVM *javaVM) :
 	_heap(NULL)
 {
 	_dumpFileName = javaVM->ramStateFilePath;
-	_isWarmRun = J9_ARE_ALL_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN);
 }
 
 JVMImage::~JVMImage()
@@ -494,6 +493,15 @@ shutdownJVMImage(J9JavaVM *javaVM)
 		j9mem_free_memory(jvmImage);
 		j9mem_free_memory(JVMIMAGEPORT_FROM_JAVAVM(javaVM));
 		javaVM->jvmImagePortLibrary = NULL;
+	}
+}
+
+extern "C" void
+teardownJVMImage(J9JavaVM *javaVM)
+{
+	if (IS_COLD_RUN(javaVM)) {
+		IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+		jvmImage->writeImageToFile();
 	}
 }
 
