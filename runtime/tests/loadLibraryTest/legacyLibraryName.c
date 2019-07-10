@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 2019, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,35 +20,43 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
-#include "j9comp.h"
+/**
+ * @file legacyLibraryName.c
+ * @brief File is to be compiled into a shared library (legacyName).  All the symbols should
+ * be exported and visible for external invocations.
+ */
 
-I_32 k8sdiv(I_32 a, I_32 b)
+#include "jni.h"
+
+/**
+ * @brief Function indicates to the runtime that the library legacyLibraryName has been
+ * linked into the executable.
+ */
+jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
-	return(a / b);
+    return JNI_VERSION_1_8;
 }
 
-I_32 k8srem( I_32 a, I_32 b)
+/**
+ * @brief Function indicates an alternative to the traditional unload routine to
+ * the runtime specifically targeting the library legaclegacyLibraryNameyName.
+ */
+void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
 {
-	return(a % b);
+    return;
 }
 
-U_32 k8udiv(U_32 a, U_32 b)
+/**
+ * @brief Provide an implementation for the class TestLoadLegacyLibrary's native method fooImpl.
+ * Package:     org.openj9.test.loadLibrary
+ * Class:       TestLoadLegacyLibrary
+ * Method:      fooImpl
+ * @param[in]   env The JNI env.
+ * @param[in]   instance The this pointer.
+ * @return      Always return value "true"
+ */
+jboolean JNICALL
+Java_j9vm_test_loadLibrary_TestLoadLegacyLibrary_fooImpl(JNIEnv *env, jobject this)
 {
-	return(a / b);
+    return JNI_TRUE;
 }
-
-U_32 k8urem(U_32 a, U_32 b)
-{
-	return(a % b);
-}
-
-I_32 k8smul(I_32 a, I_32 b)
-{
-	return(a * b);
-}
-
-U_32 k8umul(U_32 a, U_32 b)
-{
-	return(a * b);
-}
-
