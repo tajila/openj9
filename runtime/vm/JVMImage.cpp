@@ -159,8 +159,7 @@ JVMImage::allocateImageTableHeaders(void)
 
 	if ((0 == _jvmImageHeader->classLoaderTable)
 		|| (0 == _jvmImageHeader->classTable)
-		|| (0 == _jvmImageHeader->classPathEntryTable)
-	) {
+		|| (0 == _jvmImageHeader->classPathEntryTable)) {
 		return false;
 	}
 
@@ -280,7 +279,7 @@ JVMImage::deregisterEntryInTable(ImageTableHeader *table, UDATA entry)
 	Trc_VM_DeregisterInTable_Entry(table, table->currentSize, *(WSRP_GET(table->tableTail, UDATA*)), entry);
 
 	UDATA *tail = WSRP_GET(table->tableTail, UDATA*);
-	UDATA *temp = findEntryInTable(table, entry);
+	UDATA *temp = findEntryLocationInTable(table, entry);
 
 	if (NULL != temp) {
 		while (temp != tail) {
@@ -301,20 +300,63 @@ JVMImage::deregisterEntryInTable(ImageTableHeader *table, UDATA entry)
 	Trc_VM_DeregisterInTable_Exit(table, table->currentSize, *(WSRP_GET(table->tableTail, UDATA*)));
 }
 
-UDATA * 
-JVMImage::findEntryInTable(ImageTableHeader *table, UDATA entry)
+void
+JVMImage::setClassLoader(J9ClassLoader *classLoader, uint32_t classLoaderCategory)
 {
-	UDATA *tail = WSRP_GET(table->tableTail, UDATA*);
-	UDATA *head = WSRP_GET(table->tableHead, UDATA*);
-
-	while (tail >= head) {
-		if (*tail == entry) {
-			return tail;
-		}
-		tail -= 1;
+	/* TODO: Function will change when hash table is created and there would be no need for setting specific class loaders */
+	if (IS_SYSTEM_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		WSRP_SET(_jvmImageHeader->systemClassLoader, classLoader);
 	}
 
-	return NULL;
+	if (IS_APP_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		WSRP_SET(_jvmImageHeader->appClassLoader, classLoader);
+	}
+
+	if (IS_EXTENSION_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		WSRP_SET(_jvmImageHeader->extensionClassLoader, classLoader);
+	}
+}
+
+void
+JVMImage::fixupClassLoaders(void)
+{
+	J9ClassLoader *currentClassLoader = (J9ClassLoader *) imageTableStartDo(getClassLoaderTable());
+	
+	while (NULL != currentClassLoader) {
+		currentClassLoader->sharedLibraries = NULL;
+		currentClassLoader->classLoaderObject = NULL;
+		currentClassLoader->unloadLink = NULL;
+		currentClassLoader->gcLinkNext = NULL;
+		currentClassLoader->gcLinkPrevious = NULL;
+		currentClassLoader->gcFlags = 0;
+		currentClassLoader->gcRememberedSet = 0;
+		currentClassLoader->gcThreadNotification = NULL;
+		currentClassLoader->jniIDs = NULL;
+		currentClassLoader->jniRedirectionBlocks = NULL;
+		currentClassLoader->gcRememberedSet = 0;
+
+		currentClassLoader = (J9ClassLoader *) imageTableNextDo(getClassLoaderTable());
+	}
+}
+
+void
+JVMImage::fixupClasses(void)
+{
+	J9Class *currentClass = (J9Class *) imageTableStartDo(getClassTable());
+
+	while (NULL != currentClass) {
+		currentClass->classObject = NULL;
+		currentClass->initializeStatus = J9ClassInitNotInitialized;
+		internalRunPreInitInstructions(currentClass, _vm->mainThread);
+		currentClass->jniIDs = NULL;
+		currentClass->replacedClass = NULL;
+		currentClass->callSites = NULL;
+		currentClass->methodTypes = NULL;
+		currentClass->varHandleMethodTypes = NULL;
+		currentClass->gcLink = NULL;
+
+		currentClass = (J9Class *) imageTableNextDo(getClassTable());
+	}
 }
 
 bool
@@ -325,7 +367,7 @@ JVMImage::readImageFromFile(void)
 	OMRPortLibrary *portLibrary = IMAGE_OMRPORT_FROM_JAVAVM(_vm);
 	OMRPORT_ACCESS_FROM_OMRPORT(portLibrary);
 
-	intptr_t fileDescriptor = omrfile_open(_dumpFileName, EsOpenRead, 0444);
+	intptr_t fileDescriptor = omrfile_open(_dumpFileName, EsOpenRead | EsOpenWrite, 0444);
 	if (-1 == fileDescriptor) {
 		return false;
 	}
@@ -342,7 +384,7 @@ JVMImage::readImageFromFile(void)
 	_jvmImageHeader = (JVMImageHeader *)mmap(
 		(void *)imageHeaderBuffer.imageAlignedAddress,
 		imageHeaderBuffer.imageSize,
-		PROT_READ, MAP_PRIVATE | MAP_FIXED, fileDescriptor, 0);
+		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fileDescriptor, 0);
 	_heap = (J9Heap *)(_jvmImageHeader + 1);
 
 	omrfile_close(fileDescriptor);
@@ -375,6 +417,14 @@ JVMImage::writeImageToFile(void)
 	Trc_VM_WriteImageToFile_Exit();
 
 	return true;
+}
+
+void
+JVMImage::teardownImage(void)
+{
+	fixupClassLoaders();
+	fixupClasses();
+	writeImageToFile();
 }
 
 JVMImagePortLibrary * 
@@ -417,17 +467,20 @@ initializeJVMImage(J9JavaVM *javaVM)
 
 _error:
 	shutdownJVMImage(javaVM);
+	jvmImage->destroyMonitor();
 	return 0;
 }
 
 extern "C" void
-registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader)
+registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t classLoaderCategory)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
 
 	Assert_VM_notNull(jvmImage);
 
 	jvmImage->registerEntryInTable(jvmImage->getClassLoaderTable(), (UDATA)classLoader);
+	/* TODO: Currently only three class loaders are stored */
+	jvmImage->setClassLoader(classLoader, classLoaderCategory);
 }
 
 extern "C" void
@@ -451,16 +504,6 @@ registerCPEntry(J9JavaVM *javaVM, J9ClassPathEntry *cpEntry)
 }
 
 extern "C" void
-deregisterClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader)
-{
-	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
-	Assert_VM_notNull(jvmImage);
-
-	jvmImage->deregisterEntryInTable(jvmImage->getClassLoaderTable(), (UDATA)classLoader);
-}
-
-extern "C" void
 deregisterClass(J9JavaVM *javaVM, J9Class *clazz)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
@@ -480,6 +523,28 @@ deregisterCPEntry(J9JavaVM *javaVM, J9ClassPathEntry *cpEntry)
 	jvmImage->deregisterEntryInTable(jvmImage->getClassPathEntryTable(), (UDATA)cpEntry);
 }
 
+extern "C" J9ClassLoader *
+findClassLoader(J9JavaVM *javaVM, uint32_t classLoaderCategory)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+
+	/* TODO: Function will change when hash table is created and there would be no need for accessing specific class loaders (hardcoded) */
+	if (IS_SYSTEM_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		return jvmImage->getSystemClassLoader();
+	}
+
+	if (IS_APP_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		return jvmImage->getApplicationClassLoader();
+	}
+
+	if (IS_EXTENSION_CLASSLOADER_CATEGORY(classLoaderCategory)) {
+		return jvmImage->getExtensionClassLoader();
+	}
+
+	/* find should never get here */
+	return NULL;
+}
+
 extern "C" void
 shutdownJVMImage(J9JavaVM *javaVM)
 {
@@ -488,7 +553,6 @@ shutdownJVMImage(J9JavaVM *javaVM)
 	if (NULL != jvmImage) {
 		PORT_ACCESS_FROM_JAVAVM(javaVM);
 
-		jvmImage->destroyMonitor();
 		jvmImage->~JVMImage();
 		j9mem_free_memory(jvmImage);
 		j9mem_free_memory(JVMIMAGEPORT_FROM_JAVAVM(javaVM));
@@ -497,12 +561,15 @@ shutdownJVMImage(J9JavaVM *javaVM)
 }
 
 extern "C" void
-teardownJVMImage(J9JavaVM *javaVM)
+teardownAndShutdownJVMImage(J9JavaVM *javaVM)
 {
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+
 	if (IS_COLD_RUN(javaVM)) {
-		IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-		jvmImage->writeImageToFile();
+		jvmImage->teardownImage();
 	}
+
+	shutdownJVMImage(javaVM);
 }
 
 extern "C" void *

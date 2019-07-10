@@ -25,10 +25,19 @@
 
 #define PAGE_SIZE 4096
 #define PAGE_SIZE_MASK (PAGE_SIZE - 1)
-#define PAGE_SIZE_ALIGNED_ADDRESS(address) (void *) (((uintptr_t) (address) + PAGE_SIZE_MASK) & (~PAGE_SIZE_MASK))
+#define PAGE_SIZE_ALIGNED_ADDRESS(address) ((void *) (((uintptr_t) (address) + PAGE_SIZE_MASK) & (~PAGE_SIZE_MASK)))
 
 #define IS_WARM_RUN(javaVM) J9_ARE_ALL_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN)
 #define IS_COLD_RUN(javaVM) J9_ARE_ALL_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN)
+
+/* Class loader categories */
+#define IMAGE_CATEGORY_SYSTEM_CLASSLOADER 0
+#define IMAGE_CATEGORY_APP_CLASSLOADER 1
+#define IMAGE_CATEGORY_EXTENSION_CLASSLOADER 2
+
+#define IS_SYSTEM_CLASSLOADER_CATEGORY(_category) (IMAGE_CATEGORY_SYSTEM_CLASSLOADER == _category)
+#define IS_APP_CLASSLOADER_CATEGORY(_category) (IMAGE_CATEGORY_APP_CLASSLOADER == _category)
+#define IS_EXTENSION_CLASSLOADER_CATEGORY(_category) (IMAGE_CATEGORY_EXTENSION_CLASSLOADER == _category)
 
 #define INITIAL_CLASSLOADER_TABLE_SIZE 3
 #define INITIAL_CLASS_TABLE_SIZE 10
@@ -52,7 +61,11 @@ typedef struct JVMImageHeader {
 	UDATA imageSize; /* image size in bytes */
 	uintptr_t imageAddress;
 	uintptr_t imageAlignedAddress;
-	J9WSRP classLoaderTable;
+	/* TODO: only three main class loaders stored for prototype and quick access. Need to allow user defined classloaders */
+	J9WSRP systemClassLoader;
+	J9WSRP appClassLoader;
+	J9WSRP extensionClassLoader;
+	J9WSRP classLoaderTable; /* TODO: No user defined loaders currently. Needed for class loader fixup. */
 	J9WSRP classTable;
 	J9WSRP classPathEntryTable;
 } JVMImageHeader;
@@ -61,6 +74,7 @@ typedef struct JVMImageHeader {
 typedef struct ImageTableHeader {
 	J9WSRP tableHead;
 	J9WSRP tableTail; /* tail needed for O(1) append */
+	UDATA *iteratorPtr;
 	UDATA tableSize; /* table size in bytes */
 	UDATA currentSize; /* current size in bytes */
 } ImageTableHeader;

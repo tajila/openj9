@@ -127,7 +127,7 @@ standardInit( J9JavaVM *vm, char *dllName)
 		}
 	}
 	/* Now create the classPathEntries */
-	if (initializeBootstrapClassPath(vm)) {
+	if (J9_ARE_NO_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN) && initializeBootstrapClassPath(vm)) {
 		goto _fail;
 	}
 #endif
@@ -394,12 +394,24 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 		 * applicationClassLoader may be null due to lazy classloader initialization. Initialize
 		 * the applicationClassLoader now or vm will start throwing NoClassDefFoundException.
 		 */
-		vm->applicationClassLoader = (void*) (UDATA)(vmFuncs->internalAllocateClassLoader(vm, J9_JNI_UNWRAP_REFERENCE(appClassLoader)));
+
+		/* set app class loader if warm run */
+		if (IS_WARM_RUN(vm)) {
+			vm->applicationClassLoader = vmFuncs->findClassLoader(vm, IMAGE_CATEGORY_APP_CLASSLOADER);
+		}
+		/* fall back on allocation if find fails */
+		if (NULL == vm->applicationClassLoader) {
+			vm->applicationClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, J9_JNI_UNWRAP_REFERENCE(appClassLoader)));
+		}
+		
 		if (NULL != vmThread->currentException) {
 			/* while this exception check and return statement seem un-necessary, it is added to prevent
 			 * oversights if anybody adds more code in the future.
 			 */
 			goto exitVM;
+		}
+		if (IS_COLD_RUN(vm)) {
+			vmFuncs->registerClassLoader(vm, vm->applicationClassLoader, IMAGE_CATEGORY_APP_CLASSLOADER);
 		}
 	}
 
@@ -416,12 +428,22 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 		vm->extensionClassLoader = J9VMJAVALANGCLASSLOADER_VMREF(vmThread, classLoaderObject);
 
 		if (NULL == vm->extensionClassLoader) {
-			vm->extensionClassLoader = (void*) (UDATA)(vmFuncs->internalAllocateClassLoader(vm, classLoaderObject));
+			/* set extension class loader if warm run */
+			if (IS_WARM_RUN(vm)) {
+				vm->extensionClassLoader = vmFuncs->findClassLoader(vm, IMAGE_CATEGORY_EXTENSION_CLASSLOADER);
+			}
+			/* fall back on allocation if find fails */
+			if (NULL == vm->extensionClassLoader) {
+				vm->extensionClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, classLoaderObject));
+			}
 			if (NULL != vmThread->currentException) {
 				/* while this exception check and return statement seem un-necessary, it is added to prevent
 				 * oversights if anybody adds more code in the future.
 				 */
 				goto exitVM;
+			}
+			if (IS_COLD_RUN(vm)) {
+				vmFuncs->registerClassLoader(vm, vm->extensionClassLoader, IMAGE_CATEGORY_EXTENSION_CLASSLOADER);
 			}
 		}
 	}
