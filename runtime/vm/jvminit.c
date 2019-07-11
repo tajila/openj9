@@ -1285,6 +1285,7 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 	BOOLEAN lastWasSeparator = TRUE;
 
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	JVMIMAGEPORT_ACCESS_FROM_JAVAVM(vm);
 
 	if (NULL == classPath) {
 		*classPathEntries = NULL;
@@ -1310,9 +1311,15 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 	} else {
 		/* classPathEntryCount is for number of null characters */
 		UDATA classPathSize = (sizeof(J9ClassPathEntry) * classPathEntryCount) + classPathLength + classPathEntryCount;
-		J9ClassPathEntry *cpEntries = j9mem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
+		J9ClassPathEntry* cpEntries = NULL;
+		if (IS_COLD_RUN(vm)) {
+			cpEntries = imem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
+		}
+		else {
+			cpEntries = j9mem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
+		}
 
-	        if (NULL == cpEntries) {
+	    if (NULL == cpEntries) {
 			*classPathEntries = NULL;
 			classPathEntryCount = -1;
 		} else {
@@ -1351,7 +1358,7 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 				entryStart = entryEnd + 1;
 			}
 			*classPathEntries = cpEntries;
-	        }
+		}
 	}
 
 _end:
