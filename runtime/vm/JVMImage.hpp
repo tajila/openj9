@@ -44,6 +44,7 @@ private:
 
 	JVMImageHeader *_jvmImageHeader;
 	J9Heap *_heap;
+	J9ITable *_invalidTable;
 
 	omrthread_monitor_t _jvmImageMonitor;
 
@@ -57,6 +58,7 @@ public:
 	 */
 private:
 	bool initializeMonitor(void);
+	bool initializeInvalidITable(void);
 
 	void* allocateImageMemory(UDATA size);
 	void* reallocateImageMemory(UDATA size);
@@ -103,6 +105,8 @@ public:
 	ImageTableHeader* getClassLoaderTable(void) { return WSRP_GET(_jvmImageHeader->classLoaderTable, ImageTableHeader*); }
 	ImageTableHeader* getClassTable(void) { return WSRP_GET(_jvmImageHeader->classTable, ImageTableHeader*); }
 	ImageTableHeader* getClassPathEntryTable(void) { return WSRP_GET(_jvmImageHeader->classPathEntryTable, ImageTableHeader*); }
+
+	J9ITable* getInvalidTable(void) { return _invalidTable; }
 };
 
 #endif /* JVMIMAGE_H_ */
