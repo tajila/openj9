@@ -402,6 +402,8 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 		/* fall back on allocation if find fails */
 		if (NULL == vm->applicationClassLoader) {
 			vm->applicationClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, J9_JNI_UNWRAP_REFERENCE(appClassLoader)));
+		} else {
+			vmFuncs->initializeImageClassLoaderObject(vm, vm->applicationClassLoader, J9_JNI_UNWRAP_REFERENCE(appClassLoader));
 		}
 		
 		if (NULL != vmThread->currentException) {
@@ -435,6 +437,8 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 			/* fall back on allocation if find fails */
 			if (NULL == vm->extensionClassLoader) {
 				vm->extensionClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, classLoaderObject));
+			} else {
+				vmFuncs->initializeImageClassLoaderObject(vm, vm->extensionClassLoader, classLoaderObject);
 			}
 			if (NULL != vmThread->currentException) {
 				/* while this exception check and return statement seem un-necessary, it is added to prevent
