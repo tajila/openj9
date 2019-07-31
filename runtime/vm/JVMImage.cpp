@@ -22,10 +22,10 @@
 
 #include "JVMImage.hpp"
 
-#include <sys/mman.h>
+#include <sys/mman.h> /* TODO: Change to OMRPortLibrary MMAP functionality. Currently does not allow MAP_FIXED as it is not supported in all architectures */
 
 /* TODO: reallocation will fail so initial heap size is large (Should be PAGE_SIZE aligned) */
-/* TODO: currently only works because JVMImageHeader is 8 byte aligned */
+/* TODO: initial image size restriction will be removed once MMAP MAP_FIXED removed. see @ref JVMImage::readImageFromFile */
 const UDATA JVMImage::INITIAL_IMAGE_SIZE = 100 * 1024 * 1024;
 
 
@@ -40,7 +40,11 @@ JVMImage::~JVMImage()
 {
 	PORT_ACCESS_FROM_JAVAVM(_vm);
 
-	j9mem_free_memory((void *)_jvmImageHeader->imageAddress);
+	if (IS_COLD_RUN(_vm)) {
+		j9mem_free_memory((void*)_jvmImageHeader->imageAddress);
+	} else {
+		munmap((void*)_jvmImageHeader, _jvmImageHeader->imageAlignedAddress);
+	}
 }
 
 bool
@@ -53,17 +57,33 @@ JVMImage::initializeMonitor(void)
 	return true;
 }
 
+void
+JVMImage::storeInitialMethods(J9Method* cInitialStaticMethod, J9Method* cInitialSpecialMethod, J9Method* cInitialVirtualMethod)
+{
+	WSRP_SET(_jvmImageHeader->cInitialStaticMethod, cInitialStaticMethod);
+	WSRP_SET(_jvmImageHeader->cInitialSpecialMethod, cInitialSpecialMethod);
+	WSRP_SET(_jvmImageHeader->cInitialVirtualMethod, cInitialVirtualMethod);
+}
+
+void
+JVMImage::setInitialMethods(J9Method** cInitialStaticMethod, J9Method** cInitialSpecialMethod, J9Method** cInitialVirtualMethod)
+{
+	*cInitialStaticMethod = WSRP_GET(_jvmImageHeader->cInitialStaticMethod, J9Method*);
+	*cInitialSpecialMethod = WSRP_GET(_jvmImageHeader->cInitialSpecialMethod, J9Method*);
+	*cInitialVirtualMethod = WSRP_GET(_jvmImageHeader->cInitialVirtualMethod, J9Method*);
+}
+
 bool
 JVMImage::initializeInvalidITable(void)
 {
-	_invalidTable = (J9ITable *) subAllocateMemory(sizeof(J9ITable));
-	if (NULL == _invalidTable) {
+	_invalidITable = (J9ITable *) subAllocateMemory(sizeof(J9ITable));
+	if (NULL == _invalidITable) {
 		return false;
 	}
 
-	_invalidTable->interfaceClass = (J9Class *) (UDATA) 0xDEADBEEF;
-	_invalidTable->depth = 0;
-	_invalidTable->next = (J9ITable *) NULL;
+	_invalidITable->interfaceClass = (J9Class *) (UDATA) 0xDEADBEEF;
+	_invalidITable->depth = 0;
+	_invalidITable->next = (J9ITable *) NULL;
 
 	return true;
 }
@@ -87,7 +107,6 @@ JVMImage::createInstance(J9JavaVM *vm)
 	return jvmInstance;
 }
 
-/* TODO: This will be expanded once warm run set up is finished */
 ImageRC
 JVMImage::setupWarmRun(void)
 {
@@ -135,7 +154,7 @@ JVMImage::allocateImageMemory(UDATA size)
 {
 	PORT_ACCESS_FROM_JAVAVM(_vm);
 
-	void *imageAddress = j9mem_allocate_memory(size + PAGE_SIZE, J9MEM_CATEGORY_CLASSES); //TODO: change category
+	void *imageAddress = j9mem_allocate_memory(size + PAGE_SIZE, J9MEM_CATEGORY_CLASSES);
 	if (NULL == imageAddress) {
 		return NULL;
 	}
@@ -149,6 +168,7 @@ JVMImage::allocateImageMemory(UDATA size)
 }
 
 /* TODO: Currently reallocating image memory is broken since all references to memory inside of heap will fail (i.e. vm->classLoadingPool) */
+/* TODO: Reallocation will be done once random memory loading feature is completed */
 void *
 JVMImage::reallocateImageMemory(UDATA size)
 {
@@ -211,7 +231,7 @@ JVMImage::reallocateTable(ImageTableHeader *table, uintptr_t tableSize)
 
 	table->tableSize = tableSize;
 	WSRP_SET(table->tableHead, firstSlot);
-	WSRP_SET(table->tableTail, firstSlot + table->currentSize - 1);
+	WSRP_SET(table->tableTail, firstSlot + table->currentSize - 1); /* Reallocation will never be called if current size = 0 */
 
 	return firstSlot;
 }
@@ -227,7 +247,7 @@ JVMImage::subAllocateMemory(uintptr_t byteAmount)
 	void *memStart = portLibrary->heap_allocate(portLibrary, _heap, byteAmount);	
 	/* image memory is not large enough and needs to be reallocated */
 	if (NULL == memStart) {
-		reallocateImageMemory(_jvmImageHeader->imageSize * 2 + byteAmount);
+		reallocateImageMemory(_jvmImageHeader->imageSize * 2 + byteAmount); /* guarantees size of heap will accomodate byteamount */
 		memStart = portLibrary->heap_allocate(portLibrary, _heap, byteAmount);
 	}
 
@@ -247,7 +267,7 @@ JVMImage::reallocateMemory(void *address, uintptr_t byteAmount)
 	void *memStart = portLibrary->heap_reallocate(portLibrary, _heap, address, byteAmount);
 	/* image memory is not large enough and needs to be reallocated */
 	if (NULL == memStart) {
-		reallocateImageMemory(_jvmImageHeader->imageSize * 2 + byteAmount);
+		reallocateImageMemory(_jvmImageHeader->imageSize * 2 + byteAmount); /* guarantees size of heap will accomodate byteamount */
 		memStart = portLibrary->heap_reallocate(portLibrary, _heap, address, byteAmount);
 	}
 
@@ -279,7 +299,7 @@ JVMImage::registerEntryInTable(ImageTableHeader *table, UDATA entry)
 
 	UDATA *tail = WSRP_GET(table->tableTail, UDATA*);
 
-	/* initial state of every table */
+	/* initial state of every table has currentSize set to 0 and tail/heap pointer at same location */
 	if (0 != table->currentSize) {
 		tail += 1;
 		WSRP_SET(table->tableTail, tail);
@@ -376,7 +396,7 @@ JVMImage::fixupClasses(void)
 		/* Fixup the last ITable */
 		currentClass->lastITable = (J9ITable *) currentClass->iTable;
 		if (NULL == currentClass->lastITable) {
-			currentClass->lastITable = JVMImage::getInvalidTable();
+			currentClass->lastITable = JVMImage::getInvalidITable();
 		}
 
 		currentClass = (J9Class *) imageTableNextDo(getClassTable());
@@ -445,6 +465,7 @@ JVMImage::fixupMethodRunAddresses(J9Class *ramClass)
 	J9VMThread *vmThread = currentVMThread(_vm);
 	J9ROMClass *romClass = ramClass->romClass;
 
+	/* for all ramMethods call initializeMethodRunAdress for special methods */
 	if (romClass->romMethodCount != 0) {
 		UDATA i;
 		UDATA count = romClass->romMethodCount;
@@ -499,15 +520,11 @@ JVMImage::readImageFromFile(void)
 		return false;
 	}
 
-	/* Read image header then mmap the rest of the image (heap) into memory */
-	/* TODO: Should only read imageAddress and size because that is the only data we need for mmap */
-	JVMImageHeader imageHeaderBuffer;
-	omrfile_read(fileDescriptor, (void *)&imageHeaderBuffer, sizeof(JVMImageHeader));
-	uint64_t fileSize = omrfile_flength(fileDescriptor);
-	if (imageHeaderBuffer.imageSize != fileSize) {
-		return false;
-	}
+	/* Read image header size and location then mmap the rest of the image (heap) into memory */
+	JVMImageSizeAndLocation imageHeaderBuffer;
+	omrfile_read(fileDescriptor, (void *)&imageHeaderBuffer, sizeof(JVMImageSizeAndLocation));
 
+	/* TODO: currently mmap uses sys/mman.h and MAP_FIXED. Once random memory loading is complete it will change to omr mmap without MAP_FIXED */
 	_jvmImageHeader = (JVMImageHeader *)mmap(
 		(void *)imageHeaderBuffer.imageAlignedAddress,
 		imageHeaderBuffer.imageSize,
@@ -534,7 +551,6 @@ JVMImage::writeImageToFile(void)
 		return false;
 	}
 
-	/* Write header followed by the heap */
 	if ((intptr_t)_jvmImageHeader->imageSize != omrfile_write(fileDescriptor, (void *)_jvmImageHeader, _jvmImageHeader->imageSize)) {
 		return false;
 	}
@@ -552,6 +568,7 @@ JVMImage::teardownImage(void)
 	fixupClassLoaders();
 	fixupClasses();
 	fixupClassPathEntries();
+
 	writeImageToFile();
 }
 
@@ -570,21 +587,6 @@ setupJVMImagePortLibrary(J9JavaVM *javaVM)
 	return jvmImagePortLibrary;
 }
 
-void
-JVMImage::storeInitialMethods(J9Method *cInitialStaticMethod, J9Method *cInitialSpecialMethod, J9Method *cInitialVirtualMethod)
-{
-	_jvmImageHeader->cInitialStaticMethod = cInitialStaticMethod;
-	_jvmImageHeader->cInitialSpecialMethod = cInitialSpecialMethod;
-	_jvmImageHeader->cInitialVirtualMethod = cInitialVirtualMethod;
-}
-
-void
-JVMImage::setInitialMethods(J9Method **cInitialStaticMethod, J9Method **cInitialSpecialMethod, J9Method **cInitialVirtualMethod)
-{
-	*cInitialStaticMethod = _jvmImageHeader->cInitialStaticMethod;
-	*cInitialSpecialMethod = _jvmImageHeader->cInitialSpecialMethod;
-	*cInitialVirtualMethod = _jvmImageHeader->cInitialVirtualMethod;
-}
 
 extern "C" UDATA
 initializeJVMImage(J9JavaVM *javaVM)
@@ -619,8 +621,9 @@ extern "C" void
 registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t classLoaderCategory)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
 	Assert_VM_notNull(jvmImage);
+
+	Trc_VM_ImageClassLoaderRegister(classLoader, classLoaderCategory);
 
 	jvmImage->registerEntryInTable(jvmImage->getClassLoaderTable(), (UDATA)classLoader);
 	/* TODO: Currently only three class loaders are stored */
@@ -631,8 +634,12 @@ extern "C" void
 registerClass(J9JavaVM *javaVM, J9Class *clazz)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
 	Assert_VM_notNull(jvmImage);
+
+	J9ROMClass *romClass = clazz->romClass;
+
+	J9UTF8 *className = J9ROMCLASS_CLASSNAME(romClass);
+	Trc_VM_ImageClassRegister(javaVM->mainThread, clazz, J9UTF8_DATA(className));
 
 	jvmImage->registerEntryInTable(jvmImage->getClassTable(), (UDATA)clazz);
 }
@@ -641,8 +648,9 @@ extern "C" void
 registerCPEntry(J9JavaVM *javaVM, J9ClassPathEntry *cpEntry)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
 	Assert_VM_notNull(jvmImage);
+
+	Trc_VM_ImageCPEntryRegister(cpEntry, cpEntry->path);
 	
 	jvmImage->registerEntryInTable(jvmImage->getClassPathEntryTable(), (UDATA)cpEntry);
 }
@@ -651,7 +659,6 @@ extern "C" void
 deregisterClass(J9JavaVM *javaVM, J9Class *clazz)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
 	Assert_VM_notNull(jvmImage);
 
 	jvmImage->deregisterEntryInTable(jvmImage->getClassTable(), (UDATA)clazz);
@@ -661,7 +668,6 @@ extern "C" void
 deregisterCPEntry(J9JavaVM *javaVM, J9ClassPathEntry *cpEntry)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-
 	Assert_VM_notNull(jvmImage);
 
 	jvmImage->deregisterEntryInTable(jvmImage->getClassPathEntryTable(), (UDATA)cpEntry);
@@ -671,6 +677,7 @@ extern "C" J9ClassLoader *
 findClassLoader(J9JavaVM *javaVM, uint32_t classLoaderCategory)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
 
 	/* TODO: Function will change when hash table is created and there would be no need for accessing specific class loaders (hardcoded) */
 	if (IS_SYSTEM_CLASSLOADER_CATEGORY(classLoaderCategory)) {
@@ -751,6 +758,7 @@ extern "C" void
 shutdownJVMImage(J9JavaVM *javaVM)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
 
 	if (NULL != jvmImage) {
 		PORT_ACCESS_FROM_JAVAVM(javaVM);
@@ -766,16 +774,36 @@ extern "C" void
 teardownJVMImage(J9JavaVM *javaVM)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
 
 	if (IS_COLD_RUN(javaVM)) {
 		jvmImage->teardownImage();
 	}
 }
 
+extern "C" void
+storeInitialVMMethods(J9JavaVM* javaVM, J9Method* cInitialStaticMethod, J9Method* cInitialSpecialMethod, J9Method* cInitialVirtualMethod)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
+
+	jvmImage->storeInitialMethods(cInitialStaticMethod, cInitialSpecialMethod, cInitialVirtualMethod);
+}
+
+extern "C" void
+setInitialVMMethods(J9JavaVM* javaVM, J9Method** cInitialStaticMethod, J9Method** cInitialSpecialMethod, J9Method** cInitialVirtualMethod)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
+
+	jvmImage->setInitialMethods(cInitialStaticMethod, cInitialSpecialMethod, cInitialVirtualMethod);
+}
+
 extern "C" void *
 image_mem_allocate_memory(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category)
 {
 	IMAGE_ACCESS_FROM_PORT(portLibrary);
+	Assert_VM_notNull(jvmImage);
 
 	void *pointer = jvmImage->subAllocateMemory(byteAmount);
 	return pointer;
@@ -785,20 +813,7 @@ extern "C" void
 image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPointer)
 {
 	IMAGE_ACCESS_FROM_PORT(portLibrary);
+	Assert_VM_notNull(jvmImage);
 
 	jvmImage->freeSubAllocatedMemory(memoryPointer);
-}
-
-extern "C" void
-store_initial_methods(J9JavaVM *javaVM, J9Method *cInitialStaticMethod, J9Method *cInitialSpecialMethod, J9Method *cInitialVirtualMethod)
-{
-	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-	jvmImage->storeInitialMethods(cInitialStaticMethod, cInitialSpecialMethod, cInitialVirtualMethod);
-}
-
-extern "C" void
-set_initial_methods(J9JavaVM *javaVM, J9Method **cInitialStaticMethod, J9Method **cInitialSpecialMethod, J9Method **cInitialVirtualMethod)
-{
-	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-	jvmImage->setInitialMethods(cInitialStaticMethod, cInitialSpecialMethod, cInitialVirtualMethod);
 }
