@@ -211,7 +211,7 @@ addJarToSystemClassLoaderClassPathEntries(J9JavaVM *vm, const char *filename)
 		classPathLength += oldEntries[entryIndex].pathLength + 1;	/* add 1 for a null character */
 	}
 	/* Copy and grow the classPathEntries array */
-	if (IS_COLD_RUN(vm)) {
+	if (IS_RAM_CACHE_ON(vm)) {
 		newEntries = (J9ClassPathEntry *) imem_allocate_memory(sizeof(J9ClassPathEntry) * (entryCount + 1) + classPathLength, J9MEM_CATEGORY_CLASSES);
 	} else {
 		newEntries = (J9ClassPathEntry *) j9mem_allocate_memory(sizeof(J9ClassPathEntry) * (entryCount + 1) + classPathLength, J9MEM_CATEGORY_CLASSES);
@@ -253,7 +253,7 @@ addJarToSystemClassLoaderClassPathEntries(J9JavaVM *vm, const char *filename)
 		newCount = entryCount + 1;
 		classLoader->classPathEntries = newEntries;
 		classLoader->classPathEntryCount = newCount;
-		if (IS_COLD_RUN(vm)) {
+		if (IS_RAM_CACHE_ON(vm)) {
 			imem_free_memory(oldEntries);
 		} else {
 			j9mem_free_memory(oldEntries);
@@ -264,7 +264,7 @@ addJarToSystemClassLoaderClassPathEntries(J9JavaVM *vm, const char *filename)
 done:
 	/* If any error occurred, discard any allocated memory and throw OutOfMemoryError */
 	if (0 == newCount) {
-		if (IS_COLD_RUN(vm)) {
+		if (IS_RAM_CACHE_ON(vm)) {
 			imem_free_memory(oldEntries);
 		} else {
 			j9mem_free_memory(oldEntries);

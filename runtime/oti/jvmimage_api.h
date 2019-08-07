@@ -58,7 +58,44 @@ void image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPoint
 *
 * @return 0 on fail, 1 on success
 */
-UDATA initializeJVMImage(J9JavaVM *javaVM);
+JVMImagePortLibrary *
+initializeJVMImage(J9PortLibrary *portLibrary, BOOLEAN isColdRun, const char* ramCache);
+
+/**
+ * Initialize JVMImage
+ *
+ * @param jvmImagePortLibrary[in] jvmPortLib
+ * @param javaVM[in] vm token
+ */
+void
+setupJVMImage(JVMImagePortLibrary *jvmImagePortLibrary, J9JavaVM *javaVM);
+
+/**
+ * Retrieve javaVM from JVm image
+ *
+ * @param jvmImagePortLibrary[in] jvmPortLib
+ * @return vm token
+ */
+J9JavaVM *
+getJ9JavaVMFromJVMImage(JVMImagePortLibrary *jvmImagePortLibrary);
+
+/**
+ * Retrieve classloader blocks from JVM image
+ *
+ * @param javaVM[in] vm token
+ * @return classLoaderBlocks
+ */
+J9Pool*
+getClassLoaderBlocks(J9JavaVM *javaVM);
+
+/**
+ * Store classloader blocks in JVM image
+ *
+ * @param javaVM[in] vm token
+ * @return classLoaderBlocks
+ */
+void
+registerClassLoaderBlocks(J9JavaVM *javaVM);
 
 /*
 * Registers class loader to one of the three defined class loaders
@@ -166,13 +203,15 @@ void initializeImageClassLoaderObject(J9JavaVM *javaVM, J9ClassLoader *classLoad
 * Frees memory of heap variables and jvmimage instance
 * Does not destroy jvmimageheap monitor
 *
-* @param javaVM[in] the java vm
+* @param jvmImagePortLibrary[in] the jvmImagePortlib
 */
-void shutdownJVMImage(J9JavaVM *vm);
+void shutdownJVMImage(JVMImagePortLibrary *jvmImagePortLibrary);
 
 /*
 * Called on cold run to perform fixup of the image heap memory
 * Fixup of J9Class, J9ClassLoader, and J9CPEntry performed
+*
+* TODO should rename this, not clear
 *
 * @param javaVM[in] the java vm
 */

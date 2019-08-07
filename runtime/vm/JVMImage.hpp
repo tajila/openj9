@@ -40,15 +40,17 @@ class JVMImage
 	 */
 private:
 	J9JavaVM *_vm;
-
+	J9PortLibrary *_portLibrary;
 	JVMImageHeader *_jvmImageHeader;
 	J9Heap *_heap;
 	J9ITable *_invalidITable;
-
+	const char *_ramCache;
 	omrthread_monitor_t _jvmImageMonitor;
+	JVMImagePortLibrary *_jvmImagePortLibrary;
 protected:
 public:
 	static const UDATA INITIAL_IMAGE_SIZE;
+	static const UDATA CLASS_LOADER_REMOVE_COUNT;
 	
 	/*
 	 * Function Members
@@ -77,17 +79,27 @@ private:
 	void fixupMethodRunAddresses(J9Class *ramClass);
 	void fixupConstantPool(J9Class *ramClass);
 	void fixupClassPathEntries(void);
+	void removeUnpersistedClassLoaders(void);
+
 protected:
 	void *operator new(size_t size, void *memoryPointer) { return memoryPointer; }
 public:
-	JVMImage(J9JavaVM *vm);
+	JVMImage(J9PortLibrary *portLibrary, const char* ramCache);
 	~JVMImage();
 
-	static JVMImage* createInstance(J9JavaVM *javaVM);
+	static JVMImage* createInstance(J9PortLibrary *portLibrary, const char* ramCache);
 
-	ImageRC setupWarmRun(void);
-	ImageRC setupColdRun(void);
+	void setJ9JavaVM(J9JavaVM *vm);
+	void setImagePortLib(JVMImagePortLibrary *jvmImagePortLibrary);
+	J9JavaVM* getJ9JavaVM();
 
+	void setClassLoaderBlocks(J9JavaVM *vm);
+	J9Pool* getClassLoaderBlocks();
+
+	ImageRC setupWarmRun();
+	ImageRC setupColdRun();
+
+	void fixupVMStructures(void);
 	void teardownImage(void);
 
 	/* Suballocator functions */

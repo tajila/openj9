@@ -862,10 +862,13 @@ freeJavaVM(J9JavaVM * vm)
 	}
 
 	if (IS_RAM_CACHE_ON(vm)) {
-		shutdownJVMImage(vm);
+		JVMImagePortLibrary* imagePortLibrary = vm->jvmImagePortLibrary;
+		PORT_ACCESS_FROM_PORT((J9PortLibrary *) imagePortLibrary);
+		j9mem_free_memory(vm);
+		shutdownJVMImage(imagePortLibrary);
+	} else {
+		j9mem_free_memory(vm);
 	}
-
-	j9mem_free_memory(vm);
 
 	if (NULL != tmpLib->self_handle) {
 		tmpLib->port_shutdown_library(tmpLib);
@@ -954,10 +957,42 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 		return JNI_ERR;
 	}
 
-	/* Allocate the VM, including the extra OMR structures */
-	vm = allocateJavaVMWithOMR(portLibrary);
-	if (vm == NULL) {
-		return JNI_ENOMEM;
+	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RAM_CACHE)) {
+		BOOLEAN isColdRun = TRUE;
+		JVMImagePortLibrary *imagePortLib = NULL;
+
+		/* TODO need to use portlib functions */
+		if (-1 != access(createParams->ramCache, F_OK)) {
+			isColdRun = FALSE;
+		}
+
+		imagePortLib = initializeJVMImage(portLibrary, isColdRun, createParams->ramCache);
+
+		if (FALSE == imagePortLib) {
+			return JNI_ENOMEM;
+		}
+		if (isColdRun) {
+			vm = allocateJavaVMWithOMR((J9PortLibrary *)imagePortLib);
+		} else {
+			vm = getJ9JavaVMFromJVMImage(imagePortLib);
+		}
+		setupJVMImage(imagePortLib, vm);
+
+		if (vm == NULL) {
+			return JNI_ENOMEM;
+		}
+
+		if (isColdRun) {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN;
+		} else {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN;
+		}
+	} else {
+		/* Allocate the VM, including the extra OMR structures */
+		vm = allocateJavaVMWithOMR(portLibrary);
+		if (vm == NULL) {
+			return JNI_ENOMEM;
+		}
 	}
 
 #if defined(J9VM_THR_ASYNC_NAME_UPDATE)
@@ -2100,7 +2135,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			if (NULL == (vm->jniWeakGlobalReferences = pool_new(sizeof(UDATA), 0, 0, POOL_NO_ZERO, J9_GET_CALLSITE(), J9MEM_CATEGORY_JNI, POOL_FOR_PORT(vm->portLibrary))))
 				goto _error;
 
-			/* TODO: Load if Warm run */
+			/* TODO: Load if Warm run, also classloading stacks do not need to be persisted */
 			if (IS_COLD_RUN(vm)) {
 				if (NULL == (vm->classLoadingStackPool = pool_new(sizeof(J9ClassLoadingStackElement), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(IMAGE_OMRPORT_FROM_JAVAVM(vm))))) {
 					goto _error;
@@ -2108,12 +2143,19 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(IMAGE_OMRPORT_FROM_JAVAVM(vm))))) {
 					goto _error;
 				}
+				registerClassLoaderBlocks(vm);
 			} else {
 				if (NULL == (vm->classLoadingStackPool = pool_new(sizeof(J9ClassLoadingStackElement), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary)))) {
 					goto _error;
 				}
-				if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary)))) {
-					goto _error;
+				if (IS_WARM_RUN(vm)) {
+					if (NULL == (vm->classLoaderBlocks = getClassLoaderBlocks(vm))) {
+						goto _error;
+					}
+				} else {
+					if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary)))) {
+						goto _error;
+					}
 				}
 			}
 			
@@ -5979,12 +6021,6 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	}
 
 	if (JNI_OK != (stageRC = runInitializationStage(vm, VM_THREADING_INITIALIZED))) {
-		goto error;
-	}
-
-	/* TODO: Create separate initialization stage for RAM Caching */
-	if (IS_RAM_CACHE_ON(vm)
-		&& 0 == initializeJVMImage(vm)) {
 		goto error;
 	}
 

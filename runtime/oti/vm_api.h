@@ -36,6 +36,7 @@
 #include "j9comp.h"
 #include "jni.h"
 #include "omrthread.h"
+#include "jvmimageport.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,7 @@ extern "C" {
 #define J9_CREATEJAVAVM_ARGENCODING_LATIN 2
 #define J9_CREATEJAVAVM_ARGENCODING_UTF8 4
 #define J9_CREATEJAVAVM_ARGENCODING_PLATFORM 8
+#define J9_CREATEJAVAVM_RAM_CACHE 16
 
 typedef struct J9CreateJavaVMParams {
 	UDATA j2seVersion;
@@ -54,6 +56,7 @@ typedef struct J9CreateJavaVMParams {
 	J9JavaVM **globalJavaVM;
 	J9PortLibrary *portLibrary;
 	UDATA flags;
+	const char *ramCache;
 } J9CreateJavaVMParams;
 
 /* ---------------- FastJNI.cpp ---------------- */
