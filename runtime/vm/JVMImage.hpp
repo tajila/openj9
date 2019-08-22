@@ -32,6 +32,7 @@
 #include "j9protos.h"
 #include "ut_j9vm.h"
 #include "objhelp.h"
+#include "vm_api.h"
 
 class JVMImage
 {
@@ -99,6 +100,7 @@ public:
 	ImageRC setupWarmRun();
 	ImageRC setupColdRun();
 
+	void fixupJITVtable(J9Class *ramClass);
 	void fixupVMStructures(void);
 	void teardownImage(void);
 

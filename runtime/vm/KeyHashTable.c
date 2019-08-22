@@ -552,7 +552,7 @@ hashClassLocationTableNew(J9JavaVM *javaVM, U_32 initialSize)
 	U_32 flags = J9HASH_TABLE_ALLOW_SIZE_OPTIMIZATION;
 
 	OMRPortLibrary* privatePortLibrary = OMRPORT_FROM_J9PORT(javaVM->portLibrary);
-	if (IS_COLD_RUN(javaVM)) {
+	if (IS_RAM_CACHE_ON(javaVM)) {
 		privatePortLibrary = IMAGE_OMRPORT_FROM_JAVAVM(javaVM);
 	}
 	return hashTableNew(privatePortLibrary, J9_GET_CALLSITE(), initialSize, sizeof(J9ClassLocation), sizeof(char *), flags, J9MEM_CATEGORY_CLASSES, classLocationHashFn, classLocationHashEqualFn, NULL, javaVM);

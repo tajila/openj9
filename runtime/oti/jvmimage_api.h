@@ -238,6 +238,23 @@ void storeInitialVMMethods(J9JavaVM *javaVM, J9Method *cInitialStaticMethod, J9M
 */
 void setInitialVMMethods(J9JavaVM *javaVM, J9Method **cInitialStaticMethod, J9Method **cInitialSpecialMethod, J9Method **cInitialVirtualMethod);
 
+/*
+ * Run classload hooks and assign class object to J9Class
+ *
+ * @param[in] vmThread vmthread token
+ * @param[in] classLoader classloader of clazz
+ * @param[in] clazz clazz to be loaded
+ */
+BOOLEAN loadWarmClass(J9VMThread* vmThread, J9ClassLoader* classLoader, J9Class *clazz);
+
+/*
+ * Perform post-image fixups on J9Class
+ *
+ * @param[in] javaVM vm token
+ * @param[in[ clazz j9class to be initialized
+ */
+void initializeImageJ9Class(J9JavaVM *javaVM, J9Class *clazz);
+
 #ifdef __cplusplus
 }
 #endif

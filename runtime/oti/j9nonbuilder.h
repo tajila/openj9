@@ -79,6 +79,7 @@
 #define J9ClassLargestAlignmentConstraintDouble 0x1000
 #define J9ClassIsExemptFromValidation 0x2000
 #define J9ClassContainsUnflattenedFlattenables 0x4000
+#define J9ClassIsLoadedFromImage 0x8000
 
 /* @ddr_namespace: map_to_type=J9FieldFlags */
 
@@ -4806,6 +4807,7 @@ typedef struct J9InternalVMFunctions {
 	J9ClassLoader* ( *findClassLoader)(struct J9JavaVM *javaVM, uint32_t classLoaderCategory);
 	void ( *initializeImageClassLoaderObject)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, j9object_t classLoaderObject);
 	struct J9Class* ( *initializeImageClassObject)(struct J9VMThread *vmThread, struct J9ClassLoader *classLoader, struct J9Class *clazz);
+	BOOLEAN ( *loadWarmClass)(struct J9VMThread* vmThread, struct J9ClassLoader* classLoader, struct J9Class *clazz);
 } J9InternalVMFunctions;
 
 /* Jazz 99339: define a new structure to replace JavaVM so as to pass J9NativeLibrary to JVMTIEnv  */

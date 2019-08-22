@@ -249,6 +249,13 @@ internalFindClassString(J9VMThread* currentThread, j9object_t moduleName, j9obje
 		omrthread_monitor_enter(vm->classTableMutex);
 	}
 	result = hashClassTableAtString(classLoader, (j9object_t) className);
+	if (IS_WARM_RUN(currentThread->javaVM)) {
+		if (result != NULL) {
+			if (!loadWarmClass(currentThread, classLoader, result)) {
+				result = NULL;
+			}
+		}
+	}
 	if (!fastMode) {
 		omrthread_monitor_exit(vm->classTableMutex);
 	}
@@ -803,6 +810,11 @@ waitForContendedLoadClass(J9VMThread* vmThread, J9ContendedLoadTableEntry *table
 	/* still have classTableMutex here */
 	Trc_VM_waitForContendedLoadClass_waited(vmThread, vmThread, tableEntry->classLoader, classNameLength, className, status);
 	foundClass = hashClassTableAt(tableEntry->classLoader, className, classNameLength);
+	if (IS_WARM_RUN(vmThread->javaVM)) {
+		if (!loadWarmClass(vmThread, tableEntry->classLoader, foundClass)) {
+			foundClass = NULL;
+		}
+	}
 	omrthread_monitor_exit(vmThread->javaVM->classTableMutex);
 	internalAcquireVMAccess(vmThread);
 	Trc_VM_waitForContendedLoadClass_acquired_vm_access(vmThread, vmThread, tableEntry->classLoader, classNameLength, className);
@@ -899,6 +911,58 @@ arbitratedLoadClass(J9VMThread* vmThread, U_8* className, UDATA classNameLength,
 	return foundClass;
 }
 
+char* getClassName(J9Class *clazz) {
+	return (char*) J9UTF8_DATA(J9ROMCLASS_CLASSNAME(clazz->romClass));
+}
+
+BOOLEAN
+loadWarmClass(J9VMThread* vmThread, J9ClassLoader* classLoader, J9Class *clazz)
+{
+	BOOLEAN rc = TRUE;
+	BOOLEAN failed = FALSE;
+	if (J9_ARE_NO_BITS_SET(clazz->classFlags, J9ClassIsLoadedFromImage)) {
+		J9Class *superClazz = clazz->superclasses[J9CLASS_DEPTH(clazz) - 1];
+		J9ITable *itable = (J9ITable *) clazz->iTable;
+
+		clazz->classFlags |= J9ClassIsLoadedFromImage;
+
+		/* load superclasses and interfaces first */
+		if (NULL != superClazz) {
+			if (!loadWarmClass(vmThread, classLoader, superClazz)) {
+				rc = FALSE;
+				goto done;
+			}
+		}
+
+		while (NULL != itable) {
+			J9Class *interface = itable->interfaceClass;
+			if (!loadWarmClass(vmThread, classLoader, interface)) {
+				rc = FALSE;
+				goto done;
+			}
+			itable = itable->next;
+		}
+
+		initializeImageJ9Class(vmThread->javaVM, clazz);
+
+		if (J9_ARE_ALL_BITS_SET(vmThread->javaVM->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_CLASS_OBJECT_ASSIGNED) && (clazz->classObject == NULL)) {
+			clazz = initializeImageClassObject(vmThread, classLoader, clazz);
+		}
+
+		TRIGGER_J9HOOK_VM_INTERNAL_CLASS_LOAD(vmThread->javaVM->hookInterface, vmThread, clazz, failed);
+		TRIGGER_J9HOOK_VM_CLASS_LOAD(vmThread->javaVM->hookInterface, vmThread, clazz);
+
+		if (failed) {
+			printf("warm loading hook failed :%s:\n", getClassName(clazz));
+			rc = FALSE;
+			goto done;
+		}
+	}
+
+done:
+	return rc;
+}
+
 /**
  * Load non-array class.
  * @param vmThread Current VM thread
@@ -954,15 +1018,8 @@ loadNonArrayClass(J9VMThread* vmThread, J9Module *j9module, U_8* className, UDAT
 	foundClass = hashClassTableAt(classLoader, className, classNameLength);
 	if (NULL != foundClass) {
 		if (IS_WARM_RUN(vmThread->javaVM)) {
-			UDATA failed = FALSE;
-			if (J9_ARE_ALL_BITS_SET(vmThread->javaVM->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_CLASS_OBJECT_ASSIGNED)
-			&& foundClass->classObject == NULL)
-			{
-				foundClass = initializeImageClassObject(vmThread, classLoader, foundClass);
-			}
-			TRIGGER_J9HOOK_VM_INTERNAL_CLASS_LOAD(vmThread->javaVM->hookInterface, vmThread, foundClass, failed);
-			if (failed) {
-				/* TODO should do something with the failed value */
+			if (!loadWarmClass(vmThread, classLoader, foundClass)) {
+				foundClass = NULL;
 			}
 		}
 		if (!fastMode) {
@@ -989,6 +1046,11 @@ loadNonArrayClass(J9VMThread* vmThread, J9Module *j9module, U_8* className, UDAT
 				/* check again if somebody else already loaded the class */
 				foundClass = hashClassTableAt(classLoader, className, classNameLength);
 				if (NULL != foundClass) {
+					if (IS_WARM_RUN(vmThread->javaVM)) {
+						if (!loadWarmClass(vmThread, classLoader, foundClass)) {
+							foundClass = NULL;
+						}
+					}
 					omrthread_monitor_exit(vmThread->javaVM->classTableMutex);
 					goto done;
 				}

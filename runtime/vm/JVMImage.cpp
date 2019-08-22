@@ -425,6 +425,7 @@ JVMImage::fixupClassLoaders(void)
 		currentClassLoader->jniIDs = NULL;
 		currentClassLoader->jniRedirectionBlocks = NULL;
 		currentClassLoader->gcRememberedSet = 0;
+		currentClassLoader->jitMetaDataList = NULL;
 
 		currentClassLoader = (J9ClassLoader *) imageTableNextDo(getClassLoaderTable());
 	}
@@ -485,6 +486,8 @@ JVMImage::fixupClasses(void)
 			currentClass->lastITable = JVMImage::getInvalidITable();
 		}
 
+		currentClass->classFlags &= ~J9ClassIsFlattened;
+
 		currentClass = (J9Class *) imageTableNextDo(getClassTable());
 	}
 }
@@ -499,6 +502,7 @@ JVMImage::fixupClass(J9Class *clazz)
 	clazz->jniIDs = NULL;
 	clazz->replacedClass = NULL;
 	clazz->gcLink = NULL;
+	clazz->jitMetaDataList = NULL;
 
 	UDATA totalStaticSlots = totalStaticSlotsForClass(clazz->romClass);
 	memset(clazz->ramStatics, 0, totalStaticSlots * sizeof(UDATA));
@@ -524,6 +528,34 @@ JVMImage::fixupClass(J9Class *clazz)
 
 	if (NULL != clazz->varHandleMethodTypes) {
 		memset(clazz->varHandleMethodTypes, 0, sizeof(UDATA) * clazz->romClass->varHandleMethodTypeCount);
+	}
+}
+
+void
+JVMImage::fixupJITVtable(J9Class *ramClass)
+{
+	J9VMThread *vmThread = currentVMThread(_vm);
+	J9JITConfig *jitConfig = _vm->jitConfig;
+	J9VTableHeader *vTableAddress = J9VTABLE_HEADER_FROM_RAM_CLASS(ramClass);
+	if (jitConfig != NULL) {
+		UDATA *vTableWriteCursor = JIT_VTABLE_START_ADDRESS(ramClass);
+		UDATA vTableWriteIndex = vTableAddress->size;
+		J9Method **vTableReadCursor;
+		if (vTableWriteIndex != 0) {
+			if ((jitConfig->runtimeFlags & J9JIT_TOSS_CODE) != 0) {
+				vTableWriteCursor -= vTableWriteIndex;
+			} else {
+
+				vTableReadCursor = J9VTABLE_FROM_HEADER(vTableAddress);
+				for (; vTableWriteIndex > 0; vTableWriteIndex--) {
+					J9Method *currentMethod = *vTableReadCursor;
+					fillJITVTableSlot(vmThread, vTableWriteCursor, currentMethod);
+
+					vTableReadCursor++;
+					vTableWriteCursor--;
+				}
+			}
+		}
 	}
 }
 
@@ -624,7 +656,7 @@ JVMImage::readImageFromFile(void)
 	_jvmImageHeader = (JVMImageHeader *)mmap(
 		(void *)imageHeaderBuffer.imageAlignedAddress,
 		imageHeaderBuffer.imageSize,
-		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fileDescriptor, 0);
+		PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_FIXED | MAP_POPULATE, fileDescriptor, 0);
 	if (-1 == (IDATA)_jvmImageHeader) {
 		return false;
 	}
@@ -849,10 +881,21 @@ initializeImageClassLoaderObject(J9JavaVM *javaVM, J9ClassLoader *classLoader, j
 	omrthread_monitor_exit(javaVM->classLoaderBlocksMutex);
 }
 
-extern "C" J9Class * 
+extern "C" void
+initializeImageJ9Class(J9JavaVM *javaVM, J9Class *clazz)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
+
+	jvmImage->fixupJITVtable(clazz);
+}
+
+
+extern "C" J9Class *
 initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLoader, J9Class *clazz)
 {
 	J9JavaVM *javaVM = vmThread->javaVM;
+
 	/* Allocate class object */
 	J9Class *jlClass = J9VMCONSTANTPOOL_CLASSREF_AT(javaVM, J9VMCONSTANTPOOL_JAVALANGCLASS)->value;
 

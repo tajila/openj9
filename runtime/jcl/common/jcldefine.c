@@ -24,6 +24,7 @@
 #include "j9consts.h"
 #include "jclprots.h"
 #include "j9protos.h"
+#include "vm_api.h"
 
 
 
@@ -135,6 +136,11 @@ retry:
 			/* TODO: Incorrect pathway for loading already cached class */
 			if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN)) {
 				clazz = vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length);
+				if (IS_WARM_RUN(vm)) {
+					if (!vmFuncs->loadWarmClass(currentThread, classLoader, clazz)) {
+						clazz = NULL;
+					}
+				}
 				clazz = vmFuncs->initializeImageClassObject(currentThread, classLoader, clazz);
 			} else {
 				vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, (UDATA*)* (j9object_t*)className);
