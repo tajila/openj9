@@ -87,7 +87,7 @@ freeClassLoaderEntries(J9VMThread * vmThread, J9ClassPathEntry * entries, UDATA 
 		cpEntry++;
 	}
 
-	if (IS_COLD_RUN(vm)) {
+	if (IS_RAM_CACHE_ON(vm)) {
 		imem_free_memory(entries);
 	} else {
 		j9mem_free_memory(entries);

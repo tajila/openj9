@@ -70,6 +70,8 @@ struct JVMImageSizeAndLocation;
  */
 typedef struct JVMImageHeader {
 	UDATA imageSize; /* image size in bytes */
+	J9JavaVM *vm;
+	J9Pool *classLoaderBlocks;
 	uintptr_t imageAddress;
 	uintptr_t imageAlignedAddress; /* TODO: Will be removed once PAGE alignment is not needed anymore */
 	/* TODO: only three main class loaders stored for prototype and quick access. Need to allow user defined classloaders */
@@ -83,17 +85,6 @@ typedef struct JVMImageHeader {
 	J9WSRP cInitialSpecialMethod;
 	J9WSRP cInitialVirtualMethod;
 } JVMImageHeader;
-
-/*
- * Struct containing first three elements of JVMImageHeader
- * 
- * Used for initial read from file. see @ref JVMImage::readImageFromFile
- */
-typedef struct JVMImageSizeAndLocation {
-	UDATA imageSize;
-	uintptr_t imageAddress;
-	uintptr_t imageAlignedAddress;
-} JVMImageSizeAndLocation;
 
 /* Table structure to walk thorugh registered entries for J9Class, J9ClassLoader, and CPEntries
  *

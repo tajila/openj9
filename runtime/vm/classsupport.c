@@ -953,12 +953,18 @@ loadNonArrayClass(J9VMThread* vmThread, J9Module *j9module, U_8* className, UDAT
 
 	foundClass = hashClassTableAt(classLoader, className, classNameLength);
 	if (NULL != foundClass) {
-		if (IS_WARM_RUN(vmThread->javaVM)
-			&& J9_ARE_ALL_BITS_SET(vmThread->javaVM->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_CLASS_OBJECT_ASSIGNED)
-			&& foundClass->classObject == NULL) {
-			foundClass = initializeImageClassObject(vmThread, classLoader, foundClass);
+		if (IS_WARM_RUN(vmThread->javaVM)) {
+			UDATA failed = FALSE;
+			if (J9_ARE_ALL_BITS_SET(vmThread->javaVM->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_CLASS_OBJECT_ASSIGNED)
+			&& foundClass->classObject == NULL)
+			{
+				foundClass = initializeImageClassObject(vmThread, classLoader, foundClass);
+			}
+			TRIGGER_J9HOOK_VM_INTERNAL_CLASS_LOAD(vmThread->javaVM->hookInterface, vmThread, foundClass, failed);
+			if (failed) {
+				/* TODO should do something with the failed value */
+			}
 		}
-		
 		if (!fastMode) {
 			omrthread_monitor_exit(vmThread->javaVM->classTableMutex);
 		}

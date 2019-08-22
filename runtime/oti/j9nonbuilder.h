@@ -34,6 +34,7 @@
 #include "j9consts.h"
 #include "jvmti.h"
 #include "j9javaaccessflags.h"
+#include "jvmimageport.h"
 
 #define J9VM_MAX_HIDDEN_FIELDS_PER_CLASS 8
 
@@ -5116,7 +5117,7 @@ typedef struct J9JavaVM {
 	struct J9PortLibrary * portLibrary;
 	UDATA j2seVersion;
 	void* zipCachePool;
-	void* jvmImagePortLibrary;
+	JVMImagePortLibrary* jvmImagePortLibrary;
 	char* ramStateFilePath;
 	struct J9VMInterface vmInterface;
 #if defined(J9VM_OPT_HARMONY)

@@ -1242,6 +1242,7 @@ typedef struct J9SpecialArguments {
 	UDATA *argEncoding;
 	IDATA *ibmMallocTraceSet;
 	const char *executableJarPath;
+	char *ramCache;
 } J9SpecialArguments;
 /**
  * Look for special options:
@@ -1287,6 +1288,8 @@ initialArgumentScan(JavaVMInitArgs *args, J9SpecialArguments *specialArgs)
 			*(specialArgs->argEncoding) = ARG_ENCODING_UTF;
 		} else if (0 == strcmp(args->options[argCursor].optionString, VMOPT_XARGENCODINGLATIN)) {
 			*(specialArgs->argEncoding) = ARG_ENCODING_LATIN;
+		} else if (0 == strncmp(args->options[argCursor].optionString, VMOPT_XRAMCACHE, sizeof(VMOPT_XRAMCACHE) - 1)) {
+			specialArgs->ramCache = args->options[argCursor].optionString + strlen(VMOPT_XRAMCACHE);
 		}
 	}
 
@@ -1759,6 +1762,11 @@ jint JNICALL JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *vm_args) {
 	args = (JavaVMInitArgs *)vm_args;
 	launcherArgumentsSize = initialArgumentScan(args, &specialArgs);
 	localVerboseLevel = specialArgs.localVerboseLevel;
+
+	if (NULL != specialArgs.ramCache) {
+		createParams.flags |= J9_CREATEJAVAVM_RAM_CACHE;
+		createParams.ramCache = specialArgs.ramCache;
+	}
 
 	if (VERBOSE_INIT == localVerboseLevel) {
 		createParams.flags |= J9_CREATEJAVAVM_VERBOSE_INIT;
