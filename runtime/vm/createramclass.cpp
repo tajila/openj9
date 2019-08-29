@@ -3134,11 +3134,15 @@ retry:
 			classFlags |= J9ClassContainsUnflattenedFlattenables;
 		}
 #endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
-
-		result->classFlags = classFlags;
 		if (IS_COLD_RUN(javaVM)) {
 			vmFuncs->registerClass(javaVM, result);
+		} else if (IS_WARM_RUN(javaVM)) {
+			/* needed to make sure class hooks are only run once */
+			classFlags |= J9ClassIsLoadedFromImage;
 		}
+
+		result->classFlags = classFlags;
+
 	}
 
 	return result;

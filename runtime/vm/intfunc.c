@@ -380,4 +380,5 @@ J9InternalVMFunctions J9InternalFunctions = {
 	findClassLoader,
 	initializeImageClassLoaderObject,
 	initializeImageClassObject,
+	loadWarmClass,
 };
