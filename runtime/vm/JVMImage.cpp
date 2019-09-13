@@ -21,6 +21,7 @@
  *******************************************************************************/
 
 #include "JVMImage.hpp"
+#include "segment.h"
 #include <errno.h>
 
 #include <sys/mman.h> /* TODO: Change to OMRPortLibrary MMAP functionality. Currently does not allow MAP_FIXED as it is not supported in all architectures */
@@ -143,6 +144,10 @@ JVMImage::setupWarmRun(void)
 		return IMAGE_ERROR;
 	}
 
+	if (!restoreJ9JavaVMStructures()) {
+		return IMAGE_ERROR;
+	}
+
 	return IMAGE_OK;
 }
 
@@ -208,8 +213,9 @@ void *
 JVMImage::initializeHeap(void)
 {
 	PORT_ACCESS_FROM_PORT(_portLibrary);
+	UDATA pageSize = j9vmem_supported_page_sizes()[0];
 	
-	_heap = j9heap_create((J9Heap *)(_jvmImageHeader + 1), JVMImage::INITIAL_IMAGE_SIZE - sizeof(_jvmImageHeader), 0);
+	_heap = j9heap_create((J9Heap *)(_jvmImageHeader + 1), ROUND_DOWN_TO_POWEROF2(JVMImage::INITIAL_IMAGE_SIZE - sizeof(_jvmImageHeader), pageSize), 0);
 	if (NULL == _heap) {
 		return NULL;
 	}
@@ -387,13 +393,74 @@ JVMImage::setClassLoader(J9ClassLoader *classLoader, uint32_t classLoaderCategor
 void
 JVMImage::setClassLoaderBlocks(J9JavaVM *vm)
 {
-	_jvmImageHeader->classLoaderBlocks = vm->classLoaderBlocks;
+	_jvmImageHeader->savedJavaVMStructs.classLoaderBlocks = vm->classLoaderBlocks;
 }
 
 J9Pool*
 JVMImage::getClassLoaderBlocks()
 {
-	return _jvmImageHeader->classLoaderBlocks;
+	return _jvmImageHeader->savedJavaVMStructs.classLoaderBlocks;
+}
+
+void
+JVMImage::setClassMemorySegments(J9JavaVM *vm)
+{
+	_jvmImageHeader->savedJavaVMStructs.classMemorySegments = vm->classMemorySegments;
+}
+
+J9MemorySegmentList*
+JVMImage::getClassMemorySegments()
+{
+	return _jvmImageHeader->savedJavaVMStructs.classMemorySegments;
+}
+
+void
+JVMImage::setMemorySegments(J9JavaVM *vm)
+{
+	J9MemorySegmentList *oldMemorySegmentList = _vm->memorySegments;
+	J9MemorySegment *currentSegment = oldMemorySegmentList->nextSegment;
+	J9MemorySegmentList *newMemorySegmentList = _vm->internalVMFunctions->allocateMemorySegmentList(vm, 10, OMRMEM_CATEGORY_VM);
+
+	if (NULL == newMemorySegmentList) {
+		_vm->internalVMFunctions->setNativeOutOfMemoryError(currentVMThread(_vm), 0 ,0);
+		goto done;
+	}
+
+	/* copy all the persisted memory segments into the new list */
+	while (NULL != currentSegment) {
+		J9MemorySegment *nextSegment = currentSegment->nextSegment;
+		if (IS_SEGMENT_PERSISTED(currentSegment)) {
+			J9MemorySegment *newSegment = allocateMemorySegmentListEntry(newMemorySegmentList);
+
+			newSegment->type = currentSegment->type;
+			newSegment->size = currentSegment->size;
+			newSegment->baseAddress = currentSegment->baseAddress;
+			newSegment->heapBase = currentSegment->heapBase;
+			newSegment->heapTop = currentSegment->heapTop;
+			newSegment->heapAlloc = currentSegment->heapAlloc;
+
+			newMemorySegmentList->totalSegmentSize += newSegment->size;
+			if (0 != (newMemorySegmentList->flags & MEMORY_SEGMENT_LIST_FLAG_SORT)) {
+				avl_insert(&newMemorySegmentList->avlTreeData, (J9AVLTreeNode *) newSegment);
+			}
+
+			J9_MEMORY_SEGMENT_LINEAR_LINKED_LIST_REMOVE(oldMemorySegmentList->nextSegment, currentSegment);
+			pool_removeElement(oldMemorySegmentList->segmentPool, currentSegment);
+
+
+		}
+		currentSegment = nextSegment;
+	}
+
+	_jvmImageHeader->savedJavaVMStructs.memorySegments = newMemorySegmentList;
+done:
+	return;
+}
+
+J9MemorySegmentList*
+JVMImage::getMemorySegments()
+{
+	return _jvmImageHeader->savedJavaVMStructs.memorySegments;
 }
 
 
@@ -674,6 +741,37 @@ JVMImage::readImageFromFile(void)
 	return true;
 }
 
+/**
+ * Will be removed once the J9JavaVM struct is fully persisted
+ */
+void
+JVMImage::saveJ9JavaVMStructures(void)
+{
+	setClassLoaderBlocks(this->_vm);
+	setClassMemorySegments(this->_vm);
+	setMemorySegments(this->_vm);
+}
+
+/**
+ * Will be removed once the J9JavaVM struct is fully persisted
+ */
+bool
+JVMImage::restoreJ9JavaVMStructures(void)
+{
+	bool success = true;
+	J9MemorySegmentList *segmentList = getClassMemorySegments();
+	if (omrthread_monitor_init_with_name(&segmentList->segmentMutex, 0, "VM class mem segment list")) {
+		success = false;
+	}
+
+	segmentList = getMemorySegments();
+	if (omrthread_monitor_init_with_name(&segmentList->segmentMutex, 0, "VM mem segment list")) {
+		success = false;
+	}
+	return success;
+}
+
+
 bool
 JVMImage::writeImageToFile(void)
 {
@@ -702,11 +800,11 @@ void
 JVMImage::teardownImage(void)
 {
 	removeUnpersistedClassLoaders();
+	saveJ9JavaVMStructures();
 	fixupClassLoaders();
 	fixupClasses();
 	fixupClassPathEntries();
 	writeImageToFile();
-
 }
 
 JVMImagePortLibrary * 
@@ -780,15 +878,6 @@ registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t class
 	jvmImage->setClassLoader(classLoader, classLoaderCategory);
 }
 
-extern "C" void
-registerClassLoaderBlocks(J9JavaVM *javaVM)
-{
-	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
-	Assert_VM_notNull(jvmImage);
-
-	jvmImage->setClassLoaderBlocks(javaVM);
-}
-
 extern "C" J9Pool*
 getClassLoaderBlocks(J9JavaVM *javaVM)
 {
@@ -796,6 +885,24 @@ getClassLoaderBlocks(J9JavaVM *javaVM)
 	Assert_VM_notNull(jvmImage);
 
 	return jvmImage->getClassLoaderBlocks();
+}
+
+extern "C" J9MemorySegmentList *
+getClassMemorySegmentList(J9JavaVM *javaVM)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
+
+	return jvmImage->getClassMemorySegments();
+}
+
+extern "C" J9MemorySegmentList *
+getMemorySegmentList(J9JavaVM *javaVM)
+{
+	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
+	Assert_VM_notNull(jvmImage);
+
+	return jvmImage->getMemorySegments();
 }
 
 extern "C" void
@@ -961,6 +1068,8 @@ teardownJVMImage(J9JavaVM *javaVM)
 
 	if (IS_COLD_RUN(javaVM)) {
 		jvmImage->teardownImage();
+	} else {
+		jvmImage->setMemorySegments(javaVM);
 	}
 }
 

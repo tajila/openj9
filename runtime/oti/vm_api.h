@@ -2790,6 +2790,13 @@ findMemorySegment(J9JavaVM *javaVM, J9MemorySegmentList *segmentList, UDATA valu
 J9MemorySegmentList *
 allocateMemorySegmentListWithFlags(J9JavaVM * javaVM, U_32 numberOfMemorySegments, UDATA flags, U_32 memoryCategory);
 
+/**
+ * @breif Allocate segment in segment list
+ *
+ * @param currentMemorySegmentList
+ */
+J9MemorySegment *
+allocateMemorySegmentListEntry(J9MemorySegmentList *segmentList);
 
 /* ---------------- statistics.c ---------------- */
 /**

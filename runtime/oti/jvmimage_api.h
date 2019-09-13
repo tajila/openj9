@@ -89,13 +89,22 @@ J9Pool*
 getClassLoaderBlocks(J9JavaVM *javaVM);
 
 /**
- * Store classloader blocks in JVM image
+ * Retrieve class memory segment list from JVM image
  *
  * @param javaVM[in] vm token
- * @return classLoaderBlocks
+ * @return classMemorySegmentList
  */
-void
-registerClassLoaderBlocks(J9JavaVM *javaVM);
+J9MemorySegmentList *
+getClassMemorySegmentList(J9JavaVM *javaVM);
+
+/**
+ * Retrieve memory segment list from JVM image
+ *
+ * @param javaVM[in] vm token
+ * @return classMemorySegmentList
+ */
+J9MemorySegmentList *
+getMemorySegmentList(J9JavaVM *javaVM);
 
 /*
 * Registers class loader to one of the three defined class loaders

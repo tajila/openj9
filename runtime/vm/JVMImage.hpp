@@ -81,6 +81,8 @@ private:
 	void fixupConstantPool(J9Class *ramClass);
 	void fixupClassPathEntries(void);
 	void removeUnpersistedClassLoaders(void);
+	void saveJ9JavaVMStructures(void);
+	bool restoreJ9JavaVMStructures(void);
 
 protected:
 	void *operator new(size_t size, void *memoryPointer) { return memoryPointer; }
@@ -96,6 +98,10 @@ public:
 
 	void setClassLoaderBlocks(J9JavaVM *vm);
 	J9Pool* getClassLoaderBlocks();
+	void setClassMemorySegments(J9JavaVM *vm);
+	J9MemorySegmentList* getClassMemorySegments();
+	void setMemorySegments(J9JavaVM *vm);
+	J9MemorySegmentList* getMemorySegments();
 
 	ImageRC setupWarmRun();
 	ImageRC setupColdRun();

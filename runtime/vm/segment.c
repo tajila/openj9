@@ -46,7 +46,6 @@ static void * allocateMemoryForSegment (J9JavaVM *javaVM,J9MemorySegment *segmen
 J9MemorySegmentList *allocateMemorySegmentList (J9JavaVM * javaVM, U_32 numberOfMemorySegments, U_32 memoryCategory);
 J9MemorySegment * romImageNewSegment (J9JavaVM *vm, J9ROMImageHeader *header, UDATA isBaseType, J9ClassLoader *classLoader );
 void freeMemorySegment (J9JavaVM *javaVM, J9MemorySegment *segment, BOOLEAN freeDescriptor);
-J9MemorySegment * allocateMemorySegmentListEntry (J9MemorySegmentList *segmentList);
 
 J9Class* allClassesStartDo (J9ClassWalkState* state, J9JavaVM* vm, J9ClassLoader* classLoader);
 J9Class* allClassesNextDo (J9ClassWalkState* state);
@@ -135,7 +134,7 @@ void freeMemorySegment(J9JavaVM *javaVM, J9MemorySegment *segment, BOOLEAN freeD
 		} else if (segment->type & (MEMORY_TYPE_RAM_CLASS | MEMORY_TYPE_UNDEAD_CLASS)) {
 			/* TODO: Add Memory type for allocation inside JVMImage (MEMORY_TYPE_IMAGE_ALLOCATED). see @ref omr:j9nongenerated.h */
 			/* Check flag for freeing memory */
-			if (IS_COLD_RUN(javaVM)) {
+			if (IS_RAM_CACHE_ON(javaVM)) {
 				if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
 					assert(!"There is no support for compressedRefs");
 				} else {
@@ -148,7 +147,7 @@ void freeMemorySegment(J9JavaVM *javaVM, J9MemorySegment *segment, BOOLEAN freeD
 					j9mem_free_memory(segment->baseAddress);
 				}
 			}
-		} else if ((segment->type & MEMORY_TYPE_ROM_CLASS) && IS_COLD_RUN(javaVM)) {
+		} else if ((segment->type & MEMORY_TYPE_ROM_CLASS) && IS_RAM_CACHE_ON(javaVM)) {
 			imem_free_memory(segment->baseAddress);
 		} else {
 			j9mem_free_memory(segment->baseAddress);
@@ -211,7 +210,7 @@ void freeMemorySegmentList(J9JavaVM *javaVM,J9MemorySegmentList *segmentList)
 
 	/* Guaranteed that classMemorySegments was allocated on JVMImageHeap */
 	/* TODO: In J9MemorySegmentList flags add allocation from image rather than this check. see @ref omr:j9nongenerated.h */
-	if (IS_COLD_RUN(javaVM) && javaVM->classMemorySegments == segmentList) {
+	if (IS_RAM_CACHE_ON(javaVM) && ((javaVM->classMemorySegments == segmentList) || (javaVM->memorySegments == segmentList))) {
 		imem_free_memory(segmentList);
 	} else {
 		j9mem_free_memory(segmentList);
@@ -252,7 +251,7 @@ allocateMemoryForSegment(J9JavaVM *javaVM,J9MemorySegment *segment, J9PortVmemPa
 		tmpAddr = j9vmem_reserve_memory_ex(&segment->vmemIdentifier, vmemParams);
 		Trc_VM_virtualRAMClassAlloc(tmpAddr);
 	} else if (J9_ARE_ALL_BITS_SET(segment->type, MEMORY_TYPE_RAM_CLASS)) {
-		if (IS_COLD_RUN(javaVM)) {
+		if (IS_RAM_CACHE_ON(javaVM)) {
 			if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
 				assert(!"There is no support for compressedRefs");
 			} else {
@@ -266,7 +265,7 @@ allocateMemoryForSegment(J9JavaVM *javaVM,J9MemorySegment *segment, J9PortVmemPa
 				tmpAddr = j9mem_allocate_memory(segment->size, memoryCategory);
 			}
 		}
-	} else if (J9_ARE_ALL_BITS_SET(segment->type, MEMORY_TYPE_ROM_CLASS) && IS_COLD_RUN(javaVM)) {
+	} else if (J9_ARE_ALL_BITS_SET(segment->type, MEMORY_TYPE_ROM_CLASS) && IS_RAM_CACHE_ON(javaVM)) {
 		tmpAddr = imem_allocate_memory(segment->size, memoryCategory);
 		/* TODO: Add Memory type for allocation inside JVMImage (MEMORY_TYPE_IMAGE_ALLOCATED). see @ref omr:j9nongenerated.h */
 	} else {
@@ -458,7 +457,7 @@ J9MemorySegmentList *allocateMemorySegmentListWithSize(J9JavaVM * javaVM, U_32 n
 	JVMIMAGEPORT_ACCESS_FROM_JAVAVM(javaVM);
 	
 	/* Check if its a cold run and class memory segments list */
-	if (IS_COLD_RUN(javaVM) && J9MEM_CATEGORY_CLASSES == memoryCategory) {
+	if (IS_COLD_RUN(javaVM) && ((J9MEM_CATEGORY_CLASSES == memoryCategory) || (OMRMEM_CATEGORY_VM == memoryCategory))) {
 		if (NULL == (segmentList = imem_allocate_memory(sizeof(J9MemorySegmentList), memoryCategory))) {
 			return NULL;
 		}
@@ -698,4 +697,3 @@ segmentSearchComparator (J9AVLTree *tree, UDATA value, J9MemorySegment *searchNo
 		return baseAddress > value ? -1 : 1;
 	}
 }
-
