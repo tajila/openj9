@@ -637,7 +637,7 @@ freeJavaVM(J9JavaVM * vm)
 		runShutdownStage(vm, INTERPRETER_SHUTDOWN, NULL, 0);
 	}
 
-	if (IS_COLD_RUN(vm)) {
+	if (IS_RAM_CACHE_ON(vm)) {
 		teardownJVMImage(vm);
 	}
 
@@ -2160,7 +2160,6 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(IMAGE_OMRPORT_FROM_JAVAVM(vm))))) {
 					goto _error;
 				}
-				registerClassLoaderBlocks(vm);
 			} else {
 				if (NULL == (vm->classLoadingStackPool = pool_new(sizeof(J9ClassLoadingStackElement), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary)))) {
 					goto _error;

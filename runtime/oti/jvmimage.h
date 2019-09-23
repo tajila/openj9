@@ -50,6 +50,9 @@
 #define INITIAL_CLASS_TABLE_SIZE 70
 #define INITIAL_CLASSPATH_TABLE_SIZE 4
 
+#define PERSISTED_MEMORY_SEGMENT_TYPES MEMORY_TYPE_RAM_CLASS | MEMORY_TYPE_UNDEAD_CLASS | MEMORY_TYPE_ROM_CLASS
+#define IS_SEGMENT_PERSISTED(segment) J9_ARE_ANY_BITS_SET(segment->type, PERSISTED_MEMORY_SEGMENT_TYPES)
+
 enum ImageRC {
 	IMAGE_OK = BCT_ERR_NO_ERROR,
 	IMAGE_ERROR = BCT_ERR_GENERIC_ERROR,
@@ -61,6 +64,16 @@ struct ImageTableHeader;
 struct JVMImageHeader;
 struct JVMImageSizeAndLocation;
 
+/**
+ * TODO: This will not be needed once the J9JavaVM
+ * structure is properly persisted
+ */
+typedef struct SavedJ9JavaVMStructures {
+	J9Pool *classLoaderBlocks;
+	J9MemorySegmentList *classMemorySegments;
+	J9MemorySegmentList *memorySegments;
+} SavedJ9JavaVMStructures;
+
 /*
  * Struct containing data about image heap and quick access variables
  *
@@ -71,7 +84,7 @@ struct JVMImageSizeAndLocation;
 typedef struct JVMImageHeader {
 	UDATA imageSize; /* image size in bytes */
 	J9JavaVM *vm;
-	J9Pool *classLoaderBlocks;
+	SavedJ9JavaVMStructures savedJavaVMStructs;
 	uintptr_t imageAddress;
 	uintptr_t imageAlignedAddress; /* TODO: Will be removed once PAGE alignment is not needed anymore */
 	/* TODO: only three main class loaders stored for prototype and quick access. Need to allow user defined classloaders */
