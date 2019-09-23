@@ -463,6 +463,33 @@ JVMImage::getMemorySegments()
 	return _jvmImageHeader->savedJavaVMStructs.memorySegments;
 }
 
+void
+JVMImage::setPrimitiveAndArrayClasses(J9JavaVM* javaVM)
+{
+	J9Class **saveClasses = &this->_jvmImageHeader->savedJavaVMStructs.voidReflectClass;
+	J9Class **liveClasses = &javaVM->voidReflectClass;
+
+	for (int i = 0; i < 17; i++) {
+		saveClasses[i] = liveClasses[i];
+	}
+}
+
+bool
+JVMImage::restorePrimitiveAndArrayClasses(void)
+{
+	J9Class **saveClasses = &this->_jvmImageHeader->savedJavaVMStructs.voidReflectClass;
+	J9Class **liveClasses = &_vm->voidReflectClass;
+	bool rc = true;
+
+	for (int i = 0; i < 17; i++) {
+		liveClasses[i] = saveClasses[i];
+	}
+
+	return rc;
+}
+
+
+
 
 void
 JVMImage::fixupVMStructures(void)
@@ -750,6 +777,7 @@ JVMImage::saveJ9JavaVMStructures(void)
 	setClassLoaderBlocks(this->_vm);
 	setClassMemorySegments(this->_vm);
 	setMemorySegments(this->_vm);
+	setPrimitiveAndArrayClasses(this->_vm);
 }
 
 /**
@@ -759,6 +787,8 @@ bool
 JVMImage::restoreJ9JavaVMStructures(void)
 {
 	bool success = true;
+	fixupVMStructures();
+
 	J9MemorySegmentList *segmentList = getClassMemorySegments();
 	if (omrthread_monitor_init_with_name(&segmentList->segmentMutex, 0, "VM class mem segment list")) {
 		success = false;
@@ -768,6 +798,11 @@ JVMImage::restoreJ9JavaVMStructures(void)
 	if (omrthread_monitor_init_with_name(&segmentList->segmentMutex, 0, "VM mem segment list")) {
 		success = false;
 	}
+
+	if (!restorePrimitiveAndArrayClasses()) {
+		success = false;
+	}
+
 	return success;
 }
 
@@ -861,7 +896,6 @@ setupJVMImage(JVMImagePortLibrary *jvmImagePortLibrary, J9JavaVM *javaVM)
 extern "C" J9JavaVM *
 getJ9JavaVMFromJVMImage(JVMImagePortLibrary *jvmImagePortLibrary)
 {
-	((JVMImage *)jvmImagePortLibrary->jvmImage)->fixupVMStructures();
 	return ((JVMImage *)jvmImagePortLibrary->jvmImage)->getJ9JavaVM();
 }
 

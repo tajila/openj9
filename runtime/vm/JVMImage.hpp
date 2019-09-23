@@ -82,7 +82,9 @@ private:
 	void fixupClassPathEntries(void);
 	void removeUnpersistedClassLoaders(void);
 	void saveJ9JavaVMStructures(void);
+	bool restorePrimitiveAndArrayClasses(void);
 	bool restoreJ9JavaVMStructures(void);
+	void setPrimitiveAndArrayClasses(J9JavaVM *vm);
 
 protected:
 	void *operator new(size_t size, void *memoryPointer) { return memoryPointer; }
