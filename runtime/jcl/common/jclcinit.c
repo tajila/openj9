@@ -652,7 +652,6 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 		}
 	}
 
-
 	/* Initialize early since sendInitialize() uses this */ 
 	if (initializeStaticMethod(vm, J9VMCONSTANTPOOL_JAVALANGJ9VMINTERNALS_INITIALIZATIONALREADYFAILED)) {
 		return 1;
