@@ -72,6 +72,23 @@ typedef struct SavedJ9JavaVMStructures {
 	J9Pool *classLoaderBlocks;
 	J9MemorySegmentList *classMemorySegments;
 	J9MemorySegmentList *memorySegments;
+	struct J9Class* voidReflectClass;
+	struct J9Class* booleanReflectClass;
+	struct J9Class* charReflectClass;
+	struct J9Class* floatReflectClass;
+	struct J9Class* doubleReflectClass;
+	struct J9Class* byteReflectClass;
+	struct J9Class* shortReflectClass;
+	struct J9Class* intReflectClass;
+	struct J9Class* longReflectClass;
+	struct J9Class* booleanArrayClass;
+	struct J9Class* charArrayClass;
+	struct J9Class* floatArrayClass;
+	struct J9Class* doubleArrayClass;
+	struct J9Class* byteArrayClass;
+	struct J9Class* shortArrayClass;
+	struct J9Class* intArrayClass;
+	struct J9Class* longArrayClass;
 } SavedJ9JavaVMStructures;
 
 /*
