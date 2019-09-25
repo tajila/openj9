@@ -36,6 +36,16 @@ import org.objectweb.asm.*;
 
 @Test(groups = { "level.sanity" })
 public class TestClassRelationshipVerifier {
+	static {
+		try {
+			System.loadLibrary("bcvrelationships");
+		} catch (UnsatisfiedLinkError e) {
+			Assert.fail(e.getMessage() + "\nlibrary path = " + System.getProperty("java.library.path"));
+		}
+	}
+
+	native static boolean isRelationshipRecorded(String sourceClassName, String targetClassName);
+
 	/**
 	 * Source class is not loaded, but target class is loaded.
 	 * Check that a relationship is recorded for the source and target classes.
@@ -52,12 +62,16 @@ public class TestClassRelationshipVerifier {
 		Class<?> clazzC = classloader.getClass("C", bytesClassC);
 		Class<?> clazzA = classloader.getClass("A", bytesClassA);
 
-		try {
-			Object instanceC = clazzC.getDeclaredConstructor().newInstance();
-			Object instanceA = clazzA.getDeclaredConstructor().newInstance();
-		} catch (InvocationTargetException e) {
-			throw e.getCause();
+		if (!isRelationshipRecorded("B", "C")){
+			Assert.fail("relationship was not recorded");
 		}
+
+		// try {
+		// 	Object instanceC = clazzC.getDeclaredConstructor().newInstance();
+		// 	Object instanceA = clazzA.getDeclaredConstructor().newInstance();
+		// } catch (InvocationTargetException e) {
+		// 	throw e.getCause();
+		// }
 	}
 
 	/**
@@ -74,11 +88,15 @@ public class TestClassRelationshipVerifier {
 
 		Class<?> clazzA = classloader.getClass("A", bytesClassA);
 
-		try {
-			Object instanceA = clazzA.getDeclaredConstructor().newInstance();
-		} catch (InvocationTargetException e) {
-			throw e.getCause();
+		if (!isRelationshipRecorded("B", "C")){
+			Assert.fail("relationship was not recorded");
 		}
+
+		// try {
+		// 	Object instanceA = clazzA.getDeclaredConstructor().newInstance();
+		// } catch (InvocationTargetException e) {
+		// 	throw e.getCause();
+		// }
 	}
 
 	/**

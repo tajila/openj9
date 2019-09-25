@@ -65,6 +65,7 @@ extern"C"{
 #define J9_TOOLS_OS_MEMORY_DLL_NAME "osmemory29"
 #define J9_TOOLS_SOFTMX_TEST_DLL_NAME "softmxtest"
 #define J9_TOOLS_BALLOON_DLL_NAME "balloon29"
+#define J9_VERIFIER_TEST_RELATIONSHIPS_DLL_NAME "bcvrelationships"
 
 /* We need certain defines... this is a big hack until we can do this another way.*/
 #ifndef J9_VERBOSE_DLL_NAME
