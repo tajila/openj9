@@ -115,7 +115,7 @@ getMemorySegmentList(J9JavaVM *javaVM);
 *
 * TODO: Allow users to register user defined class loader
 */
-void registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t classLoaderCategory);
+UDATA registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t classLoaderCategory);
 
 /*
 * Registers class in table
@@ -185,7 +185,7 @@ UDATA* findEntryLocationInTable(ImageTableHeader *table, UDATA entry);
 *
 * TODO: Allow users to register user defined class loader.
 */
-J9ClassLoader* findClassLoader(J9JavaVM *javaVM, uint32_t classLoaderCategory);
+J9ClassLoader* findClassLoader(J9JavaVM *javaVM, UDATA entry);
 
 /*
 * Initializes class object. Mimics behaviour of internalCreateRAMClass

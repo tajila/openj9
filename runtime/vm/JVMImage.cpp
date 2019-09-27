@@ -322,7 +322,7 @@ JVMImage::freeSubAllocatedMemory(void *address)
 	omrthread_monitor_exit(_jvmImageMonitor);
 }
 
-void
+UDATA
 JVMImage::registerEntryInTable(ImageTableHeader *table, UDATA entry)
 {
 	Trc_VM_RegisterInTable_Entry(table, table->currentSize, *(WSRP_GET(table->tableTail, UDATA*)), entry);
@@ -344,6 +344,15 @@ JVMImage::registerEntryInTable(ImageTableHeader *table, UDATA entry)
 	table->currentSize += 1;
 
 	Trc_VM_RegisterInTable_Exit(table, table->currentSize, *(WSRP_GET(table->tableTail, UDATA*)));
+	return (table->currentSize - 1);
+}
+
+void *
+JVMImage::retrieveEntryInTable(ImageTableHeader *table, UDATA entry)
+{
+	UDATA *head = WSRP_GET(table->tableHead, UDATA*);
+	head += entry;
+	return (void *)*head;
 }
 
 void
@@ -899,7 +908,7 @@ getJ9JavaVMFromJVMImage(JVMImagePortLibrary *jvmImagePortLibrary)
 	return ((JVMImage *)jvmImagePortLibrary->jvmImage)->getJ9JavaVM();
 }
 
-extern "C" void
+extern "C" UDATA
 registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t classLoaderCategory)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
@@ -907,9 +916,9 @@ registerClassLoader(J9JavaVM *javaVM, J9ClassLoader *classLoader, uint32_t class
 
 	Trc_VM_ImageClassLoaderRegister(classLoader, classLoaderCategory);
 
-	jvmImage->registerEntryInTable(jvmImage->getClassLoaderTable(), (UDATA)classLoader);
-	/* TODO: Currently only three class loaders are stored */
-	jvmImage->setClassLoader(classLoader, classLoaderCategory);
+	UDATA entry = jvmImage->registerEntryInTable(jvmImage->getClassLoaderTable(), (UDATA)classLoader);
+
+	return entry;
 }
 
 extern "C" J9Pool*
@@ -983,23 +992,11 @@ deregisterCPEntry(J9JavaVM *javaVM, J9ClassPathEntry *cpEntry)
 }
 
 extern "C" J9ClassLoader *
-findClassLoader(J9JavaVM *javaVM, uint32_t classLoaderCategory)
+findClassLoader(J9JavaVM *javaVM, UDATA entry)
 {
 	IMAGE_ACCESS_FROM_JAVAVM(javaVM);
 	Assert_VM_notNull(jvmImage);
-	J9ClassLoader *classLoader = NULL;
-	/* TODO: Function will change when hash table is created and there would be no need for accessing specific class loaders (hardcoded) */
-	if (IS_SYSTEM_CLASSLOADER_CATEGORY(classLoaderCategory)) {
-		classLoader = jvmImage->getSystemClassLoader();
-	}
-
-	if (IS_APP_CLASSLOADER_CATEGORY(classLoaderCategory)) {
-		classLoader = jvmImage->getApplicationClassLoader();
-	}
-
-	if (IS_EXTENSION_CLASSLOADER_CATEGORY(classLoaderCategory)) {
-		classLoader = jvmImage->getExtensionClassLoader();
-	}
+	J9ClassLoader *classLoader = (J9ClassLoader *)jvmImage->retrieveEntryInTable(jvmImage->getClassLoaderTable(), entry);
 
 	TRIGGER_J9HOOK_VM_CLASS_LOADER_CREATED(javaVM->hookInterface, javaVM, classLoader);
 	Assert_VM_notNull(classLoader);

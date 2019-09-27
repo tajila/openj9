@@ -117,8 +117,9 @@ public:
 	void* reallocateMemory(void *address, uintptr_t byteAmount);
 	void freeSubAllocatedMemory(void *memStart);
 
-	void registerEntryInTable(ImageTableHeader *table, UDATA entry);
+	UDATA registerEntryInTable(ImageTableHeader *table, UDATA entry);
 	void deregisterEntryInTable(ImageTableHeader *table, UDATA entry);
+	void* retrieveEntryInTable(ImageTableHeader *table, UDATA entry);
 
 	void destroyMonitor(void);
 

@@ -4796,12 +4796,12 @@ typedef struct J9InternalVMFunctions {
 	void ( *setNestmatesError)(struct J9VMThread *vmThread, struct J9Class *nestMember, struct J9Class *nestHost, IDATA errorCode);
 #endif /* J9VM_OPT_VALHALLA_NESTMATES */
 	BOOLEAN ( *areValueTypesEnabled)(struct J9JavaVM *vm);
-	void ( *registerClassLoader)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, uint32_t classLoaderCategory);
+	UDATA ( *registerClassLoader)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, uint32_t classLoaderCategory);
 	void ( *registerClass)(struct J9JavaVM *javaVM, struct J9Class *clazz);
 	void ( *registerCPEntry)(struct J9JavaVM *javaVM, struct J9ClassPathEntry *cpEntry);
 	void ( *deregisterClass)(struct J9JavaVM *javaVM, struct J9Class *clazz);
 	void ( *deregisterCPEntry)(struct J9JavaVM *javaVM, struct J9ClassPathEntry *cpEntry);
-	J9ClassLoader* ( *findClassLoader)(struct J9JavaVM *javaVM, uint32_t classLoaderCategory);
+	J9ClassLoader* ( *findClassLoader)(struct J9JavaVM *javaVM, UDATA classLoaderCategory);
 	void ( *initializeImageClassLoaderObject)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, j9object_t classLoaderObject);
 	struct J9Class* ( *initializeImageClassObject)(struct J9VMThread *vmThread, struct J9ClassLoader *classLoader, struct J9Class *clazz);
 	BOOLEAN ( *loadWarmClass)(struct J9VMThread* vmThread, struct J9ClassLoader* classLoader, struct J9Class *clazz);

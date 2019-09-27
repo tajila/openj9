@@ -37,8 +37,8 @@
 /* Class loader categories */
 /* TODO: Categories will change when a better identifier for classloaders is used (also would allow user defined classloaders) */
 #define IMAGE_CATEGORY_SYSTEM_CLASSLOADER 0
-#define IMAGE_CATEGORY_APP_CLASSLOADER 1
-#define IMAGE_CATEGORY_EXTENSION_CLASSLOADER 2
+#define IMAGE_CATEGORY_EXTENSION_CLASSLOADER 1
+#define IMAGE_CATEGORY_APP_CLASSLOADER 2
 
 #define IS_SYSTEM_CLASSLOADER_CATEGORY(_category) (IMAGE_CATEGORY_SYSTEM_CLASSLOADER == _category)
 #define IS_APP_CLASSLOADER_CATEGORY(_category) (IMAGE_CATEGORY_APP_CLASSLOADER == _category)
