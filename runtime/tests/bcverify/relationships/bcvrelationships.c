@@ -38,7 +38,7 @@
  * @param[in] parentNameString the name of the parent class
  */
 JNIEXPORT jboolean JNICALL
-Java_org_openj9_test_classRelationshipVerifier_TestClassRelationshipVerifier_isRelationshipRecorded(JNIEnv *env, jstring childNameString, jstring parentNameString)
+Java_org_openj9_test_classRelationshipVerifier_TestClassRelationshipVerifier_isRelationshipRecorded(JNIEnv *env, jclass relationships, jstring childNameString, jstring parentNameString)
 {
 	jboolean foundRelationship = JNI_FALSE;
 	J9VMThread *thread  = (J9VMThread *) env;

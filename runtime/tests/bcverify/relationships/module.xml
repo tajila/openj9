@@ -52,7 +52,12 @@
 		</objects>
 
 		<libraries>
-			<library name="j9hashtable" type="external"/>						
+			<library name="j9hashtable" type="external"/>
+			<library name="j9util"/>
+			<library name="j9utilcore"/>
+			<library name="jvm"/>
+			<library name="j9omr" type="external"/>
+			<library name="j9prt"/>				
 		</libraries>
 	</artifact>
 </module>
