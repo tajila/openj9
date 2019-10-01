@@ -70,6 +70,8 @@ Java_java_lang_ClassLoader_defineClassImpl(JNIEnv *env, jobject receiver, jstrin
 		options |= J9_FINDCLASS_FLAG_UNSAFE;
 	}
 
+	options |= J9_FINDCLASS_FLAG_CREATED_BY_DEFINE_CLASS;
+
 	jclass result = defineClassCommon(env, receiver, className, classRep, offset, length, protectionDomain, options, NULL);
 
 	if (J9_ARE_ANY_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID) && (NULL == result) && (NULL == currentThread->currentException)) {

@@ -154,6 +154,12 @@ initializeMethodRunAddressVarHandle(J9Method *method)
 void
 initializeMethodRunAddress(J9VMThread *vmThread, J9Method *method)
 {
+	initializeMethodRunAddressImpl(vmThread, method, TRUE);
+}
+
+void
+initializeMethodRunAddressImpl(J9VMThread *vmThread, J9Method *method, BOOLEAN runHook)
+{
 	J9JavaVM* vm = vmThread->javaVM;
 
 	method->extra = (void *) J9_STARTPC_NOT_TRANSLATED;
@@ -162,7 +168,7 @@ initializeMethodRunAddress(J9VMThread *vmThread, J9Method *method)
 		return;
 	}
 
-	if (J9_EVENT_IS_HOOKED(vm->hookInterface, J9HOOK_VM_INITIALIZE_SEND_TARGET)) {
+	if (runHook && J9_EVENT_IS_HOOKED(vm->hookInterface, J9HOOK_VM_INITIALIZE_SEND_TARGET)) {
 		method->methodRunAddress = NULL;
 		ALWAYS_TRIGGER_J9HOOK_VM_INITIALIZE_SEND_TARGET(vm->hookInterface, vmThread, method);
 		if (NULL != method->methodRunAddress) {

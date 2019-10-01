@@ -406,6 +406,7 @@ void
 JVMImage::setClassMemorySegments(J9JavaVM *vm)
 {
 	_jvmImageHeader->savedJavaVMStructs.classMemorySegments = vm->classMemorySegments;
+	vm->classMemorySegments = copyUnPersistedMemorySegmentsToNewList(vm->classMemorySegments);
 }
 
 J9MemorySegmentList*
@@ -414,12 +415,44 @@ JVMImage::getClassMemorySegments()
 	return _jvmImageHeader->savedJavaVMStructs.classMemorySegments;
 }
 
-void
-JVMImage::setMemorySegments(J9JavaVM *vm)
+bool
+JVMImage::isImmortalClassLoader(J9ClassLoader *classLoader)
 {
-	J9MemorySegmentList *oldMemorySegmentList = _vm->memorySegments;
+	if ((classLoader == _vm->applicationClassLoader)
+	|| (classLoader == _vm->systemClassLoader)
+	|| (classLoader == _vm->extensionClassLoader)
+	|| (NULL == classLoader)
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+void
+printAllSegments(J9MemorySegmentList *segmentList, J9JavaVM *_vm)
+{
+	J9MemorySegment *currentSegment = segmentList->nextSegment;
+	int i = 0;
+
+	if (_vm->classMemorySegments == segmentList) {
+		printf("class memory segments ");
+	}
+	printf("Segment %p Total segments ------------ \n", segmentList);
+
+	while (NULL != currentSegment) {
+		printf("segment=%p heapBase=%p size=%d\n", currentSegment, currentSegment->heapBase, (int)currentSegment->size);
+		i++;
+		currentSegment = currentSegment->nextSegment;
+	}
+	printf("%p Total segments %d -------------\n", segmentList, (int) i);
+}
+
+J9MemorySegmentList*
+JVMImage::copyUnPersistedMemorySegmentsToNewList(J9MemorySegmentList *oldMemorySegmentList)
+{
 	J9MemorySegment *currentSegment = oldMemorySegmentList->nextSegment;
-	J9MemorySegmentList *newMemorySegmentList = _vm->internalVMFunctions->allocateMemorySegmentList(vm, 10, OMRMEM_CATEGORY_VM);
+	J9MemorySegmentList *newMemorySegmentList = _vm->internalVMFunctions->allocateMemorySegmentList(_vm, 10, OMRMEM_CATEGORY_VM);
 
 	if (NULL == newMemorySegmentList) {
 		_vm->internalVMFunctions->setNativeOutOfMemoryError(currentVMThread(_vm), 0 ,0);
@@ -429,7 +462,8 @@ JVMImage::setMemorySegments(J9JavaVM *vm)
 	/* copy all the persisted memory segments into the new list */
 	while (NULL != currentSegment) {
 		J9MemorySegment *nextSegment = currentSegment->nextSegment;
-		if (IS_SEGMENT_PERSISTED(currentSegment)) {
+
+		if (!IS_SEGMENT_PERSISTED(currentSegment) || !isImmortalClassLoader(currentSegment->classLoader)) {
 			J9MemorySegment *newSegment = allocateMemorySegmentListEntry(newMemorySegmentList);
 
 			newSegment->type = currentSegment->type;
@@ -444,16 +478,27 @@ JVMImage::setMemorySegments(J9JavaVM *vm)
 				avl_insert(&newMemorySegmentList->avlTreeData, (J9AVLTreeNode *) newSegment);
 			}
 
+			/* remove segment from old list */
+			if (0 != (oldMemorySegmentList->flags & MEMORY_SEGMENT_LIST_FLAG_SORT)) {
+				avl_delete(&oldMemorySegmentList->avlTreeData, (J9AVLTreeNode *) currentSegment);
+			}
 			J9_MEMORY_SEGMENT_LINEAR_LINKED_LIST_REMOVE(oldMemorySegmentList->nextSegment, currentSegment);
 			pool_removeElement(oldMemorySegmentList->segmentPool, currentSegment);
-
-
 		}
 		currentSegment = nextSegment;
 	}
 
-	_jvmImageHeader->savedJavaVMStructs.memorySegments = newMemorySegmentList;
 done:
+	return newMemorySegmentList;
+}
+
+void
+JVMImage::setMemorySegments(J9JavaVM *vm)
+{
+
+	_jvmImageHeader->savedJavaVMStructs.memorySegments = _vm->memorySegments;
+	_vm->memorySegments = copyUnPersistedMemorySegmentsToNewList(_vm->memorySegments);
+
 	return;
 }
 
@@ -503,8 +548,8 @@ JVMImage::fixupVMStructures(void)
 void
 JVMImage::fixupClassLoaders(void)
 {
-	J9ClassLoader *currentClassLoader = (J9ClassLoader *) imageTableStartDo(getClassLoaderTable());
-	
+	pool_state classLoaderWalkState = {0};
+	J9ClassLoader *currentClassLoader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
 	while (NULL != currentClassLoader) {
 		currentClassLoader->sharedLibraries = NULL;
 		currentClassLoader->librariesHead = NULL;
@@ -521,7 +566,7 @@ JVMImage::fixupClassLoaders(void)
 		currentClassLoader->gcRememberedSet = 0;
 		currentClassLoader->jitMetaDataList = NULL;
 
-		currentClassLoader = (J9ClassLoader *) imageTableNextDo(getClassLoaderTable());
+		currentClassLoader = (J9ClassLoader *) pool_nextDo(&classLoaderWalkState);
 	}
 }
 
@@ -535,9 +580,10 @@ JVMImage::removeUnpersistedClassLoaders(void)
 	J9ClassLoader **removeLoaders = (J9ClassLoader **) buf;
 	J9VMThread *vmThread = currentVMThread(_vm);
 	UDATA count = 0;
+	PORT_ACCESS_FROM_PORT(_portLibrary);
 
 	if (CLASS_LOADER_REMOVE_COUNT < numOfClassLoaders) {
-		PORT_ACCESS_FROM_PORT(_portLibrary);
+
 		removeLoaders = (J9ClassLoader **) j9mem_allocate_memory(numOfClassLoaders * sizeof(J9ClassLoader*), J9MEM_CATEGORY_CLASSES);
 		if (NULL == removeLoaders) {
 			/* TODO error handling for fixups */
@@ -547,7 +593,7 @@ JVMImage::removeUnpersistedClassLoaders(void)
 
 	J9ClassLoader *classloader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
 	while (NULL != classloader) {
-		if ((classloader != _vm->applicationClassLoader) && (classloader != _vm->extensionClassLoader) && (classloader != _vm->systemClassLoader)) {
+		if (!isImmortalClassLoader(classloader)) {
 			removeLoaders[count] = classloader;
 			count++;
 		}
@@ -557,33 +603,45 @@ JVMImage::removeUnpersistedClassLoaders(void)
 	for (UDATA i = 0; i < count; i++) {
 		freeClassLoader(removeLoaders[i], _vm, vmThread, FALSE);
 	}
+
+	if ((J9ClassLoader **)buf != removeLoaders) {
+		j9mem_free_memory(removeLoaders);
+	}
 }
 
 
 void
 JVMImage::fixupClasses(void)
 {
-	J9Class *currentClass = (J9Class *) imageTableStartDo(getClassTable());
+	pool_state classLoaderWalkState = {0};
+	J9ClassLoader *classloader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
+	while (NULL != classloader) {
+		J9ClassWalkState walkState = {0};
+		J9Class *currentClass = allLiveClassesStartDo(&walkState, _vm, classloader);
 
-	while (NULL != currentClass) {
-		J9ROMClass *romClass = currentClass->romClass;
-		
-		if (J9ROMCLASS_IS_ARRAY(romClass)) {
-			fixupArrayClass((J9ArrayClass *) currentClass);
-		} else {
-			fixupClass(currentClass);
+		while (NULL != currentClass) {
+			J9ROMClass *romClass = currentClass->romClass;
+
+			if (J9ROMCLASS_IS_ARRAY(romClass)) {
+				fixupArrayClass((J9ArrayClass *) currentClass);
+			} else {
+				fixupClass(currentClass);
+			}
+
+			/* Fixup the last ITable */
+			currentClass->lastITable = (J9ITable *) currentClass->iTable;
+			if (NULL == currentClass->lastITable) {
+				currentClass->lastITable = JVMImage::getInvalidITable();
+			}
+
+			currentClass = allLiveClassesNextDo(&walkState);
 		}
+		allLiveClassesEndDo(&walkState);
 
-		/* Fixup the last ITable */
-		currentClass->lastITable = (J9ITable *) currentClass->iTable;
-		if (NULL == currentClass->lastITable) {
-			currentClass->lastITable = JVMImage::getInvalidITable();
-		}
-
-		currentClass->classFlags &= ~J9ClassIsFlattened;
-
-		currentClass = (J9Class *) imageTableNextDo(getClassTable());
+		classloader = (J9ClassLoader *) pool_nextDo(&classLoaderWalkState);
 	}
+
+
 }
 
 void
@@ -691,7 +749,7 @@ JVMImage::fixupMethodRunAddresses(J9Class *ramClass)
 		UDATA count = romClass->romMethodCount;
 		J9Method *ramMethod = ramClass->ramMethods;
 		for (i = 0; i < count; i++) {
-			initializeMethodRunAddress(vmThread, ramMethod);
+			initializeMethodRunAddressImpl(vmThread, ramMethod, FALSE);
 			ramMethod++;
 		}
 	}
@@ -835,10 +893,10 @@ void
 JVMImage::teardownImage(void)
 {
 	removeUnpersistedClassLoaders();
-	saveJ9JavaVMStructures();
 	fixupClassLoaders();
 	fixupClasses();
 	fixupClassPathEntries();
+	saveJ9JavaVMStructures();
 	writeImageToFile();
 }
 
@@ -1038,7 +1096,7 @@ initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLoader, J9C
 	J9JavaVM *javaVM = vmThread->javaVM;
 
 	/* Allocate class object */
-	J9Class *jlClass = J9VMCONSTANTPOOL_CLASSREF_AT(javaVM, J9VMCONSTANTPOOL_JAVALANGCLASS)->value;
+	J9Class *jlClass = J9VMJAVALANGCLASS_OR_NULL(javaVM);
 
 	if (NULL == jlClass) {
 		return NULL;
