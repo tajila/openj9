@@ -750,7 +750,7 @@ JVMImage::readImageFromFile(void)
 	_jvmImageHeader = (JVMImageHeader *)mmap(
 		(void *)imageHeaderBuffer.imageAlignedAddress,
 		imageHeaderBuffer.imageSize,
-		PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_FIXED | MAP_POPULATE, fileDescriptor, 0);
+		PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, fileDescriptor, 0);
 	if (-1 == (IDATA)_jvmImageHeader) {
 		return false;
 	}
