@@ -968,7 +968,7 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 
 		imagePortLib = initializeJVMImage(portLibrary, isColdRun, createParams->ramCache);
 
-		if (FALSE == imagePortLib) {
+		if (NULL == imagePortLib) {
 			return JNI_ENOMEM;
 		}
 		if (isColdRun) {
