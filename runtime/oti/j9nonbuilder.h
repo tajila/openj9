@@ -4804,6 +4804,7 @@ typedef struct J9InternalVMFunctions {
 	void ( *setNestmatesError)(struct J9VMThread *vmThread, struct J9Class *nestMember, struct J9Class *nestHost, IDATA errorCode);
 #endif /* J9VM_OPT_VALHALLA_NESTMATES */
 	BOOLEAN ( *areValueTypesEnabled)(struct J9JavaVM *vm);
+	J9Class* ( *peekClassHashTable)(struct J9VMThread* currentThread, J9ClassLoader* classLoader, U_8* className, UDATA classNameLength);
 	void ( *registerClassLoader)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, uint32_t classLoaderCategory);
 	void ( *registerClass)(struct J9JavaVM *javaVM, struct J9Class *clazz);
 	void ( *registerCPEntry)(struct J9JavaVM *javaVM, struct J9ClassPathEntry *cpEntry);
