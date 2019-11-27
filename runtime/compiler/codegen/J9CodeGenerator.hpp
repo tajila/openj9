@@ -171,6 +171,7 @@ public:
                                           TR::Node *node);
 
    bool needClassAndMethodPointerRelocations();
+   bool needRelocationsForLookupEvaluationData();
    bool needRelocationsForStatics();
    bool needRelocationsForHelpers();
 #if defined(JITSERVER_SUPPORT)
@@ -293,6 +294,16 @@ public:
 
    TR_BitVector *getLiveMonitors() {return _liveMonitors;}
    TR_BitVector *setLiveMonitors(TR_BitVector *v) {return (_liveMonitors = v);}
+
+public:
+
+TR_OpaqueClassBlock* getMonClass(TR::Node* monNode);
+
+protected:
+
+TR_Array<void *> _monitorMapping;
+
+void addMonClass(TR::Node* monNode, TR_OpaqueClassBlock* clazz);
 
 private:
 
