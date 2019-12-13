@@ -28,6 +28,9 @@
 #define IS_COLD_RUN(javaVM) J9_ARE_ALL_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN)
 #define IS_RAM_CACHE_ON(javaVM) J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN | J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN)
 
+#define CAN_LOAD_DIRECT_FROM_CLASSTABLE(clazz) (J9_ARE_ALL_BITS_SET((clazz)->classFlags, J9ClassCreatedFromDefineClass | J9ClassLoadedFromDefineClass) \
+		|| J9_ARE_NO_BITS_SET((clazz)->classFlags, J9ClassCreatedFromDefineClass))
+
 /* Page size allocation macros needed for MMAP MAP_FIXED to work. see @ref JVMImage::readImageFromFile */
 /* TODO: remove once MMAP is not used anymore (random memory loading) */
 #define PAGE_SIZE 4096 /* PAGE Size only defined for certain architectures (4KB default) */

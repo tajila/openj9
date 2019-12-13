@@ -81,6 +81,9 @@
 #define J9ClassContainsUnflattenedFlattenables 0x4000
 #define J9ClassCanSupportFastSubstitutability 0x8000
 #define J9ClassIsLoadedFromImage 0x10000
+#define J9ClassCreatedFromDefineClass 0x20000
+#define J9ClassLoadedFromDefineClass 0x40000
+/* TODO J9ClassIsLoadedFromImage and J9ClassLoadedFromDefineClass can be merged into one */
 
 /* @ddr_namespace: map_to_type=J9FieldFlags */
 

@@ -896,6 +896,9 @@ growJavaStack(J9VMThread * vmThread, UDATA newStackSize);
 void
 initializeMethodRunAddress(J9VMThread *vmThread, J9Method *method);
 
+void
+initializeMethodRunAddressImpl(J9VMThread *vmThread, J9Method *method, BOOLEAN runHook);
+
 
 /**
 * @brief

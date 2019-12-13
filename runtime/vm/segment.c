@@ -466,9 +466,10 @@ J9MemorySegmentList *allocateMemorySegmentListWithSize(J9JavaVM * javaVM, U_32 n
 			imem_free_memory(segmentList);
 			return NULL;
 		}
-	} else if (NULL == (segmentList = j9mem_allocate_memory(sizeof(J9MemorySegmentList), memoryCategory))) {
-		return NULL;
-	} else {
+	} else { 
+		if (NULL == (segmentList = j9mem_allocate_memory(sizeof(J9MemorySegmentList), memoryCategory))) {
+			return NULL;
+		}
 		segmentList->segmentPool = pool_new(sizeOfElements, numberOfMemorySegments, 0, 0, J9_GET_CALLSITE(), memoryCategory, POOL_FOR_PORT(PORTLIB));
 		if (!(segmentList->segmentPool)) {
 			j9mem_free_memory(segmentList);

@@ -561,6 +561,10 @@ void OMRNORETURN exitJavaVM(J9VMThread * vmThread, IDATA rc)
 		omrthread_monitor_enter(vm->classLoaderBlocksMutex);
 #endif
 
+		if (IS_COLD_RUN(vm)) {
+			teardownJVMImage(vm);
+		}
+
 #if defined(COUNT_BYTECODE_PAIRS)
 		printBytecodePairs(vm);
 #endif /* COUNT_BYTECODE_PAIRS */

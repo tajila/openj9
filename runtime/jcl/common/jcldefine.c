@@ -134,14 +134,18 @@ retry:
 		omrthread_monitor_exit(vm->classTableMutex);
 		if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
 			/* TODO: Incorrect pathway for loading already cached class */
-			if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN)) {
+			if (IS_WARM_RUN(vm)) {
 				clazz = vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length);
-				if (IS_WARM_RUN(vm)) {
-					if (!vmFuncs->loadWarmClass(currentThread, classLoader, clazz)) {
-						clazz = NULL;
-					}
+
+				if (!vmFuncs->loadWarmClass(currentThread, classLoader, clazz)) {
+					clazz = NULL;
 				}
+
 				clazz = vmFuncs->initializeImageClassObject(currentThread, classLoader, clazz);
+				if (NULL != protectionDomain) {
+					J9VMJAVALANGCLASS_SET_PROTECTIONDOMAIN(currentThread, clazz->classObject, J9_JNI_UNWRAP_REFERENCE(protectionDomain));
+				}
+				clazz->classFlags |= J9ClassLoadedFromDefineClass;
 			} else {
 				vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, (UDATA*)* (j9object_t*)className);
 			}
@@ -210,6 +214,10 @@ retry:
 				loadedClass,
 				hostClass,
 				&localBuffer);
+
+	if (J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_CREATED_BY_DEFINE_CLASS)) {
+		clazz->classFlags |= J9ClassCreatedFromDefineClass;
+	}
 
 	/* If OutOfMemory, try a GC to free up some memory */
 	

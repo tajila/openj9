@@ -795,3 +795,7 @@ TraceExit=Trc_VM_DeregisterInTable_Exit NoEnv Overhead=1 Level=1 Template="Table
 TraceEvent=Trc_VM_ImageClassLoaderRegister NoEnv Overhead=1 Level=1 Template="Classloader located at %p. Classloader ID is %d."
 TraceEvent=Trc_VM_ImageClassRegister Overhead=1 Level=1 Template="Class located at %p. Class Name is %s."
 TraceEvent=Trc_VM_ImageCPEntryRegister NoEnv Overhead=1 Level=1 Template="ClassPath located at %p. ClassPath Name is %s."
+
+TraceEvent=Trc_VM_warmClassLoadHookFailed Overhead=1 Level=1 Template="Warm class load hook failed class=%p, %s"
+
+TraceEvent=Trc_VM_loadWarmClass Overhead=1 Level=1 Template="LoadClass clazz=%p, %s"

@@ -85,6 +85,8 @@ private:
 	bool restorePrimitiveAndArrayClasses(void);
 	bool restoreJ9JavaVMStructures(void);
 	void setPrimitiveAndArrayClasses(J9JavaVM *vm);
+	bool isImmortalClassLoader(J9ClassLoader *classLoader);
+	J9MemorySegmentList* copyUnPersistedMemorySegmentsToNewList(J9MemorySegmentList *oldMemorySegmentList);
 
 protected:
 	void *operator new(size_t size, void *memoryPointer) { return memoryPointer; }
