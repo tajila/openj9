@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * Copyright (c) 1991, 2019 IBM Corp. and others
+ * Copyright (c) 1991, 2020 IBM Corp. and others
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
  * distribution and is available at https://www.eclipse.org/legal/epl-2.0/
@@ -3765,6 +3765,10 @@ typedef struct J9JITConfig {
 	void ( *jitIllegalFinalFieldModification)(struct J9VMThread *currentThread, struct J9Class *fieldClass);
 	U_8* (*codeCacheWarmAlloc)(void *codeCache);
 	U_8* (*codeCacheColdAlloc)(void *codeCache);
+#if defined(JITSERVER_SUPPORT)
+	int32_t (*startJITServer)(struct J9JITConfig *jitConfig);
+	int32_t (*waitJITServerTermination)(struct J9JITConfig *jitConfig);
+#endif /* JITSERVER_SUPPORT */
 } J9JITConfig;
 
 #define J9JIT_GROW_CACHES  0x100000
@@ -4820,6 +4824,10 @@ typedef struct J9InternalVMFunctions {
 	BOOLEAN ( *loadWarmClass)(struct J9VMThread* vmThread, struct J9ClassLoader* classLoader, struct J9Class *clazz);
 	struct J9MemorySegmentList* ( *getClassMemorySegmentList)(struct J9JavaVM *javaVM);
 	struct J9MemorySegmentList* ( *getMemorySegmentList)(struct J9JavaVM *javaVM);
+#if defined(JITSERVER_SUPPORT)
+	BOOLEAN ( *isJITServerEnabled )(struct J9JavaVM *vm);
+#endif /* JITSERVER_SUPPORT */
+	IDATA ( *createJoinableThreadWithCategory)(omrthread_t* handle, UDATA stacksize, UDATA priority, UDATA suspend, omrthread_entrypoint_t entrypoint, void* entryarg, U_32 category) ;
 } J9InternalVMFunctions;
 
 /* Jazz 99339: define a new structure to replace JavaVM so as to pass J9NativeLibrary to JVMTIEnv  */

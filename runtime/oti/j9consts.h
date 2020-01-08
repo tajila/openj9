@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2019 IBM Corp. and others
+ * Copyright (c) 1991, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -330,8 +330,9 @@ extern "C" {
 #define J9_EXTENDED_RUNTIME2_LOAD_AGENT_MODULE 0x8
 #define J9_EXTENDED_RUNTIME2_ENABLE_DEEPSCAN 0x10
 #define J9_EXTENDED_RUNTIME2_ENABLE_CLASS_RELATIONSHIP_VERIFIER 0x20
-#define J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN 0x40
-#define J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN 0x80
+#define J9_EXTENDED_RUNTIME2_ENABLE_START_JITSERVER 0x40
+#define J9_EXTENDED_RUNTIME2_RAMSTATE_COLD_RUN 0x80
+#define J9_EXTENDED_RUNTIME2_RAMSTATE_WARM_RUN 0x100
 
 /* TODO: Define this until the JIT removes it */
 #define J9_EXTENDED_RUNTIME_ALLOW_GET_CALLER_CLASS 0
