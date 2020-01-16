@@ -84,7 +84,7 @@ def setupTests() {
         timestamps {
             dir ('openj9/test') {
                 withEnv(["TEST_JDK_HOME=${TEST_JDK_HOME}", "NATIVE_TEST_LIBS=${NATIVE_TEST_LIBS}"]) {
-                    sh 'git clone https://github.com/AdoptOpenJDK/TKG.git'
+                    sh 'git clone https://github.com/tajila/TKG.git'
                 }
             }
         }

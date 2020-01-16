@@ -265,7 +265,7 @@ def build() {
 	}
 	stage('Modify header files for Valhalla') {
 		timestamps {
-			sh "sed -i '65 a #define J9VM_OPT_VALHALLA_VALUE_TYPES' openj9/runtime/include/j9cfg.h.ftl"
+			sh "sed -i '68 a #define J9VM_OPT_VALHALLA_VALUE_TYPES' openj9/runtime/include/j9cfg.h.ftl"
 			sh "cat openj9/runtime/include/j9cfg.h.ftl"
 		}
 	}

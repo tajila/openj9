@@ -471,12 +471,14 @@ x86-64_linux:
     11: '/usr/lib/jvm/jdk-11'
     12: '/usr/lib/jvm/jdk-11'
     13: '/usr/lib/jvm/adoptojdk-java-12'
+    14: '/usr/lib/jvm/adoptojdk-java-13'
     next: '/usr/lib/jvm/adoptojdk-java-13'
   release:
     8: 'linux-x86_64-normal-server-release'
     11: 'linux-x86_64-normal-server-release'
     12: 'linux-x86_64-server-release'
     13: 'linux-x86_64-server-release'
+    14: 'linux-x86_64-server-release'
     next: 'linux-x86_64-server-release'
   freemarker: '/home/jenkins/freemarker.jar'
   openjdk_reference_repo: '/home/jenkins/openjdk_cache'
@@ -486,6 +488,7 @@ x86-64_linux:
       11: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
       12: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
       13: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
+      14: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
       next: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
     test:
       8: 'ci.role.build && hw.arch.x86 && sw.os.rhel.6'
@@ -494,18 +497,21 @@ x86-64_linux:
       11: 'ci.role.build && hw.arch.x86 && sw.os.rhel.6'
       12: 'ci.role.build && hw.arch.x86 && sw.os.rhel.6'
       13: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
+      14: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
       next: 'ci.role.build && hw.arch.x86 && sw.os.cent.6'
   extra_getsource_options:
     8: '--openssl-version=1.1.1d'
     11: '--openssl-version=1.1.1d'
     12: '--openssl-version=1.1.1d'
     13: '--openssl-version=1.1.1d'
+    14: '--openssl-version=1.1.1d'
     next: '--openssl-version=1.1.1d'
   extra_configure_options:
     8: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
     11: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
     12: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
     13: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
+    14: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
     next: '--enable-cuda --with-cuda=/usr/local/cuda-9.0 --with-openssl=fetched'
   build_env:
     cmd:
@@ -513,6 +519,7 @@ x86-64_linux:
       11: 'source /opt/rh/devtoolset-7/enable'
       12: 'source /opt/rh/devtoolset-7/enable'
       13: 'source /opt/rh/devtoolset-7/enable'
+      14: 'source /opt/rh/devtoolset-7/enable'
       next: 'source /opt/rh/devtoolset-7/enable'
   excluded_tests:
     11:
@@ -520,6 +527,8 @@ x86-64_linux:
     12:
       ? special.system
     13:
+      ? special.system
+    14:
       ? special.system
 #========================================#
 # Linux x86 64bits Compressed Pointers /w CMake
