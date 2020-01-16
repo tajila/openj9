@@ -74,6 +74,7 @@ private:
 	bool _isAnon;
 	J9UTF8* _anonClassName;
 	J9UTF8* _originalClassName;
+	bool _injectedIdentityObjectInterface;
 	
 protected:
 
@@ -334,7 +335,10 @@ public:
 		, _isAnon(FALSE)
 		, _anonClassName(NULL)
 		, _originalClassName(NULL)
+		, _injectedIdentityObjectInterface(false)
 	{
+		_injectedIdentityObjectInterface = J9_ARE_ALL_BITS_SET(_romClass->extraModifiers, J9AccClassHasInjectedIdentityObjectInterface);
+
 		/* anonClasses have the following name format: '[originalName]/[ROMSegmentAddress]' */
 		if (J9_ARE_ALL_BITS_SET(_romClass->extraModifiers, J9AccClassAnonClass)) {
 			PORT_ACCESS_FROM_JAVAVM(_javaVM);

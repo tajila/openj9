@@ -327,7 +327,9 @@ ClassFileWriter::analyzeInterfaces()
 	UDATA interfaceCount = _romClass->interfaceCount;
 	for (UDATA i = 0; i < interfaceCount; i++) {
 		J9UTF8 * interfaceName = NNSRP_GET(interfaceNames[i], J9UTF8*);
-		addClassEntry(interfaceName, 0);
+		if (!(_injectedIdentityObjectInterface && J9UTF8_DATA_EQUALS(J9UTF8_DATA(interfaceName), J9UTF8_LENGTH(interfaceName), IDENTITY_OBJECT_NAME, strlen(IDENTITY_OBJECT_NAME)))) {
+			addClassEntry(interfaceName, 0);
+		}
 	}
 }
 
@@ -682,11 +684,19 @@ ClassFileWriter::writeInterfaces()
 {
 	J9SRP * interfaceNames = J9ROMCLASS_INTERFACES(_romClass);
 	UDATA interfaceCount = _romClass->interfaceCount;
+	UDATA interfaceCountInClassFile = interfaceCount;
 
-	writeU16(U_16(_romClass->interfaceCount));
+	if (_injectedIdentityObjectInterface) {
+		interfaceCountInClassFile--;
+	}
+
+	writeU16(U_16(interfaceCountInClassFile));
 	for (UDATA i = 0; i < interfaceCount; i++) {
 		J9UTF8 * interfaceName = NNSRP_GET(interfaceNames[i], J9UTF8 *);
-		writeU16(indexForClass(interfaceName));
+
+		if (!(_injectedIdentityObjectInterface && J9UTF8_DATA_EQUALS(J9UTF8_DATA(interfaceName), J9UTF8_LENGTH(interfaceName), IDENTITY_OBJECT_NAME, strlen(IDENTITY_OBJECT_NAME)))) {
+			writeU16(indexForClass(interfaceName));
+		}
 	}
 }
 

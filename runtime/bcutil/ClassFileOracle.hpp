@@ -771,6 +771,10 @@ class NameAndTypeIterator
 			/* Each interface is a constantClass, use slot1 to get at the underlying UTF8 */
 			visitor->visitConstantPoolIndex(U_16(_classFile->constantPool[ *interface ].slot1));
 		}
+
+		if (needsIdentityObjectInterface()) {
+			visitor->visitConstantPoolIndex(getConstantPoolCount());
+		}
 	}
 
 	/*
@@ -924,6 +928,8 @@ class NameAndTypeIterator
 	bool annotationRefersDoubleSlotEntry() const { return _annotationRefersDoubleSlotEntry; }
 	bool isInnerClass() const { return _isInnerClass; }
 	bool needsStaticConstantInit() const { return _needsStaticConstantInit; }
+	bool needsIdentityObjectInterface() const { return _isIdentityInterfaceNeeded; }
+	bool isValueType() const { return _isValueType; }
 
 	U_8 constantDynamicType(U_16 cpIndex) const
 	{
@@ -999,6 +1005,8 @@ private:
 	bool _annotationRefersDoubleSlotEntry;
 	bool _isInnerClass;
 	bool _needsStaticConstantInit;
+	bool _isIdentityInterfaceNeeded;
+	bool _isValueType;
 
 	FieldInfo *_fieldsInfo;
 	MethodInfo *_methodsInfo;

@@ -1,5 +1,7 @@
+/*[INCLUDE-IF Sidecar18-SE]*/
+package java.lang;
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,45 +21,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
-/*
- * SRPKeyProducer.cpp
- */
 
-#include "SRPKeyProducer.hpp"
-#include "ClassFileOracle.hpp"
+public interface IdentityObject {
 
-#include "ut_j9bcu.h"
-
-SRPKeyProducer::SRPKeyProducer(ClassFileOracle *classFileOracle) :
-	_cfrConstantPoolCount(classFileOracle->getConstantPoolCount()),
-	_methodCount(classFileOracle->getMethodsCount()),
-	_startStackMapKeys(0),
-	_startMethodDebugInfoKeys(0),
-	_startVariableInfoKeys(0),
-	_maxKey(0),
-	_getMaxKeyWasCalled(false),
-	_needsIdentityInterfaceObject(classFileOracle->needsIdentityObjectInterface())
-{
-	_startStackMapKeys = _cfrConstantPoolCount;
-	if (classFileOracle->needsIdentityObjectInterface()) {
-		_startStackMapKeys++;
-	}
-	_startMethodDebugInfoKeys = _startStackMapKeys + UDATA(_methodCount);
-	_startVariableInfoKeys = _startMethodDebugInfoKeys + UDATA(_methodCount);
-	_maxKey = _startVariableInfoKeys + UDATA(_methodCount);
-}
-
-UDATA
-SRPKeyProducer::generateKey()
-{
-	Trc_BCU_Assert_Equals(false, _getMaxKeyWasCalled);
-
-	return ++_maxKey;
-}
-
-UDATA
-SRPKeyProducer::getMaxKey()
-{
-	_getMaxKeyWasCalled = true;
-	return _maxKey;
 }

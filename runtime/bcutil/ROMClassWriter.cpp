@@ -356,7 +356,7 @@ ROMClassWriter::writeROMClass(Cursor *cursor,
 		cursor->writeSRP(_srpKeyProducer->mapCfrConstantPoolIndexToKey(_classFileOracle->getSuperClassNameIndex()), Cursor::SRP_TO_UTF8);
 		cursor->writeU32(modifiers, Cursor::GENERIC);
 		cursor->writeU32(extraModifiers, Cursor::GENERIC);
-		cursor->writeU32(_classFileOracle->getInterfacesCount(), Cursor::GENERIC);
+		cursor->writeU32(_classFileOracle->needsIdentityObjectInterface() ? _classFileOracle->getInterfacesCount() + 1 : _classFileOracle->getInterfacesCount(), Cursor::GENERIC);
 		cursor->writeSRP(_interfacesSRPKey, Cursor::SRP_TO_GENERIC);
 		cursor->writeU32(_classFileOracle->getMethodsCount(), Cursor::GENERIC);
 		cursor->writeSRP(_methodsSRPKey, Cursor::SRP_TO_GENERIC);
@@ -761,7 +761,8 @@ public:
 		if (!_markAndCountOnly) {
 			for (ClassFileOracle::UTF8Iterator iterator = _classFileOracle->getUTF8Iterator();
 					iterator.isNotDone();
-					iterator.next()) {
+					iterator.next())
+			{
 				U_16 cpIndex = iterator.getCPIndex();
 
 				if (_constantPoolMap->isUTF8ConstantReferenced(cpIndex)) {
@@ -775,6 +776,14 @@ public:
 						_cursor->writeUTF8(utf8Data, utf8Length, Cursor::GENERIC);
 					}
 				}
+			}
+
+			if (_classFileOracle->needsIdentityObjectInterface()) {
+#define JAVA_LANG_IDENTITYOBJECT "java/lang/IdentityObject"
+				/* if the class requires the identityobject interface an "extra" CP slot in the key table is added */
+				_cursor->mark(_classFileOracle->getConstantPoolCount());
+				_cursor->writeUTF8((U_8*)JAVA_LANG_IDENTITYOBJECT, sizeof(JAVA_LANG_IDENTITYOBJECT) - 1, Cursor::GENERIC);
+#undef JAVA_LANG_IDENTITYOBJECT
 			}
 		}
 	}
@@ -1080,6 +1089,9 @@ ROMClassWriter::writeInterfaces(Cursor *cursor, bool markAndCountOnly)
 {
 	cursor->mark(_interfacesSRPKey);
 	UDATA size = UDATA(_classFileOracle->getInterfacesCount()) * sizeof(J9SRP);
+	if (_classFileOracle->needsIdentityObjectInterface()) {
+		size += sizeof(J9SRP);
+	}
 	CheckSize _(cursor, size);
 	Helper(cursor, markAndCountOnly, _classFileOracle, _srpKeyProducer, _srpOffsetTable, _constantPoolMap, size).writeInterfaces();
 }

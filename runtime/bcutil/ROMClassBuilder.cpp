@@ -1060,7 +1060,7 @@ ROMClassBuilder::finishPrepareAndLaydown(
  *                        + AccSynthetic (matches Oracle modifier position)
  *                       + AccClassUseBisectionSearch
  *                      + AccClassInnerClass
- *                     + UNUSED
+ *                     + AccClassHasInjectedIdentityObjectInterface
  *
  *                   + AccClassNeedsStaticConstantInit
  *                  + AccClassIntermediateDataIsClassfile
@@ -1120,6 +1120,10 @@ ROMClassBuilder::computeExtraModifiers(ClassFileOracle *classFileOracle, ROMClas
 
 	if ( classFileOracle->isClassUnmodifiable() ) {
 		modifiers |= J9AccClassIsUnmodifiable;
+	}
+
+	if ( classFileOracle->needsIdentityObjectInterface() ) {
+		modifiers |= J9AccClassHasInjectedIdentityObjectInterface;
 	}
 
 	U_32 classNameindex = classFileOracle->getClassNameIndex();

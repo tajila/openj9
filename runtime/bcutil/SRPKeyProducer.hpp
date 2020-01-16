@@ -44,13 +44,25 @@ public:
 
 	UDATA mapCfrConstantPoolIndexToKey(U_16 index)
 	{
-		Trc_BCU_Assert_LessThan(index, _cfrConstantPoolCount);
+		U_16 maxIndex = _cfrConstantPoolCount;
+
+		if (_needsIdentityInterfaceObject) {
+			maxIndex++;
+		}
+
+		Trc_BCU_Assert_LessThan(index, maxIndex);
 		return index;
 	}
 
 	U_16 mapKeyToCfrConstantPoolIndex(UDATA key)
 	{
-		Trc_BCU_Assert_LessThan(key, _cfrConstantPoolCount);
+		U_16 maxIndex = _cfrConstantPoolCount;
+
+		if (_needsIdentityInterfaceObject) {
+			maxIndex++;
+		}
+
+		Trc_BCU_Assert_LessThan(key, maxIndex);
 		return U_16(key);
 	}
 
@@ -82,6 +94,7 @@ private:
 	UDATA _startVariableInfoKeys;
 	UDATA _maxKey;
 	bool _getMaxKeyWasCalled;
+	bool _needsIdentityInterfaceObject;
 };
 
 #endif /* SRPKEYPRODUCER_HPP_ */
