@@ -944,7 +944,7 @@ typedef struct J9SharedClassTransaction {
 	U_32 allocatedLocalVariableTableSize;
 	void* allocatedLineNumberTable;
 	void* allocatedLocalVariableTable;
-	void* ClasspathWrapper;
+	void* ClasspathWrapper; /* points to ClasspathItem if it is full/soft full. Otherwise, points to a ClasspathWrapper in the cache */
 	void* cacheAreaForAllocate;
 	void* newItemInCache;
 	j9object_t updatedItemSize;
@@ -954,6 +954,7 @@ typedef struct J9SharedClassTransaction {
 	UDATA oldVMState;
 	UDATA isModifiedClassfile;
 	UDATA takeReadWriteLock;
+	U_64 cacheFullFlags;
 } J9SharedClassTransaction;
 
 typedef struct J9SharedStringTransaction {
