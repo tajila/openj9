@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018, 2019 IBM Corp. and others
+ * Copyright (c) 2018, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -49,6 +49,14 @@ romMethodAtClassIndex(J9ROMClass *romClass, uint64_t methodIndex)
    for (size_t i = methodIndex; i; --i)
       romMethod = nextROMMethod(romMethod);
    return romMethod;
+   }
+
+static J9UTF8 *str2utf8(const char *str, int32_t length, TR_Memory *trMemory, TR_AllocationKind allocKind)
+   {
+   J9UTF8 *utf8 = (J9UTF8 *) trMemory->allocateMemory(length+sizeof(J9UTF8), allocKind); // This allocates more memory than it needs.
+   J9UTF8_SET_LENGTH(utf8, length);
+   memcpy(J9UTF8_DATA(utf8), str, length);
+   return utf8;
    }
 
 TR_ResolvedJ9JITServerMethod::TR_ResolvedJ9JITServerMethod(TR_OpaqueMethodBlock * aMethod, TR_FrontEnd * fe, TR_Memory * trMemory, TR_ResolvedMethod * owningMethod, uint32_t vTableSlot)
@@ -231,12 +239,49 @@ TR_ResolvedJ9JITServerMethod::classOfStatic(I_32 cpIndex, bool returnClassForAOT
    return classOfStatic;
    }
 
+void *
+TR_ResolvedJ9JITServerMethod::getConstantDynamicTypeFromCP(I_32 cpIndex)
+   {
+   TR_ASSERT_FATAL(cpIndex != -1, "ConstantDynamic cpIndex shouldn't be -1");
+   _stream->write(JITServer::MessageType::ResolvedMethod_getConstantDynamicTypeFromCP, _remoteMirror, cpIndex);
+
+   const std::string &retConstantDynamicTypeStr = std::get<0>(_stream->read<std::string>());
+   TR_Memory *trMemory = ((TR::CompilationInfoPerThreadRemote *) _fe->_compInfoPT)->getCompilation()->trMemory();
+   J9UTF8 * constantDynamicType = str2utf8((char*)&retConstantDynamicTypeStr[0], (int32_t)retConstantDynamicTypeStr.length(), trMemory, heapAlloc);
+   return constantDynamicType;
+   }
+
 bool
 TR_ResolvedJ9JITServerMethod::isConstantDynamic(I_32 cpIndex)
    {
    TR_ASSERT_FATAL(cpIndex != -1, "ConstantDynamic cpIndex shouldn't be -1");
    UDATA cpType = J9_CP_TYPE(J9ROMCLASS_CPSHAPEDESCRIPTION(_romClass), cpIndex);
    return (J9CPTYPE_CONSTANT_DYNAMIC == cpType);
+   }
+
+bool
+TR_ResolvedJ9JITServerMethod::isUnresolvedConstantDynamic(I_32 cpIndex)
+   {
+   TR_ASSERT(cpIndex != -1, "ConstantDynamic cpIndex shouldn't be -1");
+   _stream->write(JITServer::MessageType::ResolvedMethod_isUnresolvedConstantDynamic, _remoteMirror, cpIndex);
+   return std::get<0>(_stream->read<bool>());
+   }
+
+void *
+TR_ResolvedJ9JITServerMethod::dynamicConstant(I_32 cpIndex, uintptrj_t *obj)
+   {
+   TR_ASSERT_FATAL(cpIndex != -1, "ConstantDynamic cpIndex shouldn't be -1");
+
+   _stream->write(JITServer::MessageType::ResolvedMethod_dynamicConstant, _remoteMirror, cpIndex);
+
+   auto recv = _stream->read<uintptrj_t *, uintptrj_t>();
+   uintptrj_t *objLocation = std::get<0>(recv);
+   if (obj)
+      {
+      *obj = std::get<1>(recv);
+      }
+
+   return objLocation;
    }
 
 TR_ResolvedMethod *
@@ -256,6 +301,26 @@ TR_ResolvedJ9JITServerMethod::getResolvedPossiblyPrivateVirtualMethod(TR::Compil
          TR::DebugCounter::incStaticDebugCounter(comp, "resources.resolvedMethods/virtual/null");
          if (unresolvedInCP)
             handleUnresolvedVirtualMethodInCP(cpIndex, unresolvedInCP);
+         }
+      else
+         {
+         if (((TR_ResolvedJ9Method*)resolvedMethod)->isVarHandleAccessMethod())
+            {
+            // VarHandle access methods are resolved to *_impl()V, restore their signatures to obtain function correctness in the Walker
+            J9ROMConstantPoolItem *cpItem = (J9ROMConstantPoolItem *)romLiterals();
+            J9ROMMethodRef *romMethodRef = (J9ROMMethodRef *)(cpItem + cpIndex);
+            int32_t signatureLength = 0;
+            char *signature = getROMString(signatureLength, romMethodRef,
+                                 {
+                                 offsetof(J9ROMMethodRef, nameAndSignature),
+                                 offsetof(J9ROMNameAndSignature, signature)
+                                 });
+
+            ((TR_ResolvedJ9Method *)resolvedMethod)->setSignature(signature, signatureLength, comp->trMemory());
+            }
+
+         TR::DebugCounter::incStaticDebugCounter(comp, "resources.resolvedMethods/virtual");
+         TR::DebugCounter::incStaticDebugCounter(comp, "resources.resolvedMethods/virtual:#bytes", sizeof(TR_ResolvedJ9Method));
          }
       return resolvedMethod;
       }
@@ -327,7 +392,6 @@ TR_ResolvedJ9JITServerMethod::getResolvedPossiblyPrivateVirtualMethod(TR::Compil
 
       TR::DebugCounter::incStaticDebugCounter(comp, "resources.resolvedMethods/virtual");
       TR::DebugCounter::incStaticDebugCounter(comp, "resources.resolvedMethods/virtual:#bytes", sizeof(TR_ResolvedJ9Method));
-      
       }
 
    return resolvedMethod;
@@ -1506,9 +1570,9 @@ TR_ResolvedJ9JITServerMethod::createResolvedMethodFromJ9MethodMirror(TR_Resolved
       J9Method *j9method = (J9Method *) method;
 
       if (comp->getOption(TR_DisableDFP) ||
-          (!(TR::Compiler->target.cpu.supportsDecimalFloatingPoint()
+          (!(comp->target().cpu.supportsDecimalFloatingPoint()
 #ifdef TR_TARGET_S390
-          || TR::Compiler->target.cpu.getSupportsDecimalFloatingPointFacility()
+          || comp->target().cpu.getSupportsDecimalFloatingPointFacility()
 #endif
             ) ||
              !TR_J9MethodBase::isBigDecimalMethod(j9method)))
@@ -2569,15 +2633,6 @@ TR_ResolvedRelocatableJ9JITServerMethod::validateMethodFieldAttributes(const TR_
    auto clientAttributes = std::get<0>(recv);
    bool equal = (attributes == clientAttributes);
    return equal;
-   }
-
-// TR_J9ServerMethod
-static J9UTF8 *str2utf8(const char *str, int32_t length, TR_Memory *trMemory, TR_AllocationKind allocKind)
-   {
-   J9UTF8 *utf8 = (J9UTF8 *) trMemory->allocateMemory(length+sizeof(J9UTF8), allocKind); // This allocates more memory than it needs.
-   J9UTF8_SET_LENGTH(utf8, length);
-   memcpy(J9UTF8_DATA(utf8), str, length);
-   return utf8;
    }
 
 TR_J9ServerMethod::TR_J9ServerMethod(TR_FrontEnd * fe, TR_Memory * trMemory, J9Class * aClazz, uintptr_t cpIndex)

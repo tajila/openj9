@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -101,7 +101,7 @@ J9::Z::PrivateLinkage::PrivateLinkage(TR::CodeGenerator * codeGen,TR_S390Linkage
    setLongDoubleReturnRegister4  (TR::RealRegister::FPR4 );
    setLongDoubleReturnRegister6  (TR::RealRegister::FPR6 );
 
-   if(TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z13) && TR::Compiler->target.cpu.getSupportsVectorFacility() &&
+   if(codeGen->comp()->target().cpu.getSupportsArch(TR::CPU::z13) && codeGen->comp()->target().cpu.getSupportsVectorFacility() &&
      !comp()->getOption(TR_DisableSIMD))
        {
        codeGen->setSupportsVectorRegisters();
@@ -116,7 +116,7 @@ J9::Z::PrivateLinkage::PrivateLinkage(TR::CodeGenerator * codeGen,TR_S390Linkage
    if (enableVectorLinkage) setVectorReturnRegister(TR::RealRegister::VRF24);
 
    setStackPointerRegister  (TR::RealRegister::GPR5 );
-   setEntryPointRegister    ((TR::Compiler->target.isLinux()) ? TR::RealRegister::GPR4 : TR::RealRegister::GPR15);
+   setEntryPointRegister    ((codeGen->comp()->target().isLinux()) ? TR::RealRegister::GPR4 : TR::RealRegister::GPR15);
    setReturnAddressRegister (TR::RealRegister::GPR14);
 
    setVTableIndexArgumentRegister (TR::RealRegister::GPR0);
@@ -150,7 +150,7 @@ J9::Z::PrivateLinkage::PrivateLinkage(TR::CodeGenerator * codeGen,TR_S390Linkage
       setNumVectorArgumentRegisters(vecIndex);
       }
 
-   setOffsetToFirstLocal  ((TR::Compiler->target.is64Bit()) ? -8 : -4);
+   setOffsetToFirstLocal  ((codeGen->comp()->target().is64Bit()) ? -8 : -4);
    setOffsetToRegSaveArea (0);
    setOffsetToLongDispSlot(0);
    setOffsetToFirstParm   (0);
@@ -903,6 +903,110 @@ J9::Z::PrivateLinkage::hasToBeOnStack(TR::ParameterSymbol * parm)
    return result;
    }
 
+void
+J9::Z::PrivateLinkage::setParameterLinkageRegisterIndex(TR::ResolvedMethodSymbol * method)
+   {
+   self()->setParameterLinkageRegisterIndex(method, method->getParameterList());
+   }
+
+void
+J9::Z::PrivateLinkage::setParameterLinkageRegisterIndex(TR::ResolvedMethodSymbol * method, List<TR::ParameterSymbol> &parmList)
+   {
+   ListIterator<TR::ParameterSymbol> paramIterator(&parmList);
+   TR::ParameterSymbol * paramCursor=paramIterator.getFirst();
+   int32_t numIntArgs = 0, numFloatArgs = 0, numVectorArgs = 0;
+
+   int32_t paramNum = -1;
+   while ((paramCursor != NULL) &&
+          (numIntArgs < self()->getNumIntegerArgumentRegisters() ||
+           numFloatArgs < self()->getNumFloatArgumentRegisters() ||
+           numVectorArgs < self()->getNumVectorArgumentRegisters()))
+      {
+      int32_t index = -1;
+      paramNum++;
+
+      TR::DataType dt = paramCursor->getDataType();
+
+      switch (dt)
+         {
+         case TR::Int8:
+         case TR::Int16:
+         case TR::Int32:
+         case TR::Address:
+            if (numIntArgs < self()->getNumIntegerArgumentRegisters())
+               {
+               index = numIntArgs;
+               }
+            numIntArgs++;
+            break;
+         case TR::Int64:
+            if(numIntArgs < self()->getNumIntegerArgumentRegisters())
+               {
+               index = numIntArgs;
+               }
+            numIntArgs += (self()->cg()->comp()->target().is64Bit() ? 1 : 2);
+            break;
+         case TR::Float:
+         case TR::Double:
+         case TR::DecimalFloat:
+            if (numFloatArgs < self()->getNumFloatArgumentRegisters())
+               {
+               index = numFloatArgs;
+               }
+            numFloatArgs++;
+            break;
+         case TR::DecimalLongDouble:
+            // On zLinux Long Double is passed in memory using a pointer to buffer
+            if(self()->cg()->comp()->target().isLinux())
+               {
+               if(numIntArgs < self()->getNumIntegerArgumentRegisters())
+                  index = numIntArgs++;
+               break;
+               }
+            if ((numFloatArgs & 0x1) !=0)  // if there are odd number of fp args in before a long double arg, need to skip one
+               numFloatArgs++;
+            if (numFloatArgs < self()->getNumFloatArgumentRegisters())
+               {
+               index = numFloatArgs;
+               }
+            numFloatArgs +=2;
+            break;
+         case TR::PackedDecimal:
+         case TR::ZonedDecimal:
+         case TR::ZonedDecimalSignLeadingEmbedded:
+         case TR::ZonedDecimalSignLeadingSeparate:
+         case TR::ZonedDecimalSignTrailingSeparate:
+         case TR::UnicodeDecimal:
+         case TR::UnicodeDecimalSignLeading:
+         case TR::UnicodeDecimalSignTrailing:
+         case TR::Aggregate:
+            break;
+         case TR::VectorInt8:
+         case TR::VectorInt16:
+         case TR::VectorInt32:
+         case TR::VectorInt64:
+         case TR::VectorDouble:
+            if (numVectorArgs < self()->getNumVectorArgumentRegisters())
+               {
+               index = numVectorArgs;
+               }
+            numVectorArgs++;
+            break;
+         }
+      paramCursor->setLinkageRegisterIndex(index);
+      paramCursor = paramIterator.getNext();
+
+      if (self()->isFastLinkLinkageType())
+         {
+         if ((numFloatArgs == 1) || (numIntArgs >= self()->getNumIntegerArgumentRegisters()))
+            {
+            // force fastlink ABI condition of only one float parameter for fastlink parameter and it must be within first slots
+            numFloatArgs = self()->getNumFloatArgumentRegisters();   // no more float args possible now
+            }
+         }
+      }
+   }
+
 //Clears numBytes bytes of storage from baseOffset(srcReg)
 static TR::Instruction *
 initStg(TR::CodeGenerator * codeGen, TR::Node * node, TR::RealRegister * tmpReg, TR::RealRegister * srcReg,TR::RealRegister * itersReg, int32_t baseOffset, int32_t numBytes,
@@ -1004,7 +1108,7 @@ J9::Z::PrivateLinkage::setupLiteralPoolRegister(TR::Snippet *firstSnippet)
    if (!cg()->isLiteralPoolOnDemandOn() && firstSnippet != NULL)
       {
       // The immediate operand will be patched when the actual address of the literal pool is known
-      if (!TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z10) || cg()->anyLitPoolSnippets())
+      if (!cg()->comp()->target().cpu.getSupportsArch(TR::CPU::z10) || cg()->anyLitPoolSnippets())
          {
          return getLitPoolRealRegister()->getRegisterNumber();
          }
@@ -1049,7 +1153,7 @@ J9::Z::PrivateLinkage::createPrologue(TR::Instruction * cursor)
       setStackSizeCheckNeeded(true);
       }
 
-   if (0 && TR::Compiler->target.is64Bit())
+   if (0 && cg()->comp()->target().is64Bit())
       {
       argSize = cg()->getLargestOutgoingArgSize() * 2 + getOffsetToFirstParm();
       }
@@ -1333,7 +1437,7 @@ J9::Z::PrivateLinkage::createPrologue(TR::Instruction * cursor)
    // Save or move arguments according to the result of register assignment.
    cursor = (TR::Instruction *) saveArguments(cursor, false);
 
-   if (TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z10))
+   if (cg()->comp()->target().cpu.getSupportsArch(TR::CPU::z10))
       {
       static const bool prefetchStack = feGetEnv("TR_PrefetchStack") != NULL;
 
@@ -1899,7 +2003,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
             {
             cursor = generateRIInstruction(cg(), TR::InstOpCode::getLoadHalfWordImmOpCode(), callNode, RegZero, offset);
             }
-         else if (TR::Compiler->target.is64Bit())
+         else if (cg()->comp()->target().is64Bit())
             {
             cursor = genLoadLongConstant(cg(), callNode, (int64_t)offset, RegZero);
             }
@@ -2090,7 +2194,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
             //Load return address in RegRA
             cursor = new (trHeapMemory()) TR::S390RILInstruction(TR::InstOpCode::LARL, callNode, RegRA, returnLocationLabel, cursor, cg());
 
-            if (TR::Compiler->target.is64Bit())
+            if (cg()->comp()->target().is64Bit())
                cursor = generateRXInstruction(cg(), TR::InstOpCode::LPQ, callNode, classMethodEPPairRegister,
                         generateS390MemoryReference(snippetReg, ifcSnippet->getDataConstantSnippet()->getSingleDynamicSlotOffset(), cg()), cursor);
             else
@@ -2119,7 +2223,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
             }
          else
             {
-            useCLFIandBRCL = false && (TR::Compiler->target.is64Bit() &&  // Support for 64-bit
+            useCLFIandBRCL = false && (cg()->comp()->target().is64Bit() &&  // Support for 64-bit
                                    TR::Compiler->om.generateCompressedObjectHeaders() // Classes are <2GB on CompressedRefs only.
                                    );
 
@@ -2181,7 +2285,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
                for(i = 0; i < numInterfaceCallCacheSlots; i++)
                   {
                   TR::InstOpCode::Mnemonic cmpOp = TR::InstOpCode::getCmpLogicalOpCode();
-                  if (TR::Compiler->target.is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
+                  if (cg()->comp()->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
                      cmpOp = TR::InstOpCode::CL;
 
                   //check if cached class matches the receiving object class
@@ -2676,7 +2780,7 @@ J9::Z::JNILinkage::releaseVMAccessMaskAtomicFree(TR::Node * callNode,
    TR::CodeGenerator* cg = self()->cg();
    TR::Compilation* comp = self()->comp();
 
-   if (TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z10))
+   if (cg->comp()->target().cpu.getSupportsArch(TR::CPU::z10))
       {
       // Store a 1 into vmthread->inNative
       generateSILInstruction(cg, TR::InstOpCode::getMoveHalfWordImmOpCode(), callNode,
@@ -2807,10 +2911,10 @@ J9::Z::JNILinkage::processJNIReturnValue(TR::Node * callNode,
       }
    else if ((returnType == TR::Int8) && comp()->getSymRefTab()->isReturnTypeBool(callNode->getSymbolReference()))
       {
-      if (TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z13))
+      if (cg->comp()->target().cpu.getSupportsArch(TR::CPU::z13))
          {
          generateRIInstruction(cg, TR::InstOpCode::getCmpHalfWordImmOpCode(), callNode, javaReturnRegister, 0);
-         generateRIEInstruction(cg, TR::Compiler->target.is64Bit() ? TR::InstOpCode::LOCGHI : TR::InstOpCode::LOCHI,
+         generateRIEInstruction(cg, cg->comp()->target().is64Bit() ? TR::InstOpCode::LOCGHI : TR::InstOpCode::LOCHI,
                                 callNode, javaReturnRegister, 1, TR::InstOpCode::COND_BNE);
          }
       else
@@ -2896,7 +3000,7 @@ TR::Register * J9::Z::JNILinkage::buildDirectDispatch(TR::Node * callNode)
    bool isCheckException = !fej9->jniNoExceptionsThrown(resolvedMethod);
    bool isKillAllUnlockedGPRs = isJNIGCPoint;
 
-   killMask = killAndAssignRegister(killMask, deps, &methodAddressReg, (TR::Compiler->target.isLinux()) ?  TR::RealRegister::GPR1 : TR::RealRegister::GPR9 , codeGen, true);
+   killMask = killAndAssignRegister(killMask, deps, &methodAddressReg, (cg()->comp()->target().isLinux()) ?  TR::RealRegister::GPR1 : TR::RealRegister::GPR9 , codeGen, true);
    killMask = killAndAssignRegister(killMask, deps, &javaLitOffsetReg, TR::RealRegister::GPR11, codeGen, true);
 
    targetAddress = (intptrj_t) resolvedMethod->startAddressForJNIMethod(comp());
@@ -2974,7 +3078,7 @@ TR::Register * J9::Z::JNILinkage::buildDirectDispatch(TR::Node * callNode)
      auto* literalOffsetMemoryReference = new (trHeapMemory()) TR::MemoryReference(methodMetaDataVirtualRegister, (int32_t)fej9->thisThreadGetJavaLiteralsOffset(), codeGen);
 
      // Set up literal offset slot to zero
-     if (TR::Compiler->target.cpu.getSupportsArch(TR::CPU::z10))
+     if (cg()->comp()->target().cpu.getSupportsArch(TR::CPU::z10))
         {
         generateSILInstruction(codeGen, TR::InstOpCode::getMoveHalfWordImmOpCode(), callNode, literalOffsetMemoryReference, 0);
         }
@@ -3218,7 +3322,7 @@ J9::Z::PrivateLinkage::buildDirectDispatch(TR::Node * callNode)
          break;
       case TR::lcall:
             {
-            if (TR::Compiler->target.is64Bit())
+            if (cg()->comp()->target().is64Bit())
                {
                returnRegister = dependencies->searchPostConditionRegister(getLongReturnRegister());
                }
@@ -3303,7 +3407,7 @@ J9::Z::PrivateLinkage::buildIndirectDispatch(TR::Node * callNode)
          break;
       case TR::lcalli:
             {
-            if (TR::Compiler->target.is64Bit())
+            if (cg()->comp()->target().is64Bit())
                {
                returnRegister = dependencies->searchPostConditionRegister(getLongReturnRegister());
                }
@@ -3378,10 +3482,10 @@ J9::Z::PrivateLinkage::mapIncomingParms(TR::ResolvedMethodSymbol *method)
       }
    else
       {
-      uint32_t sizeOfParameterArea = method->getNumParameterSlots() << (TR::Compiler->target.is64Bit() ? 3 : 2);
+      uint32_t sizeOfParameterArea = method->getNumParameterSlots() << (cg()->comp()->target().is64Bit() ? 3 : 2);
       while (parmCursor != NULL)
          {
-         if (TR::Compiler->target.is64Bit() && parmCursor->getDataType() != TR::Address)
+         if (cg()->comp()->target().is64Bit() && parmCursor->getDataType() != TR::Address)
             // in 64Bit mode: long and double args takes 2x8 byte slots
             // all other types takes 1x8 byte
             {
@@ -3441,8 +3545,8 @@ J9::Z::PrivateLinkage::setupRegisterDepForLinkage(TR::Node * callNode, TR_Dispat
 
    if (dispatchType == TR_SystemDispatch)
      {
-      killMask = killAndAssignRegister(killMask, deps, methodAddressReg, (TR::Compiler->target.isLinux()) ?  TR::RealRegister::GPR14 : TR::RealRegister::GPR8 , codeGen, true);
-      killMask = killAndAssignRegister(killMask, deps, &javaLitOffsetReg, (TR::Compiler->target.isLinux()) ?  TR::RealRegister::GPR8 : TR::RealRegister::GPR14 , codeGen, true);
+      killMask = killAndAssignRegister(killMask, deps, methodAddressReg, (cg()->comp()->target().isLinux()) ?  TR::RealRegister::GPR14 : TR::RealRegister::GPR8 , codeGen, true);
+      killMask = killAndAssignRegister(killMask, deps, &javaLitOffsetReg, (cg()->comp()->target().isLinux()) ?  TR::RealRegister::GPR8 : TR::RealRegister::GPR14 , codeGen, true);
      }
 
    /*****************/
@@ -3450,7 +3554,7 @@ J9::Z::PrivateLinkage::setupRegisterDepForLinkage(TR::Node * callNode, TR_Dispat
    TR::RealRegister * systemStackRealRegister = systemLinkage->getStackPointerRealRegister();
    TR::Register * systemStackVirtualRegister = systemStackRealRegister;
 
-   if (TR::Compiler->target.isZOS())
+   if (cg()->comp()->target().isZOS())
       {
 
       TR::RealRegister::RegNum systemStackPointerRegister;
@@ -3488,8 +3592,8 @@ J9::Z::PrivateLinkage::setupRegisterDepForLinkage(TR::Node * callNode, TR_Dispat
 
 
    // This logic was originally in OMR::Z::Linkage::buildNativeDispatch and the condition is cg()->supportsJITFreeSystemStackPointer().
-   // The original condition is only true for J9 and only on zos, so replacing it with TR::Compiler->target.isZOS().
-   if ( TR::Compiler->target.isZOS() )
+   // The original condition is only true for J9 and only on zos, so replacing it with cg()->comp()->target().isZOS().
+   if ( cg()->comp()->target().isZOS() )
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       generateRXInstruction(codeGen, TR::InstOpCode::getLoadOpCode(), callNode, systemStackVirtualRegister,

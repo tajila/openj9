@@ -39,9 +39,7 @@ UPDATE_BUILD_NODES = params.UPDATE_BUILD_NODES
 
 EXTENSIONS_REPOS = [[name: "openj9", url: "https://github.com/eclipse/openj9.git"]]
 
-properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')),
-            pipelineTriggers([cron('''# Daily at 11:00pm
-                                        0 23 * * *''')])])
+properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10'))])
 
 def jobs = [:]
 
@@ -212,7 +210,7 @@ def config(remoteName, remoteUrl) {
 */
 def get_openjdk_repos(openJdkMap, useDefault) {
     def repos = []
-    def releases = ['8', '11', '13', '14', 'next']
+    def releases = ['8', '11', '14', 'next']
 
     // iterate over VARIABLES.openjdk map and fetch the repository URL
     openJdkMap.entrySet().each { mapEntry ->

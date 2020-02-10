@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -115,6 +115,8 @@
    java_lang_Math_sqrt,
    java_lang_Math_tan,
    java_lang_Math_tanh,
+   java_lang_Math_fma_D,
+   java_lang_Math_fma_F,
    java_lang_Object_init,
    java_lang_Object_getClass,
    java_lang_Object_clone,
@@ -236,8 +238,11 @@
    java_nio_Bits_copyToByteArray,
    java_nio_Bits_copyFromByteArray,
    java_nio_Bits_keepAlive,
+   java_nio_Bits_byteOrder,
 
    java_nio_HeapByteBuffer_put,
+
+   java_nio_ByteOrder_nativeOrder,
 
    // routines from the memory Fence library.  See JIT design 1598
    java_util_concurrent_atomic_Fences_postLoadFence,
@@ -821,6 +826,8 @@
    java_lang_StrictMath_sqrt,
    java_lang_StrictMath_tan,
    java_lang_StrictMath_tanh,
+   java_lang_StrictMath_fma_D,
+   java_lang_StrictMath_fma_F,
 
    //1421 atomic methods
    java_util_concurrent_atomic_AtomicBoolean_getAndSet,

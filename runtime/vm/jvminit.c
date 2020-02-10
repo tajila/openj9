@@ -1942,6 +1942,22 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			}
 #endif /* !defined(WIN32) && !defined(J9ZTPF) */
 
+#if defined(AIXPPC)
+			/* Override the AIX soft limit on the data segment to avoid getting EAGAIN when creating a new thread,
+			 * which results in an OutOfMemoryException. Also provides compatibility with IBM Java 8.
+			 */
+			{
+				uint64_t limit = 0;
+				uint32_t rc = omrsysinfo_get_limit(OMRPORT_RESOURCE_DATA | OMRPORT_LIMIT_SOFT, &limit);
+				if (OMRPORT_LIMIT_UNLIMITED != rc) {
+					uint32_t rc = omrsysinfo_get_limit(OMRPORT_RESOURCE_DATA | OMRPORT_LIMIT_HARD, &limit);
+					if (OMRPORT_LIMIT_UNKNOWN != rc) {
+						omrsysinfo_set_limit(OMRPORT_RESOURCE_DATA | OMRPORT_LIMIT_SOFT, limit);
+					}
+				}
+			}
+#endif /* defined(AIXPPC) */
+
 			/* Parse options related to idle tuning */
 			{
 				IDATA argIndexGcOnIdleEnable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXIDLETUNINGGCONIDLEENABLE, NULL);
@@ -3375,10 +3391,9 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 	{
 		IDATA compressed = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XCOMPRESSEDREFS, NULL);
 		IDATA nocompressed = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XNOCOMPRESSEDREFS, NULL);
-		if (compressed > nocompressed) {
+		/* Compressed refs by default */
+		if (compressed >= nocompressed) {
 			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES;
-		} else if (compressed < nocompressed) {
-			vm->extendedRuntimeFlags2 &= ~(UDATA)J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES;
 		}
 	}
 #endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
@@ -5890,8 +5905,6 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	}
 #endif
 
-	initializeROMClasses(vm);
-
 #ifdef J9VM_RAS_EYECATCHERS
 	J9RASInitialize(vm);
 #endif
@@ -6077,6 +6090,9 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	if (JNI_OK != processVMArgsFromFirstToLast(vm)) {
 		goto error;
 	}
+
+	/* Must be done after the compressed/full determination has been made */
+	initializeROMClasses(vm);
 
 #if !defined(WIN32)
 	if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags,J9_EXTENDED_RUNTIME_HANDLE_SIGXFSZ)) {

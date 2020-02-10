@@ -111,6 +111,11 @@
 #define J9FieldTypeMask 0x380000
 #define J9FieldTypeShort 0x280000
 
+/* Constants from J9RecordComponentFlags */
+#define J9RecordComponentFlagHasGenericSignature 0x1
+#define J9RecordComponentFlagHasAnnotations 0x2
+#define J9RecordComponentFlagHasTypeAnnotations 0x4
+
 /* @ddr_namespace: map_to_type=J9ArrayShapeFlags */
 
 /* Constants from J9ArrayShapeFlags */
@@ -242,6 +247,7 @@
 #define J9_ROMCLASS_OPTINFO_UNUSED_100000 0x100000
 #define J9_ROMCLASS_OPTINFO_UNUSED 0x200000
 #define J9_ROMCLASS_OPTINFO_TYPE_ANNOTATION_INFO 0x400000
+#define J9_ROMCLASS_OPTINFO_RECORD_ATTRIBUTE 0x800000
 
 /* Constants for checkVisibility return results */
 #define J9_VISIBILITY_ALLOWED 1
@@ -699,6 +705,14 @@ typedef struct J9ROMStaticFieldShape {
 #define J9ROMSTATICFIELDSHAPE_NAME(base) NNSRP_GET((&((base)->nameAndSignature))->name, struct J9UTF8*)
 #define J9ROMSTATICFIELDSHAPE_SIGNATURE(base) NNSRP_GET((&((base)->nameAndSignature))->signature, struct J9UTF8*)
 
+typedef struct J9ROMRecordComponentShape {
+	struct J9ROMNameAndSignature nameAndSignature;
+	U_32 attributeFlags;
+} J9ROMRecordComponentShape;
+
+#define J9ROMRECORDCOMPONENTSHAPE_NAME(base) NNSRP_GET((&((base)->nameAndSignature))->name, struct J9UTF8*)
+#define J9ROMRECORDCOMPONENTSHAPE_SIGNATURE(base) NNSRP_GET((&((base)->nameAndSignature))->signature, struct J9UTF8*)
+
 /* @ddr_namespace: map_to_type=J9VMExt */
 
 #define J9MEMORYPOOLDATA_MAX_NAME_BUFFER_SIZE   32
@@ -944,7 +958,7 @@ typedef struct J9SharedClassTransaction {
 	U_32 allocatedLocalVariableTableSize;
 	void* allocatedLineNumberTable;
 	void* allocatedLocalVariableTable;
-	void* ClasspathWrapper;
+	void* ClasspathWrapper; /* points to ClasspathItem if it is full/soft full. Otherwise, points to a ClasspathWrapper in the cache */
 	void* cacheAreaForAllocate;
 	void* newItemInCache;
 	j9object_t updatedItemSize;
@@ -954,6 +968,7 @@ typedef struct J9SharedClassTransaction {
 	UDATA oldVMState;
 	UDATA isModifiedClassfile;
 	UDATA takeReadWriteLock;
+	U_64 cacheFullFlags;
 } J9SharedClassTransaction;
 
 typedef struct J9SharedStringTransaction {
@@ -1829,6 +1844,7 @@ typedef struct J9TranslationLocalBuffer {
 	IDATA entryIndex;
 	I_32 loadLocationType;
 	struct J9ClassPathEntry* cpEntryUsed;
+	struct J9ClassPatchMap* patchMap;
 } J9TranslationLocalBuffer;
 
 typedef struct J9TranslationBufferSet {
@@ -1961,6 +1977,11 @@ typedef struct J9ClassPathEntry {
 	U_8 paddingToPowerOf2[12];
 #endif
 } J9ClassPathEntry;
+
+typedef struct J9ClassPatchMap {
+	U_16 size;
+	U_16* indexMap;
+} J9ClassPatchMap;
 
 #define CPE_STATUS_ASSUME_JXE  					0x1
 #define CPE_STATUS_JXE_MISSING_ROM_CLASSES  	0x2
@@ -3768,6 +3789,7 @@ typedef struct J9JITConfig {
 #if defined(JITSERVER_SUPPORT)
 	int32_t (*startJITServer)(struct J9JITConfig *jitConfig);
 	int32_t (*waitJITServerTermination)(struct J9JITConfig *jitConfig);
+	uint64_t clientUID;
 #endif /* JITSERVER_SUPPORT */
 } J9JITConfig;
 
@@ -5079,16 +5101,13 @@ typedef struct J9VMThread {
 #if defined(OMR_GC_FULL_POINTERS)
 /* Mixed mode - necessarily 64-bit */
 #define J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) (0 != (vmThread)->compressObjectReferences)
-#define J9VMTHREAD_REFERENCE_SHIFT(vmThread) (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) ? 2 : 3)
 #else /* OMR_GC_FULL_POINTERS */
 /* Compressed only - necessarily 64-bit */
 #define J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) TRUE
-#define J9VMTHREAD_REFERENCE_SHIFT(vmThread) 2
 #endif /* OMR_GC_FULL_POINTERS */
 #else /* OMR_GC_COMPRESSED_POINTERS */
 /* Full only - could be 32 or 64-bit */
 #define J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) FALSE
-#define J9VMTHREAD_REFERENCE_SHIFT(vmThread) OMR_LOG_POINTER_SIZE
 #endif /* OMR_GC_COMPRESSED_POINTERS */
 #define J9VMTHREAD_REFERENCE_SIZE(vmThread) (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) ? sizeof(U_32) : sizeof(UDATA))
 #define J9VMTHREAD_OBJECT_HEADER_SIZE(vmThread) (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread) ? sizeof(J9ObjectCompressed) : sizeof(J9ObjectFull))
@@ -5542,16 +5561,13 @@ typedef struct J9JavaVM {
 #if defined(OMR_GC_FULL_POINTERS)
 /* Mixed mode - necessarily 64-bit */
 #define J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) J9_ARE_ANY_BITS_SET((vm)->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES)
-#define J9JAVAVM_REFERENCE_SHIFT(vm) (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) ? 2 : 3)
 #else /* OMR_GC_FULL_POINTERS */
 /* Compressed only - necessarily 64-bit */
 #define J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) TRUE
-#define J9JAVAVM_REFERENCE_SHIFT(vm) 2
 #endif /* OMR_GC_FULL_POINTERS */
 #else /* OMR_GC_COMPRESSED_POINTERS */
 /* Full only - could be 32 or 64-bit */
 #define J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) FALSE
-#define J9JAVAVM_REFERENCE_SHIFT(vm) OMR_LOG_POINTER_SIZE
 #endif /* OMR_GC_COMPRESSED_POINTERS */
 #define J9JAVAVM_REFERENCE_SIZE(vm) (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) ? sizeof(U_32) : sizeof(UDATA))
 #define J9JAVAVM_OBJECT_HEADER_SIZE(vm) (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) ? sizeof(J9ObjectCompressed) : sizeof(J9ObjectFull))

@@ -637,14 +637,37 @@ def get_date() {
 }
 
 /*
-* Set TESTS_TARGETS, indicating the level of testing
-* and sets TEST_FLAG for all targets if defined in variable file
+* Set TESTS_TARGETS, indicating the level of testing.
 */
 def set_test_targets() {
-    TESTS_TARGETS = params.TESTS_TARGETS
-    if (!TESTS_TARGETS) {
-        // set default TESTS_TARGETS for pipeline job (fetch from variables file)
-        TESTS_TARGETS = get_default_test_targets()
+    TARGET_NAMES = []
+
+    if (TESTS_TARGETS != 'none') {
+        for (target in TESTS_TARGETS.replaceAll("\\s","").toLowerCase().tokenize(',')) {
+            switch (target) {
+                case ["sanity", "extended"]:
+                    TARGET_NAMES.add("${target}.functional")
+                    break
+                default:
+                    TARGET_NAMES.add(target)
+            }
+        }
+    }
+    echo "TARGET_NAMES:'${TARGET_NAMES}'"
+}
+
+/*
+* Set TEST_FLAG for all targets if defined in variable file.
+* Set EXCLUDED_TESTS if defined in variable file.
+* Set EXTRA_TEST_LABELS map if defined in variable file.
+*/
+def set_test_misc() {
+    EXTRA_TEST_LABELS = [:]
+    if (!params.TEST_NODE) {
+        // Only add extra test labels if the user has not specified a specific TEST_NODE
+        TARGET_NAMES.each { target ->
+            EXTRA_TEST_LABELS[target] = buildspec.getVectorField("extra_test_labels", target).join('&&') ?: ''
+        }
     }
 
     EXCLUDED_TESTS = []
@@ -654,23 +677,20 @@ def set_test_targets() {
         EXCLUDED_TESTS.addAll(excludedTests)
     }
 
-    TEST_FLAG = ''
-    if (VARIABLES."${SPEC}".test_flags) {
-        TEST_FLAG = get_value(VARIABLES."${SPEC}".test_flags, SDK_VERSION)
+    TEST_FLAG = buildspec.getScalarField("test_flags", SDK_VERSION) ?: ''
+
+    // Set test param KEEP_REPORTDIR to false unless set true in variable file.
+    TEST_KEEP_REPORTDIR = [:]
+    TARGET_NAMES.each { target ->
+        TEST_KEEP_REPORTDIR[target] = buildspec_manager.getSpec('misc').getScalarField("test_keep_reportdir", target) ?: 'false'
     }
 
-    echo "TESTS_TARGETS: ${TESTS_TARGETS}"
-    echo "EXCLUDED_TESTS: ${EXCLUDED_TESTS}"
-    echo "TEST_FLAG: ${TEST_FLAG}"
+    echo "EXCLUDED_TESTS:'${EXCLUDED_TESTS}'"
+    echo "TEST_FLAG:'${TEST_FLAG}'"
+    echo "EXTRA_TEST_LABELS:'${EXTRA_TEST_LABELS}'"
+    echo "TEST_KEEP_REPORTDIR:'${TEST_KEEP_REPORTDIR}'"
 }
 
-def get_default_test_targets() {
-    if (VARIABLES.tests_targets && VARIABLES.tests_targets.default) {
-        return VARIABLES.tests_targets.default.join(',')
-    }
-
-    return ''
-}
 
 def set_slack_channel() {
     SLACK_CHANNEL = params.SLACK_CHANNEL
@@ -796,6 +816,7 @@ def set_job_variables(job_type) {
             set_vendor_variables()
             set_build_extra_options()
             set_test_targets()
+            set_test_misc()
             set_slack_channel()
             set_restart_timeout()
             add_pr_to_description()
@@ -805,6 +826,7 @@ def set_job_variables(job_type) {
             set_repos_variables(BUILD_SPECS)
             set_build_extra_options(BUILD_SPECS)
             set_adoptopenjdk_tests_repository(get_build_releases(BUILD_SPECS))
+            set_test_targets()
             set_restart_timeout()
             break
         default:

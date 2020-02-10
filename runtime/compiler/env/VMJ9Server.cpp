@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018, 2019 IBM Corp. and others
+ * Copyright (c) 2018, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -202,6 +202,14 @@ TR_J9ServerVM::getSystemClassFromClassName(const char * name, int32_t length, bo
       // loaded in the future, thus we should not cache NULL pointers.
       }
    return clazz;
+   }
+
+TR_OpaqueClassBlock *
+TR_J9ServerVM::getByteArrayClass()
+   {
+   JITServer::ServerStream *stream = _compInfoPT->getMethodBeingCompiled()->_stream;
+   auto *vmInfo = _compInfoPT->getClientData()->getOrCacheVMInfo(stream);
+   return vmInfo->_byteArrayClass;
    }
 
 bool
@@ -661,7 +669,7 @@ TR_J9ServerVM::getAllocationSize(TR::StaticSymbol *classSym, TR_OpaqueClassBlock
    JITServer::ServerStream *stream = _compInfoPT->getMethodBeingCompiled()->_stream;
    JITServerHelpers::getAndCacheRAMClassInfo((J9Class *)clazz, _compInfoPT->getClientData(), stream, JITServerHelpers::CLASSINFO_TOTAL_INSTANCE_SIZE, (void *)&totalInstanceSize);
 
-   uint32_t objectSize = sizeof(J9Object) + (uint32_t)totalInstanceSize;
+   uint32_t objectSize = getObjectHeaderSizeInBytes() + (uint32_t)totalInstanceSize;
    return ((objectSize >= J9_GC_MINIMUM_OBJECT_SIZE) ? objectSize : J9_GC_MINIMUM_OBJECT_SIZE);
    }
 
@@ -753,8 +761,13 @@ int32_t
 TR_J9ServerVM::getNewArrayTypeFromClass(TR_OpaqueClassBlock *clazz)
    {
    JITServer::ServerStream *stream = _compInfoPT->getMethodBeingCompiled()->_stream;
-   stream->write(JITServer::MessageType::VM_getNewArrayTypeFromClass, clazz);
-   return std::get<0>(stream->read<int32_t>());
+   ClientSessionData::VMInfo * vmInfo = _compInfoPT->getClientData()->getOrCacheVMInfo(stream);
+   for (int32_t i = 0; i < 8; ++i)
+      {
+      if ((void*)vmInfo->_arrayTypeClasses[i] == (void*)clazz)
+         return i + 4;
+      }
+   return -1;
    }
 
 TR_OpaqueClassBlock *
@@ -1839,9 +1852,9 @@ TR_J9SharedCacheServerVM::supportAllocationInlining(TR::Compilation *comp, TR::N
    if (comp->getOptions()->realTimeGC())
       return false;
 
-   if ((TR::Compiler->target.cpu.isX86() ||
-        TR::Compiler->target.cpu.isPower() ||
-        TR::Compiler->target.cpu.isZ()) &&
+   if ((comp->target().cpu.isX86() ||
+        comp->target().cpu.isPower() ||
+        comp->target().cpu.isZ()) &&
        !comp->getOption(TR_DisableAllocationInlining))
       return true;
 

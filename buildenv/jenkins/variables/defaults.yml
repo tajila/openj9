@@ -64,6 +64,10 @@ misc:
   jdk_image_dir:
     all: 'jdk'
     8: 'j2sdk-image'
+  test_keep_reportdir:
+    sanity.openjdk: 'true'
+    extended.openjdk: 'true'
+    special.openjdk: 'true'
 credentials:
   github: 'b6987280-6402-458f-bdd6-7affc2e360d4'
 test_dependencies_job_name: 'test.getDependency'
@@ -83,16 +87,6 @@ build_discarder:
 restart_timeout:
   time: '5'
   units: 'HOURS'
-tests_targets:
-  sanity:
-    - sanity.functional
-  extended:
-    - extended.functional
-  default: &defaultTests
-    - extended.functional
-    - extended.system
-    - sanity.functional
-    - sanity.system
 #========================================#
 # Large heap build
 #========================================#
@@ -109,7 +103,10 @@ cmake:
     next: '--disable-ddr'
   extra_make_options: 'EXTRA_CMAKE_ARGS="-DOMR_WARNINGS_AS_ERRORS=FALSE"'
   excluded_tests:
-      - *defaultTests
+      - sanity.functional
+      - extended.functional
+      - sanity.system
+      - extended.system
       - special.system
 #========================================#
 # JITServer
@@ -155,7 +152,7 @@ ppc64le_linux:
     8: '--enable-jitserver'
     11: '--enable-jitserver'
   build_env:
-    vars: 'CC=gcc-7 CXX=g++-7'
+    vars: 'PATH+GCC7=/usr/local/gcc-7.5.0/bin LD_LIBRARY_PATH=/usr/local/gcc-7.5.0/lib64:$LD_LIBRARY_PATH'
 #========================================#
 # Linux PPCLE 64bits Large Heap
 #========================================#
@@ -191,7 +188,7 @@ s390x_linux:
   node_labels:
     build: 'ci.role.build && hw.arch.s390x && sw.os.ubuntu'
   build_env:
-    vars: 'CC=gcc-7 CXX=g++-7'
+    vars: 'PATH+GCC7=/usr/local/gcc-7.5.0/bin LD_LIBRARY_PATH=/usr/local/gcc-7.5.0/lib64:$LD_LIBRARY_PATH'
   excluded_tests:
     11:
       - special.system
@@ -242,6 +239,8 @@ ppc64_aix:
       14: 'PATH+XLC=/opt/IBM/xlC/16.1.0/bin:/opt/IBM/xlc/16.1.0/bin CC=xlclang CXX=xlclang++'
       next: 'PATH+XLC=/opt/IBM/xlC/16.1.0/bin:/opt/IBM/xlc/16.1.0/bin CC=xlclang CXX=xlclang++'
   excluded_tests:
+    8:
+      - special.system
     11:
       - special.system
 #========================================#
@@ -267,6 +266,7 @@ x86-64_linux:
     11: '--enable-jitserver'
   build_env:
     cmd: 'source /opt/rh/devtoolset-7/enable'
+    vars: 'OPENJ9_JAVA_OPTIONS=-Xdump:system+java:events=systhrow,filter=java/lang/ClassCastException,request=exclusive+prepwalk+preempt'
   excluded_tests:
     11:
       - special.system
@@ -386,6 +386,7 @@ x86-64_mac:
       8: 'ci.role.build && hw.arch.x86 && sw.os.osx.10_11'
   build_env:
     vars:
+      all: 'OPENJ9_JAVA_OPTIONS=-Xdump:system+java:events=systhrow,filter=java/lang/ClassCastException,request=exclusive+prepwalk+preempt'
       8: 'MACOSX_DEPLOYMENT_TARGET=10.9.0 SDKPATH=/Users/jenkins/Xcode4/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk'
   excluded_tests:
     11:

@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 2019, 2019 IBM Corp. and others
+# Copyright (c) 2019, 2020 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -46,10 +46,17 @@ target_include_directories(j9ddr_misc
 # remove all optimization options so needed debugging information is not suppressed
 omr_remove_flags(CMAKE_CXX_FLAGS -O -O1 -O2 -O3 /Ox)
 
-if(OMR_TOOLCONFIG STREQUAL "gnu")
+if((OMR_TOOLCONFIG STREQUAL "gnu") AND (NOT CMAKE_CXX_COMPILER_ID MATCHES Clang))
 	target_compile_options(j9ddr_misc PRIVATE -femit-class-debug-always)
 endif()
 
+
+if(OMR_OS_AIX)
+	target_link_libraries(j9ddr_misc
+		PRIVATE
+			-Wl,-bexpall
+	)
+endif()
 target_enable_ddr(j9ddr_misc)
 ddr_set_add_targets(j9ddr j9ddr_misc)
 

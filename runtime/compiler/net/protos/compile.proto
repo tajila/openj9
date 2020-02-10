@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018, 2019 IBM Corp. and others
+ * Copyright (c) 2018, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -113,6 +113,10 @@ enum MessageType
    ResolvedMethod_varHandleMethodTypeTableEntryAddress = 152;
    ResolvedMethod_isUnresolvedVarHandleMethodTypeTableEntry = 153;
 
+   ResolvedMethod_getConstantDynamicTypeFromCP = 154;
+   ResolvedMethod_isUnresolvedConstantDynamic = 155;
+   ResolvedMethod_dynamicConstant = 156;
+
    ResolvedRelocatableMethod_createResolvedRelocatableJ9Method = 160;
    ResolvedRelocatableMethod_storeValidationRecordIfNecessary = 161;
    ResolvedRelocatableMethod_fieldAttributes = 162;
@@ -218,7 +222,7 @@ enum MessageType
    VM_createMethodHandleArchetypeSpecimen = 295;
    /* VM_getSystemClassLoader = 296; */
    VM_instanceOfOrCheckCast = 297;
-   VM_getNewArrayTypeFromClass = 298;
+   /* VM_getNewArrayTypeFromClass = 298; */
    VM_getResolvedMethodsAndMirror = 300;
    VM_getVMInfo = 301;
    VM_isAnonymousClass = 302;
@@ -281,8 +285,12 @@ enum MessageType
    runFEMacro_invokeFilterArgumentsHandle = 714;
    runFEMacro_invokeFilterArgumentsHandle2 = 715;
    runFEMacro_invokeCatchHandle = 716;
-   runFEMacro_invokeILGenMacros = 717;
-   runFEMacro_derefUintptrjPtr = 718;
+   runFEMacro_invokeILGenMacrosParameterCount = 717;
+   runFEMacro_invokeILGenMacrosArrayLength = 718;
+   runFEMacro_invokeILGenMacrosGetField = 719;
+   runFEMacro_invokeFilterArgumentsWithCombinerHandleNumSuffixArgs = 720;
+   runFEMacro_invokeFilterArgumentsWithCombinerHandleFilterPosition = 721;
+   runFEMacro_invokeFilterArgumentsWithCombinerHandleArgumentIndices = 722;
 
    // for JITServerPersistentCHTable
    CHTable_getAllClassInfo = 800;

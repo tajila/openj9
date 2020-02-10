@@ -36,6 +36,7 @@
 #include "jvminit.h"
 #if defined(JITSERVER_SUPPORT)
 #include "j9vmnls.h"
+#include "omrformatconsts.h"
 #endif /* defined(JITSERVER_SUPPORT) */
 #include "codegen/CodeGenerator.hpp"
 #include "compile/Compilation.hpp"
@@ -1425,6 +1426,17 @@ J9::Options::fePreProcess(void * base)
          }
       }
 
+   // -XX:+PrintCodeCache will be parsed twice into both AOT and JIT options here.
+   const char *xxPrintCodeCacheOption = "-XX:+PrintCodeCache";
+   const char *xxDisablePrintCodeCacheOption = "-XX:-PrintCodeCache";
+   int32_t xxPrintCodeCacheArgIndex = FIND_ARG_IN_VMARGS(EXACT_MATCH, xxPrintCodeCacheOption, 0);
+   int32_t xxDisablePrintCodeCacheArgIndex = FIND_ARG_IN_VMARGS(EXACT_MATCH, xxDisablePrintCodeCacheOption, 0);
+
+   if (xxPrintCodeCacheArgIndex > xxDisablePrintCodeCacheArgIndex)
+      {
+      self()->setOption(TR_PrintCodeCacheUsage);
+      }
+
    // Enable on X and Z, also on P.
    // PPC supports -Xlp:codecache option.. since it's set via environment variables.  JVM should always request 4k pages.
    // fePreProcess is called twice - for AOT and JIT options parsing, which is redundant in terms of
@@ -1989,10 +2001,22 @@ J9::Options::fePreProcess(void * base)
          std::random_device rd;
          std::mt19937_64 rng(rd());
          std::uniform_int_distribution<uint64_t> dist;
-         compInfo->getPersistentInfo()->setClientUID(dist(rng));
+         // clientUID != 0 when running in client mode
+         uint64_t clientUID = dist(rng);
+         while (0 == clientUID)
+            clientUID = dist(rng);
+         compInfo->getPersistentInfo()->setClientUID(clientUID);
+         jitConfig->clientUID = clientUID;
+
          // _safeReservePhysicalMemoryValue is set as 0 for the JITClient because compilations
          // are done remotely. The user can still override it with a command line option
          J9::Options::_safeReservePhysicalMemoryValue = 0;
+         }
+      else
+         {
+         // clientUID == 0 when running in server mode / regular JVM
+         compInfo->getPersistentInfo()->setClientUID(0);
+         jitConfig->clientUID = 0;
          }
       }
 #endif /* defined(JITSERVER_SUPPORT) */
@@ -2072,12 +2096,18 @@ J9::Options::setupJITServerOptions()
       {
       TR::PersistentInfo *persistentInfo = compInfo->getPersistentInfo();
       if (persistentInfo->getRemoteCompilationMode() == JITServer::SERVER)
+         {
          TR_VerboseLog::writeLineLocked(TR_Vlog_JITServer, "JITServer Server Mode. Port: %d. Connection Timeout %ums",
                persistentInfo->getJITServerPort(), persistentInfo->getSocketTimeout());
+         }
       else if (persistentInfo->getRemoteCompilationMode() == JITServer::CLIENT)
+         {
          TR_VerboseLog::writeLineLocked(TR_Vlog_JITServer, "JITServer Client Mode. Server address: %s port: %d. Connection Timeout %ums",
                persistentInfo->getJITServerAddress().c_str(), persistentInfo->getJITServerPort(),
                persistentInfo->getSocketTimeout());
+         TR_VerboseLog::writeLineLocked(TR_Vlog_JITServer, "Identifier for current client JVM: %" OMR_PRIu64 "\n",
+               compInfo->getPersistentInfo()->getClientUID());
+         }
       }
 
    }

@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 1998, 2019 IBM Corp. and others
+ * Copyright (c) 1998, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -3836,8 +3836,16 @@ private class MethodInfo {
 
 static boolean methodAOverridesMethodB(Class<?> methodAClass,	boolean methodAIsAbstract, boolean methodAClassIsInterface,
 		Class<?> methodBClass, boolean methodBIsAbstract, boolean methodBClassIsInterface) {
-	return (methodBIsAbstract && methodBClassIsInterface && !methodAIsAbstract && !methodAClassIsInterface) 
-		|| (methodBClass.isAssignableFrom(methodAClass));
+	return (methodBIsAbstract && methodBClassIsInterface && !methodAIsAbstract && !methodAClassIsInterface) ||
+			(methodBClass.isAssignableFrom(methodAClass)
+					/*[IF !Sidecar19-SE]*/
+					/*
+					 * In Java 8, abstract methods in subinterfaces do not hide abstract methods in superinterfaces.
+					 * This is fixed in Java 9.
+					 */
+					&& (!methodAClassIsInterface || !methodAIsAbstract)
+					/*[ENDIF]*/
+					);
 }
 
 /*[PR 125873] Improve reflection cache */
@@ -4686,14 +4694,9 @@ public Class<?>[] getNestMembers() throws LinkageError, SecurityException {
 	/**
 	 * Returns true if the class instance is a record.
 	 * 
-	 * Note: current implementation is a stub and always returns false.
-	 * For JEP 359 support see https://github.com/eclipse/openj9/pull/7946
-	 * 
 	 * @return true for a record class, false otherwise
 	 */
-	public boolean isRecord() {
-		return false;
-	}
+	public native boolean isRecord();
 
 	/**
 	 * Returns an array of RecordComponent objects for a record class.

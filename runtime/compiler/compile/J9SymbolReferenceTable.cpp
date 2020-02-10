@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -768,7 +768,7 @@ J9::SymbolReferenceTable::findOrCreateInstanceShapeSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -786,7 +786,7 @@ J9::SymbolReferenceTable::findOrCreateInstanceDescriptionSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -805,7 +805,7 @@ J9::SymbolReferenceTable::findOrCreateDescriptionWordFromPtrSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -851,7 +851,7 @@ J9::SymbolReferenceTable::findOrCreateArrayComponentTypeAsPrimitiveSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -976,7 +976,7 @@ J9::SymbolReferenceTable::findOrCreateJ9MethodConstantPoolFieldSymbolRef(intptrj
    if (!element(j9methodConstantPoolSymbol))
       {
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int32);
@@ -995,7 +995,7 @@ J9::SymbolReferenceTable::findOrCreateJ9MethodExtraFieldSymbolRef(intptrj_t offs
    if (!element(j9methodExtraFieldSymbol))
       {
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int32);
@@ -1080,7 +1080,7 @@ TR::SymbolReference *
 J9::SymbolReferenceTable::findOrCreateConstantDynamicSymbol(TR::ResolvedMethodSymbol * owningMethodSymbol, int32_t cpIndex, char* symbolTypeSig, int32_t symbolTypeSigLength, bool isCondyPrimitive)
    {
    TR_ResolvedMethod * owningMethod = owningMethodSymbol->getResolvedMethod();
-   void * dynamicConst = owningMethod->dynamicConstant(cpIndex);
+   void * dynamicConst = owningMethod->dynamicConstant(cpIndex, NULL);
    TR::SymbolReference * symRef;
    if (owningMethod->isUnresolvedConstantDynamic(cpIndex))
       {
@@ -1207,7 +1207,7 @@ J9::SymbolReferenceTable::findOrCreateClassFromJavaLangClassAsPrimitiveSymbolRef
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -1660,7 +1660,7 @@ J9::SymbolReferenceTable::findOrCreateInitializeStatusFromClassSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym = NULL;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(), TR::Int32);
@@ -1693,7 +1693,7 @@ J9::SymbolReferenceTable::findOrCreateGlobalFragmentSymbolRef()
       {
       TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
       TR::Symbol * sym;
-      if (TR::Compiler->target.is64Bit())
+      if (self()->comp()->target().is64Bit())
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int64);
       else
          sym = TR::Symbol::createShadow(trHeapMemory(),TR::Int32);
@@ -1959,15 +1959,18 @@ J9::SymbolReferenceTable::checkImmutable(TR::SymbolReference *symRef)
       "java/lang/String"
       };
 
-   TR_ASSERT(sizeof(names)/sizeof(char *) == _numImmutableClasses,"Size of names array is not correct\n");
-   int32_t i;
-   for (i = 0; i < _numImmutableClasses; i++)
+   if (!comp()->getOption(TR_DisableImmutableFieldAliasing))
       {
-      if (strcmp(names[i].name, name) == 0)
+      TR_ASSERT(sizeof(names)/sizeof(char *) == _numImmutableClasses,"Size of names array is not correct\n");
+      int32_t i;
+      for (i = 0; i < _numImmutableClasses; i++)
          {
-         _hasImmutable = true;
-         _immutableSymRefNumbers[i]->set(symRef->getReferenceNumber());
-         break;
+         if (strcmp(names[i].name, name) == 0)
+            {
+            _hasImmutable = true;
+            _immutableSymRefNumbers[i]->set(symRef->getReferenceNumber());
+            break;
+            }
          }
       }
 

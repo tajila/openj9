@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2018, 2019 IBM Corp. and others
+Copyright (c) 2018, 2020 IBM Corp. and others
 
 This program and the accompanying materials are made available under
 the terms of the Eclipse Public License 2.0 which accompanies this
@@ -56,7 +56,6 @@ These are the steps to run the tests on your machine.
 
    Compile the test
    ```
-   make -f run_configure.mk
    make compile
    ```
    NOTE: to compile and run tests, ant-contrib.jar is needed, and on some systems just installing ant will not install ant-contrib.
@@ -70,7 +69,7 @@ These are the steps to run the tests on your machine.
 
    Manually start the server if `JITAAS` TEST_FLAG is not used.
    ```
-   $JAVA_BIN/java -XX:StartAsJITServer
+   $JAVA_BIN/jitserver
    ```
    ```
    make _sanity

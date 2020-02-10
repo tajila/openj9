@@ -1,5 +1,6 @@
+/*[INCLUDE-IF Sidecar19-SE&(PLATFORM-mz31|PLATFORM-mz64)]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2020, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,20 +21,12 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
-extern "C"
-   {
+/*[REM] This file must not use tabs because the dependency recognition code in openjdk does not support them. */
 
-   /* Do nothing, just define dummy symbols */
-   void MTUnresolvedInt32Load() {}
-   void MTUnresolvedInt64Load() {}
-   void MTUnresolvedFloatLoad() {}
-   void MTUnresolvedDoubleLoad() {}
-   void MTUnresolvedAddressLoad() {}
-
-   void MTUnresolvedInt32Store() {}
-   void MTUnresolvedInt64Store() {}
-   void MTUnresolvedFloatStore() {}
-   void MTUnresolvedDoubleStore() {}
-   void MTUnresolvedAddressStore() {}
-
-   }
+/**
+ * Provides access to z/OS datasets.
+ */
+module com.ibm.jzos {
+  requires java.base;
+  exports com.ibm.jzos;
+}

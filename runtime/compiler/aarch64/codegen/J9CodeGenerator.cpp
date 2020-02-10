@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019, 2019 IBM Corp. and others
+ * Copyright (c) 2019, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -91,7 +91,7 @@ J9::ARM64::CodeGenerator::allocateRecompilationInfo()
    }
 
 uint32_t
-J9::ARM64::CodeGenerator::encodeHelperBranchAndLink(TR::SymbolReference *symRef, uint8_t *cursor, TR::Node *node)
+J9::ARM64::CodeGenerator::encodeHelperBranchAndLink(TR::SymbolReference *symRef, uint8_t *cursor, TR::Node *node, bool omitLink)
    {
    TR::CodeGenerator *cg = self();
    uintptrj_t target = (uintptrj_t)symRef->getMethodAddress();
@@ -100,7 +100,7 @@ J9::ARM64::CodeGenerator::encodeHelperBranchAndLink(TR::SymbolReference *symRef,
       {
       target = TR::CodeCacheManager::instance()->findHelperTrampoline(symRef->getReferenceNumber(), (void *)cursor);
 
-      TR_ASSERT_FATAL(TR::Compiler->target.cpu.isTargetWithinUnconditionalBranchImmediateRange(target, (intptrj_t)cursor),
+      TR_ASSERT_FATAL(cg->comp()->target().cpu.isTargetWithinUnconditionalBranchImmediateRange(target, (intptrj_t)cursor),
                       "Target address is out of range");
       }
 
@@ -111,7 +111,7 @@ J9::ARM64::CodeGenerator::encodeHelperBranchAndLink(TR::SymbolReference *symRef,
                              __FILE__, __LINE__, node);
 
    uintptr_t distance = target - (uintptr_t)cursor;
-   return TR::InstOpCode::getOpCodeBinaryEncoding(TR::InstOpCode::bl) | ((distance >> 2) & 0x3ffffff); /* imm26 */
+   return TR::InstOpCode::getOpCodeBinaryEncoding(omitLink ? (TR::InstOpCode::b) : (TR::InstOpCode::bl)) | ((distance >> 2) & 0x3ffffff); /* imm26 */
    }
 
 void

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -100,6 +100,7 @@
 #include "runtime/JITClientSession.hpp"
 #include "net/ClientStream.hpp"
 #include "net/ServerStream.hpp"
+#include "omrformatconsts.h"
 #endif /* defined(JITSERVER_SUPPORT) */
 #ifdef COMPRESS_AOT_DATA
 #include "shcdatatypes.h" // For CompiledMethodWrapper
@@ -1049,8 +1050,6 @@ TR::CompilationInfoPerThread::CompilationInfoPerThread(TR::CompilationInfo &comp
       {
       _classesThatShouldNotBeNewlyExtended = NULL;
       }
-
-   _lastLocalGCCounter = 0;
 #endif /* defined(JITSERVER_SUPPORT) */
    }
 
@@ -3193,6 +3192,22 @@ void TR::CompilationInfo::stopCompilationThreads()
       }
 
    static char * printCompMem = feGetEnv("TR_PrintCompMem");
+   static char * printCCUsage = feGetEnv("TR_PrintCodeCacheUsage");
+
+   // Example:
+   // CodeCache: size=262144Kb used=2048Kb max_used=1079Kb free=260096Kb
+   if (TR::Options::getCmdLineOptions()->getOption(TR_PrintCodeCacheUsage) || printCompMem || printCCUsage)
+      {
+      unsigned long currTotalUsedKB = (unsigned long)(TR::CodeCacheManager::instance()->getCurrTotalUsedInBytes()/1024);
+      unsigned long maxUsedKB = (unsigned long)(TR::CodeCacheManager::instance()->getMaxUsedInBytes()/1024);
+
+      fprintf(stderr, "\nCodeCache: size=%luKb used=%luKb max_used=%luKb free=%luKb\n\n",
+              _jitConfig->codeCacheTotalKB,
+              currTotalUsedKB,
+              maxUsedKB,
+              (_jitConfig->codeCacheTotalKB - currTotalUsedKB));
+      }
+
    if (printCompMem)
       {
       int32_t codeCacheAllocated = TR::CodeCacheManager::instance()->getCurrentNumberOfCodeCaches() * _jitConfig->codeCacheKB;
@@ -6898,6 +6913,10 @@ TR::CompilationInfoPerThreadBase::shouldPerformLocalComp(const TR_MethodToBeComp
       (!JITServerHelpers::isServerAvailable() && !JITServerHelpers::shouldRetryConnection(OMRPORT_FROM_J9PORT(_jitConfig->javaVM->portLibrary))))
       doLocalComp = true;
 
+   // Do a local compile because the Power codegen is missing some FieldWatch relocation support.
+   if (TR::Compiler->target.cpu.isPower() && _jitConfig->inlineFieldWatches)
+      doLocalComp = true;
+
    return doLocalComp;
    }
 #endif /* defined(JITSERVER_SUPPORT) */
@@ -7772,18 +7791,17 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
 
    // cleanup the compilationShouldBeInterrupted flag.
    that->setCompilationShouldBeInterrupted(0);
-
-   if (that->_methodBeingCompiled->isDLTCompile())
-      {
-      TR_J9SharedCache *sc = (TR_J9SharedCache *) (vm->sharedCache());
-      if (sc)
-        sc->addHint(that->_methodBeingCompiled->getMethodDetails().getMethod(), TR_HintDLT);
-      }
-
    that->setMetadata(NULL);
 
    try
       {
+      if (that->_methodBeingCompiled->isDLTCompile())
+         {
+         TR_J9SharedCache *sc = (TR_J9SharedCache *) (vm->sharedCache());
+         if (sc)
+            sc->addHint(that->_methodBeingCompiled->getMethodDetails().getMethod(), TR_HintDLT);
+         }
+
       InterruptibleOperation generatingCompilationObject(*that);
       TR::IlGeneratorMethodDetails & details = that->_methodBeingCompiled->getMethodDetails();
       TR_OpaqueMethodBlock *method = (TR_OpaqueMethodBlock *) details.getMethod();
@@ -8789,13 +8807,20 @@ TR::CompilationInfoPerThreadBase::compile(
                {
                TR_ASSERT(_compiler.getHotnessName(_compiler.getMethodHotness()), "expected to have a hotness string");
                if (_compiler.getOutFile() != NULL && _compiler.getOption(TR_TraceAll))
-                  traceMsg(&_compiler, "<compile\n"
-                          "\tmethod=\"%s\"\n"
-                          "\thotness=\"%s\"\n"
-                          "\tisProfilingCompile=%d>\n",
-                          _compiler.signature(),
-                          _compiler.getHotnessName(_compiler.getMethodHotness()),
-                          _compiler.isProfilingCompilation());
+                  {
+                  traceMsg(&_compiler, "<compile\n");
+                  traceMsg(&_compiler, "\tmethod=\"%s\"\n", _compiler.signature());
+                  traceMsg(&_compiler, "\thotness=\"%s\"\n", _compiler.getHotnessName(_compiler.getMethodHotness()));
+                  traceMsg(&_compiler, "\tisProfilingCompile=%d", _compiler.isProfilingCompilation());
+#if defined(JITSERVER_SUPPORT)
+                  if (_compiler.isOutOfProcessCompilation() && TR::compInfoPT->getClientData()) // using jitserver && client JVM
+                     {
+                     traceMsg(&_compiler, "\n");
+                     traceMsg(&_compiler, "\tclientID=%" OMR_PRIu64, TR::compInfoPT->getClientData()->getClientUID());
+                     }
+#endif /* defined(JITSERVER_SUPPORT) */
+                  traceMsg(&_compiler, ">\n");
+                  }
                }
             ~CompilationTrace() throw()
                {
@@ -10984,6 +11009,10 @@ TR::CompilationInfoPerThreadBase::processException(
       {
       _methodBeingCompiled->_compErrCode = compilationRestrictedMethod;
       }
+   catch (const TR::NoRecompilationRecoverableILGenException &e)
+      {
+      _methodBeingCompiled->_compErrCode = compilationRestrictedMethod;
+      }
    catch (const TR::ILGenFailure &e)
       {
       _methodBeingCompiled->_compErrCode = compilationILGenFailure;
@@ -12854,12 +12883,6 @@ TR::CompilationInfo::canRelocateMethod(TR::Compilation *comp)
    }
 
 #if defined(JITSERVER_SUPPORT)
-void
-TR::CompilationInfoPerThread::updateLastLocalGCCounter()
-   {
-   _lastLocalGCCounter = getCompilationInfo()->getLocalGCCounter();
-   }
-
 // This method is executed by the JITServer to queue a placeholder for
 // a compilation request received from the client. At the time the new
 // entry is queued we do not know any details about the compilation request.

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -1016,7 +1016,7 @@ UDATA TR_J9VMBase::thisThreadGetReturnValueOffset()                 {return offs
 UDATA TR_J9VMBase::getThreadDebugEventDataOffset(int32_t index) {J9VMThread *dummy=0; return offsetof(J9VMThread, debugEventData1) + (index-1)*sizeof(dummy->debugEventData1);} // index counts from 1
 UDATA TR_J9VMBase::getThreadLowTenureAddressPointerOffset()         {return offsetof(J9VMThread, lowTenureAddress);}
 UDATA TR_J9VMBase::getThreadHighTenureAddressPointerOffset()        {return offsetof(J9VMThread, highTenureAddress);}
-UDATA TR_J9VMBase::getObjectHeaderSizeInBytes()                     {return sizeof(J9Object);}
+UDATA TR_J9VMBase::getObjectHeaderSizeInBytes()                     {return TR::Compiler->om.objectHeaderSizeInBytes();}
 
 UDATA TR_J9VMBase::getOffsetOfSuperclassesInClassObject()           {return offsetof(J9Class, superclasses);}
 UDATA TR_J9VMBase::getOffsetOfBackfillOffsetField()                 {return offsetof(J9Class, backfillOffset);}
@@ -1130,12 +1130,12 @@ TR_J9VMBase::getReferenceFieldAtAddress(uintptrj_t fieldAddress)
       vmThread()->javaVM->javaVM->memoryManagerFunctions->J9ReadBarrier(vmThread(), (fj9object_t *)fieldAddress);
 #endif
 
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-   uintptrj_t compressedResult = *(uint32_t*)fieldAddress;
-   return (compressedResult << TR::Compiler->om.compressedReferenceShift()) + TR::Compiler->vm.heapBaseAddress();
-#else
+   if (TR::Compiler->om.compressObjectReferences())
+      {
+      uintptrj_t compressedResult = *(uint32_t*)fieldAddress;
+      return (compressedResult << TR::Compiler->om.compressedReferenceShift()) + TR::Compiler->vm.heapBaseAddress();
+      }
    return *(uintptrj_t*)fieldAddress;
-#endif
    }
 
 uintptrj_t
@@ -1157,21 +1157,21 @@ int32_t
 TR_J9VMBase::getInt32FieldAt(uintptrj_t objectPointer, uintptrj_t fieldOffset)
    {
    TR_ASSERT(haveAccess(), "Must haveAccess in getInt32Field");
-   return *(int32_t*)(objectPointer + sizeof(J9Object) + fieldOffset);
+   return *(int32_t*)(objectPointer + getObjectHeaderSizeInBytes() + fieldOffset);
    }
 
 int64_t
 TR_J9VMBase::getInt64FieldAt(uintptrj_t objectPointer, uintptrj_t fieldOffset)
    {
    TR_ASSERT(haveAccess(), "Must haveAccess in getInt64Field");
-   return *(int64_t*)(objectPointer + sizeof(J9Object) + fieldOffset);
+   return *(int64_t*)(objectPointer + getObjectHeaderSizeInBytes() + fieldOffset);
    }
 
 void
 TR_J9VMBase::setInt64FieldAt(uintptrj_t objectPointer, uintptrj_t fieldOffset, int64_t newValue)
    {
    TR_ASSERT(haveAccess(), "Must haveAccess in setInt64Field");
-   *(int64_t*)(objectPointer + sizeof(J9Object) + fieldOffset) = newValue;
+   *(int64_t*)(objectPointer + getObjectHeaderSizeInBytes() + fieldOffset) = newValue;
    }
 
 bool
@@ -1792,11 +1792,11 @@ UDATA TR_J9VMBase::thisThreadGetConcurrentScavengeActiveByteAddressOffset()
 UDATA TR_J9VMBase::thisThreadGetEvacuateBaseAddressOffset()
    {
 #if defined(OMR_GC_CONCURRENT_SCAVENGER)
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-   return offsetof(J9VMThread, readBarrierRangeCheckBaseCompressed);
-#else
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+  if (TR::Compiler->om.compressObjectReferences())
+      return offsetof(J9VMThread, readBarrierRangeCheckBaseCompressed);
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
    return offsetof(J9VMThread, readBarrierRangeCheckBase);
-#endif /* defined(J9VM_GC_COMPRESSED_POINTERS) */
 #else /* defined(OMR_GC_CONCURRENT_SCAVENGER) */
    TR_ASSERT(0,"Field readBarrierRangeCheckBase does not exists in J9VMThread.");
    return 0;
@@ -1809,11 +1809,11 @@ UDATA TR_J9VMBase::thisThreadGetEvacuateBaseAddressOffset()
 UDATA TR_J9VMBase::thisThreadGetEvacuateTopAddressOffset()
    {
 #if defined(OMR_GC_CONCURRENT_SCAVENGER)
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-   return offsetof(J9VMThread, readBarrierRangeCheckTopCompressed);
-#else
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+   if (TR::Compiler->om.compressObjectReferences())
+      return offsetof(J9VMThread, readBarrierRangeCheckTopCompressed);
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
    return offsetof(J9VMThread, readBarrierRangeCheckTop);
-#endif /* defined(J9VM_GC_COMPRESSED_POINTERS) */
 #else /* defined(OMR_GC_CONCURRENT_SCAVENGER) */
    TR_ASSERT(0,"Field readBarrierRangeCheckTop does not exists in J9VMThread.");
    return 0;
@@ -1923,7 +1923,7 @@ int32_t TR_J9VMBase::getFirstArrayletPointerOffset(TR::Compilation *comp)
    TR_ASSERT(TR::Compiler->om.canGenerateArraylets(), "not supposed to be generating arraylets!");
 
    int32_t headerSize = TR::Compiler->om.useHybridArraylets() ?
-      sizeof(J9IndexableObjectDiscontiguous) : sizeof(J9IndexableObjectContiguous);
+		   TR::Compiler->om.discontiguousArrayHeaderSizeInBytes() : TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
 
    return (headerSize + TR::Compiler->om.sizeofReferenceField()-1) & (-1)*(intptrj_t)(TR::Compiler->om.sizeofReferenceField());
    }
@@ -1966,11 +1966,11 @@ int32_t TR_J9VMBase::getCAASaveOffset()
 uint32_t
 TR_J9VMBase::getWordOffsetToGCFlags()
    {
-#if defined(J9VM_INTERP_FLAGS_IN_CLASS_SLOT) && defined(TR_TARGET_64BIT) && !defined(J9VM_GC_COMPRESSED_POINTERS)
-      return TR::Compiler->om.offsetOfHeaderFlags() + 4;
-#else
-      return TR::Compiler->om.offsetOfHeaderFlags();
+#if defined(J9VM_INTERP_FLAGS_IN_CLASS_SLOT) && defined(TR_TARGET_64BIT)
+   if (!TR::Compiler->om.compressObjectReferences())
+     return TR::Compiler->om.offsetOfHeaderFlags() + 4;
 #endif
+   return TR::Compiler->om.offsetOfHeaderFlags();
    }
 
 uint32_t
@@ -2913,7 +2913,7 @@ bool TR_J9VMBase::supressInliningRecognizedInitialCallee(TR_CallSite* callsite, 
              * for java_lang_String_hashCodeImplCompressed instead of using a fallthrough.
              */
             if (!TR::Compiler->om.canGenerateArraylets() &&
-                TR::Compiler->target.cpu.isPower() && TR::Compiler->target.cpu.id() >= TR_PPCp8 && getPPCSupportsVSXRegisters() && !comp->compileRelocatableCode())
+                comp->target().cpu.isPower() && comp->target().cpu.id() >= TR_PPCp8 && getPPCSupportsVSXRegisters() && !comp->compileRelocatableCode())
                   {
                   dontInlineRecognizedMethod = true;
                   break;
@@ -3121,7 +3121,7 @@ TR_J9VMBase::refineColdness (TR::Node* node, bool& isCold)
 
 static TR::ILOpCodes udataIndirectLoadOpCode(TR::Compilation * comp)
    {
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       return TR::lloadi;
       }
@@ -3133,7 +3133,7 @@ static TR::ILOpCodes udataIndirectLoadOpCode(TR::Compilation * comp)
 
 static TR::ILOpCodes udataIndirectStoreOpCode(TR::Compilation * comp)
    {
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       return TR::lstorei;
       }
@@ -3145,7 +3145,7 @@ static TR::ILOpCodes udataIndirectStoreOpCode(TR::Compilation * comp)
 
 static TR::ILOpCodes udataConstOpCode(TR::Compilation * comp)
    {
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       return TR::lconst;
       }
@@ -3157,7 +3157,7 @@ static TR::ILOpCodes udataConstOpCode(TR::Compilation * comp)
 
 static TR::ILOpCodes udataLoadOpCode(TR::Compilation * comp)
    {
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       return TR::lload;
       }
@@ -3169,7 +3169,7 @@ static TR::ILOpCodes udataLoadOpCode(TR::Compilation * comp)
 
 static TR::ILOpCodes udataCmpEqOpCode(TR::Compilation * comp)
    {
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       return TR::lcmpeq;
       }
@@ -3191,7 +3191,7 @@ TR_J9VMBase::lowerAsyncCheck(TR::Compilation * comp, TR::Node * root, TR::TreeTo
 
    TR::Node * loadNode  = TR::Node::createWithSymRef(root, udataLoadOpCode(comp), 0, stackOverflowSymRef);
    TR::Node * constNode = TR::Node::create(root, udataConstOpCode(comp), 0, 0);
-   if (TR::Compiler->target.is64Bit())
+   if (comp->target().is64Bit())
       {
       constNode->setLongInt(-1L);
       }
@@ -3368,7 +3368,7 @@ TR_J9VMBase::lowerMethodHook(TR::Compilation * comp, TR::Node * root, TR::TreeTo
          TR::Node::createif(TR::ificmpne,
             TR::Node::create(TR::iand, 2,
                TR::Node::create(TR::bu2i, 1,
-                  TR::Node::createWithSymRef(root, TR::buload, 0, new (comp->trHeapMemory()) TR::SymbolReference(comp->getSymRefTab(), addressSym))),
+                  TR::Node::createWithSymRef(root, TR::bload, 0, new (comp->trHeapMemory()) TR::SymbolReference(comp->getSymRefTab(), addressSym))),
                TR::Node::create(root, TR::iconst, 0, J9HOOK_FLAG_HOOKED)),
             TR::Node::create(root, TR::iconst, 0, 0)));
 
@@ -3389,7 +3389,7 @@ TR_J9VMBase::lowerMethodHook(TR::Compilation * comp, TR::Node * root, TR::TreeTo
          TR::TreeTop * selectedTest = TR::TreeTop::create(comp,
             TR::Node::createif(TR::ificmpne,
                TR::Node::create(TR::bu2i, 1,
-                  TR::Node::createWithSymRef(root, TR::buload, 0, new (comp->trHeapMemory()) TR::SymbolReference(comp->getSymRefTab(), extendedFlagsSym))),
+                  TR::Node::createWithSymRef(root, TR::bload, 0, new (comp->trHeapMemory()) TR::SymbolReference(comp->getSymRefTab(), extendedFlagsSym))),
                TR::Node::create(root, TR::iconst, 0, 0)));
 
          result = selectedTest;
@@ -3557,7 +3557,7 @@ TR_J9VMBase::lowerMultiANewArray(TR::Compilation * comp, TR::Node * root, TR::Tr
    root->setNumChildren(3);
 
    static bool recreateRoot = feGetEnv("TR_LowerMultiANewArrayRecreateRoot") ? true : false;
-   if (!TR::Compiler->target.is64Bit() || recreateRoot || dims > 2 || secondDimConstNonZero)
+   if (!comp->target().is64Bit() || recreateRoot || dims > 2 || secondDimConstNonZero)
       TR::Node::recreate(root, TR::acall);
 
    return treeTop;
@@ -4007,9 +4007,9 @@ TR_J9VMBase::methodMayHaveBeenInterpreted(TR::Compilation *comp)
    {
    if ((!TR::Options::getCmdLineOptions()->getOption(TR_DisableDFP) &&
         !TR::Options::getAOTCmdLineOptions()->getOption(TR_DisableDFP)) &&
-       (TR::Compiler->target.cpu.supportsDecimalFloatingPoint()
+       (comp->target().cpu.supportsDecimalFloatingPoint()
 #ifdef TR_TARGET_S390
-       || TR::Compiler->target.cpu.getSupportsDecimalFloatingPointFacility()
+       || comp->target().cpu.getSupportsDecimalFloatingPointFacility()
 #endif
          ))
       {
@@ -4383,7 +4383,7 @@ TR::TreeTop* TR_J9VMBase::initializeClazzFlagsMonitorFields(TR::Compilation* com
       if (TR::Compiler->cls.classFlagReservableWordInitValue(ramClass))
          lwInitialValue = OBJECT_HEADER_LOCK_RESERVED;
 
-      if (!TR::Compiler->target.is64Bit() || generateCompressedLockWord())
+      if (!comp->target().is64Bit() || generateCompressedLockWord())
          {
          node = TR::Node::iconst(allocationNode, lwInitialValue);
          node = TR::Node::createWithSymRef(TR::istorei, 2, 2, allocationNode, node,
@@ -6760,6 +6760,12 @@ TR_J9VM::getSystemClassFromClassName(const char * name, int32_t length, bool isV
    return result;
    }
 
+TR_OpaqueClassBlock *
+TR_J9VMBase::getByteArrayClass()
+   {
+   return convertClassPtrToClassOffset(_jitConfig->javaVM->byteArrayClass);
+   }
+
 void *
 TR_J9VMBase::getSystemClassLoader()
    {
@@ -7180,7 +7186,7 @@ TR_J9VM::transformJavaLangClassIsArray(TR::Compilation * comp, TR::Node * callNo
 
    TR::Node * vftLoad = TR::Node::createWithSymRef(callNode, TR::aloadi, 1, jlClass, comp->getSymRefTab()->findOrCreateClassFromJavaLangClassSymbolRef());
 
-   if (TR::Compiler->target.is32Bit())
+   if (comp->target().is32Bit())
       {
       classFlag = TR::Node::createWithSymRef(callNode, TR::iloadi, 1, vftLoad, symRefTab->findOrCreateClassAndDepthFlagsSymbolRef());
       }
@@ -7457,10 +7463,9 @@ TR_J9VM::inlineNativeCall(TR::Compilation * comp, TR::TreeTop * callNodeTreeTop,
             }
 
          // char *caseName = (methodID == TR::sun_reflect_Reflection_getCallerClass) ? "s/r/R.getCallerClass" : "j/l/CL.getStackClassLoader";
-         TR::Node *iconstNode = callNode->getFirstChild();
-         if (iconstNode->getOpCodeValue() == TR::iconst)
+         if (callNode->getNumChildren() == 0 || callNode->getFirstChild()->getOpCodeValue() == TR::iconst)
             {
-            int32_t stackDepth = iconstNode->getInt();
+            int32_t stackDepth = callNode->getNumChildren() == 0 ? -1 : callNode->getFirstChild()->getInt();
             if (stackDepth <= 0)
                return 0;   // getCallerClass is meaningless when invoked with depth <= 0
             int32_t callerIndex = callNode->getByteCodeInfo().getCallerIndex();
@@ -7715,7 +7720,7 @@ TR_J9VM::inlineNativeCall(TR::Compilation * comp, TR::TreeTop * callNodeTreeTop,
          {
          // these methods are static so there are no child to worry about
          int32_t intValue = 0;
-         if (TR::Compiler->target.is32Bit())
+         if (comp->target().is32Bit())
             intValue = 1;
          TR::Node::recreate(callNode, TR::iconst);
          callNode->setNumChildren(0);
@@ -7769,7 +7774,7 @@ TR_J9VM::inlineNativeCall(TR::Compilation * comp, TR::TreeTop * callNodeTreeTop,
       case TR::com_ibm_oti_vm_ORBVMHelpers_getNumBytesInJ9ObjectHeader:
       case TR::com_ibm_jit_JITHelpers_getNumBytesInJ9ObjectHeader:
          {
-         int32_t intValue = sizeof(J9Object);
+         int32_t intValue = getObjectHeaderSizeInBytes();
          TR::Node::recreate(callNode, TR::iconst);
          callNode->setNumChildren(0);
          callNode->setInt(intValue);
@@ -8266,7 +8271,7 @@ uint32_t
 TR_J9VMBase::getAllocationSize(TR::StaticSymbol *classSym, TR_OpaqueClassBlock * opaqueClazz)
    {
    J9Class * clazz = (J9Class * ) opaqueClazz;
-   int32_t headerSize = sizeof(J9Object);
+   int32_t headerSize = getObjectHeaderSizeInBytes();
    int32_t objectSize = (int32_t)clazz->totalInstanceSize + headerSize;
 
    // gc requires objects to have
@@ -8616,9 +8621,9 @@ TR_J9SharedCacheVM::supportAllocationInlining(TR::Compilation *comp, TR::Node *n
    if (comp->getOptions()->realTimeGC())
       return false;
 
-   if ((TR::Compiler->target.cpu.isX86() ||
-        TR::Compiler->target.cpu.isPower() ||
-        TR::Compiler->target.cpu.isZ()) &&
+   if ((comp->target().cpu.isX86() ||
+        comp->target().cpu.isPower() ||
+        comp->target().cpu.isZ()) &&
        !comp->getOption(TR_DisableAllocationInlining))
       return true;
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2019 IBM Corp. and others
+ * Copyright (c) 1998, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -30,7 +30,7 @@
 
 jclass 
 defineClassCommon(JNIEnv *env, jobject classLoaderObject,
-	jstring className, jbyteArray classRep, jint offset, jint length, jobject protectionDomain, UDATA options, J9Class *hostClass)
+	jstring className, jbyteArray classRep, jint offset, jint length, jobject protectionDomain, UDATA options, J9Class *hostClass, J9ClassPatchMap *patchMap)
 {
 #ifdef J9VM_OPT_DYNAMIC_LOAD_SUPPORT
 
@@ -69,6 +69,10 @@ defineClassCommon(JNIEnv *env, jobject classLoaderObject,
 			throwNewNullPointerException(env, NULL);
 		}
 		goto done;
+	}
+
+	if ((patchMap != NULL) && (patchMap->size != 0)) {
+		localBuffer.patchMap = patchMap;
 	}
 
 	vmFuncs->internalEnterVMFromJNI(currentThread);

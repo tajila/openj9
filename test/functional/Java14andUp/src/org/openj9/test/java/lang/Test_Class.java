@@ -1,5 +1,7 @@
+package org.openj9.test.java.lang;
+
 /*******************************************************************************
- * Copyright (c) 2019, 2019 IBM Corp. and others
+ * Copyright (c) 2020, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,43 +21,31 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
-package com.ibm.jzos;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import org.testng.annotations.Test;
+import org.testng.log4testng.Logger;
 
-/**
- * This class is a stub that allows DDR to be compiled on platforms other than z/OS.
+import org.testng.AssertJUnit;
+
+/*
+ * Test JCL additions to java.lang.Class from JEP 359: Records preview.
+ * 
+ * New methods include:
+ * - boolean isRecord()
  */
-public class ZFile {
 
-	public static boolean exists(String name) {
-		return false;
-	}
+ @Test(groups = { "level.sanity" })
+ public class Test_Class {
+    private static final Logger logger = Logger.getLogger(Test_Class.class);
 
-	public ZFile(String name, String options) throws IOException {
-		super();
-		throw new FileNotFoundException();
-	}
+    /* Test classes and records */
+    class TestNotARecord {}
+    record TestRecordEmpty() {}
 
-	public void close() throws IOException {
-		return;
-	}
-
-	public int getLrecl() throws IOException {
-		return 0;
-	}
-
-	public byte[] getPos() throws IOException {
-		return new byte[] { 0 };
-	}
-
-	public int read(byte[] buffer) throws IOException {
-		return 0;
-	}
-
-	public void setPos(byte[] position) throws IOException {
-		return;
-	}
-
-}
+    @Test
+    public void test_isRecord() {
+        AssertJUnit.assertTrue("TestRecordEmpty is a record", TestRecordEmpty.class.isRecord());
+        AssertJUnit.assertTrue("TestNotARecord is not a record", !TestNotARecord.class.isRecord());
+    }
+ }
+ 

@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (c) 1991, 2019 IBM Corp. and others
+# Copyright (c) 1991, 2020 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -26,8 +26,6 @@ set(J9VM_ENV_DATA64 ON CACHE BOOL "")
 set(J9VM_ENV_HAS_FPU ON CACHE BOOL "")
 set(J9VM_ENV_LITTLE_ENDIAN ON CACHE BOOL "")
 
-set(OMR_GC_IDLE_HEAP_MANAGER ON CACHE BOOL "")
-set(OMR_GC_TLH_PREFETCH_FTA ON CACHE BOOL "")
 set(J9VM_PORT_RUNTIME_INSTRUMENTATION OFF CACHE BOOL "")
 set(J9VM_MODULE_CODEGEN_IA32 ON CACHE BOOL "")
 set(J9VM_MODULE_CODERT_IA32 ON CACHE BOOL "")
@@ -37,4 +35,9 @@ set(J9VM_MODULE_MASM2GAS ON CACHE BOOL "")
 set(J9VM_GC_IDLE_HEAP_MANAGER ON CACHE BOOL "")
 set(J9VM_OPT_SWITCH_STACKS_FOR_SIGNAL_HANDLER ON CACHE BOOL "")
 
+set(OMR_GC_IDLE_HEAP_MANAGER ON CACHE BOOL "")
+set(OMR_GC_TLH_PREFETCH_FTA ON CACHE BOOL "")
+set(OMR_PORT_NUMA_SUPPORT ON CACHE BOOL "")
+
+include("${CMAKE_CURRENT_LIST_DIR}/linux.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/common.cmake")

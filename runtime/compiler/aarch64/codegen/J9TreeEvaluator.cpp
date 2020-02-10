@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019, 2019 IBM Corp. and others
+ * Copyright (c) 2019, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -204,9 +204,9 @@ J9::ARM64::TreeEvaluator::awrtbarEvaluator(TR::Node *node, TR::CodeGenerator *cg
 
    TR::Register *sourceRegister;
    bool killSource = false;
-   bool needSync = (node->getSymbolReference()->getSymbol()->isSyncVolatile() && TR::Compiler->target.isSMP());
+   bool needSync = (node->getSymbolReference()->getSymbol()->isSyncVolatile() && cg->comp()->target().isSMP());
 
-   if (node->getSymbolReference()->getSymbol()->isShadow() && node->getSymbolReference()->getSymbol()->isOrdered() && TR::Compiler->target.isSMP())
+   if (node->getSymbolReference()->getSymbol()->isShadow() && node->getSymbolReference()->getSymbol()->isOrdered() && cg->comp()->target().isSMP())
       {
       needSync = true;
       }
@@ -253,12 +253,54 @@ J9::ARM64::TreeEvaluator::awrtbariEvaluator(TR::Node *node, TR::CodeGenerator *c
    TR::Node *secondChild = node->getSecondChild();
    TR::Register *sourceRegister;
    bool killSource = false;
-   // assuming usingCompressedPointers is always false for now
-   bool needSync = (node->getSymbolReference()->getSymbol()->isSyncVolatile() && TR::Compiler->target.isSMP());
+   bool usingCompressedPointers = false;
+   bool needSync = (node->getSymbolReference()->getSymbol()->isSyncVolatile() && cg->comp()->target().isSMP());
 
-   if (node->getSymbolReference()->getSymbol()->isShadow() && node->getSymbolReference()->getSymbol()->isOrdered() && TR::Compiler->target.isSMP())
+   if (node->getSymbolReference()->getSymbol()->isShadow() && node->getSymbolReference()->getSymbol()->isOrdered() && cg->comp()->target().isSMP())
       {
       needSync = true;
+      }
+
+   if (comp->useCompressedPointers() && (node->getSymbolReference()->getSymbol()->getDataType() == TR::Address) && (node->getSecondChild()->getDataType() != TR::Address))
+      {
+      // pattern match the sequence
+      //     awrtbari f    awrtbari f         <- node
+      //       aload O       aload O
+      //     value           l2i
+      //                       lshr         <- translatedNode
+      //                         lsub
+      //                           a2l
+      //                             value   <- secondChild
+      //                           lconst HB
+      //                         iconst shftKonst
+      //
+      // -or- if the field is known to be null or usingLowMemHeap
+      // awrtbari f
+      //    aload O
+      //    l2i
+      //      a2l
+      //        value  <- secondChild
+      //
+      TR::Node *translatedNode = secondChild;
+      if (translatedNode->getOpCode().isConversion())
+         translatedNode = translatedNode->getFirstChild();
+      if (translatedNode->getOpCode().isRightShift()) // optional
+         translatedNode = translatedNode->getFirstChild();
+
+      bool usingLowMemHeap = false;
+      if (TR::Compiler->vm.heapBaseAddress() == 0 || secondChild->isNull())
+         usingLowMemHeap = true;
+
+      if (translatedNode->getOpCode().isSub() || usingLowMemHeap)
+         usingCompressedPointers = true;
+
+      if (usingCompressedPointers)
+         {
+         while (secondChild->getNumChildren() && secondChild->getOpCodeValue() != TR::a2l)
+            secondChild = secondChild->getFirstChild();
+         if (secondChild->getNumChildren())
+            secondChild = secondChild->getFirstChild();
+         }
       }
 
    if (secondChild->getReferenceCount() > 1 && secondChild->getRegister() != NULL)
@@ -279,12 +321,16 @@ J9::ARM64::TreeEvaluator::awrtbariEvaluator(TR::Node *node, TR::CodeGenerator *c
       sourceRegister = cg->evaluate(secondChild);
       }
 
-   TR::MemoryReference *tempMR = new (cg->trHeapMemory()) TR::MemoryReference(node, TR::Compiler->om.sizeofReferenceAddress(), cg);
+   TR::InstOpCode::Mnemonic storeOp = usingCompressedPointers ? TR::InstOpCode::strimmw : TR::InstOpCode::strimmx;
+   TR::Register *translatedSrcReg = usingCompressedPointers ? cg->evaluate(node->getSecondChild()) : sourceRegister;
+   int32_t sizeofMR = usingCompressedPointers ? TR::Compiler->om.sizeofReferenceField() : TR::Compiler->om.sizeofReferenceAddress();
+
+   TR::MemoryReference *tempMR = new (cg->trHeapMemory()) TR::MemoryReference(node, sizeofMR, cg);
 
    if (needSync)
       generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, 0xE);
 
-   generateMemSrc1Instruction(cg,TR::InstOpCode::strimmx, node, tempMR, sourceRegister);
+   generateMemSrc1Instruction(cg, storeOp, node, tempMR, translatedSrcReg);
 
    wrtbarEvaluator(node, sourceRegister, destinationRegister, secondChild->isNonNull(), true, cg);
 
@@ -294,6 +340,9 @@ J9::ARM64::TreeEvaluator::awrtbariEvaluator(TR::Node *node, TR::CodeGenerator *c
    cg->decReferenceCount(node->getSecondChild());
    cg->decReferenceCount(node->getChild(2));
    tempMR->decNodeReferenceCounts(cg);
+
+   if (comp->useCompressedPointers())
+      node->setStoreAlreadyEvaluated(true);
 
    return NULL;
    }
@@ -335,11 +384,61 @@ J9::ARM64::TreeEvaluator::DIVCHKEvaluator(TR::Node *node, TR::CodeGenerator *cg)
 TR::Register *
 J9::ARM64::TreeEvaluator::monexitEvaluator(TR::Node *node, TR::CodeGenerator *cg)
    {
-   TR::ILOpCodes opCode = node->getOpCodeValue();
-   TR::Node::recreate(node, TR::call);
-   TR::Register *targetRegister = directCallEvaluator(node, cg);
-   TR::Node::recreate(node, opCode);
-   return targetRegister;
+   TR::Compilation *comp = TR::comp();
+   TR_J9VMBase *fej9 = (TR_J9VMBase *)(cg->fe());
+   int32_t lwOffset = fej9->getByteOffsetToLockword(cg->getMonClass(node));
+   TR::InstOpCode::Mnemonic op;
+
+   if (comp->getOption(TR_OptimizeForSpace) ||
+       comp->getOption(TR_FullSpeedDebug) ||
+       comp->getOption(TR_DisableInlineMonEnt) ||
+       lwOffset <= 0)
+      {
+      TR::ILOpCodes opCode = node->getOpCodeValue();
+      TR::Node::recreate(node, TR::call);
+      TR::Register *targetRegister = directCallEvaluator(node, cg);
+      TR::Node::recreate(node, opCode);
+      return targetRegister;
+      }
+
+   TR::Node *objNode = node->getFirstChild();
+   TR::Register *objReg = cg->evaluate(objNode);
+   TR::Register *dataReg = cg->allocateRegister();
+   TR::Register *addrReg = cg->allocateRegister();
+   TR::Register *tempReg = cg->allocateRegister();
+   TR::Register *metaReg = cg->getMethodMetaDataRegister();
+
+   TR::RegisterDependencyConditions *deps = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(4, 4, cg->trMemory());
+   TR::addDependency(deps, objReg, TR::RealRegister::x0, TR_GPR, cg);
+   TR::addDependency(deps, dataReg, TR::RealRegister::NoReg, TR_GPR, cg);
+   TR::addDependency(deps, addrReg, TR::RealRegister::NoReg, TR_GPR, cg);
+   TR::addDependency(deps, tempReg, TR::RealRegister::NoReg, TR_GPR, cg);
+
+   TR::LabelSymbol *callLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+   TR::LabelSymbol *decLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+   TR::LabelSymbol *doneLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+
+   generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addimmx, node, addrReg, objReg, lwOffset);
+   op = fej9->generateCompressedLockWord() ? TR::InstOpCode::ldrimmw : TR::InstOpCode::ldrimmx;
+   generateTrg1MemInstruction(cg, op, node, dataReg, new (cg->trHeapMemory()) TR::MemoryReference(addrReg, (int32_t)0, cg));
+   generateCompareInstruction(cg, node, dataReg, metaReg, true);
+
+   generateConditionalBranchInstruction(cg, TR::InstOpCode::b_cond, node, decLabel, TR::CC_NE);
+
+   generateTrg1ImmInstruction(cg, TR::InstOpCode::movzx, node, tempReg, 0);
+   generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, 0xF); // dmb SY
+   op = fej9->generateCompressedLockWord() ? TR::InstOpCode::strimmw : TR::InstOpCode::strimmx;
+   generateMemSrc1Instruction(cg, op, node, new (cg->trHeapMemory()) TR::MemoryReference(addrReg, (int32_t)0, cg), tempReg);
+
+   generateLabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, deps);
+
+   TR::Snippet *snippet = new (cg->trHeapMemory()) TR::ARM64MonitorExitSnippet(cg, node, decLabel, callLabel, doneLabel);
+   cg->addSnippet(snippet);
+   doneLabel->setEndInternalControlFlow();
+
+   cg->decReferenceCount(objNode);
+   cg->machine()->setLinkRegisterKilled(true);
+   return NULL;
    }
 
 TR::Register *
@@ -488,11 +587,63 @@ J9::ARM64::TreeEvaluator::anewArrayEvaluator(TR::Node *node, TR::CodeGenerator *
 TR::Register *
 J9::ARM64::TreeEvaluator::monentEvaluator(TR::Node *node, TR::CodeGenerator *cg)
    {
-   TR::ILOpCodes opCode = node->getOpCodeValue();
-   TR::Node::recreate(node, TR::call);
-   TR::Register *targetRegister = directCallEvaluator(node, cg);
-   TR::Node::recreate(node, opCode);
-   return targetRegister;
+   TR::Compilation *comp = TR::comp();
+   TR_J9VMBase *fej9 = (TR_J9VMBase *)(cg->fe());
+   int32_t lwOffset = fej9->getByteOffsetToLockword(cg->getMonClass(node));
+   TR::InstOpCode::Mnemonic op;
+
+   if (comp->getOption(TR_OptimizeForSpace) ||
+       comp->getOption(TR_FullSpeedDebug) ||
+       comp->getOption(TR_DisableInlineMonEnt) ||
+       lwOffset <= 0)
+      {
+      TR::ILOpCodes opCode = node->getOpCodeValue();
+      TR::Node::recreate(node, TR::call);
+      TR::Register *targetRegister = directCallEvaluator(node, cg);
+      TR::Node::recreate(node, opCode);
+      return targetRegister;
+      }
+
+   TR::Node *objNode = node->getFirstChild();
+   TR::Register *objReg = cg->evaluate(objNode);
+   TR::Register *dataReg = cg->allocateRegister();
+   TR::Register *addrReg = cg->allocateRegister();
+   TR::Register *tempReg = cg->allocateRegister();
+   TR::Register *metaReg = cg->getMethodMetaDataRegister();
+
+   TR::RegisterDependencyConditions *deps = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(4, 4, cg->trMemory());
+   TR::addDependency(deps, objReg, TR::RealRegister::x0, TR_GPR, cg);
+   TR::addDependency(deps, dataReg, TR::RealRegister::NoReg, TR_GPR, cg);
+   TR::addDependency(deps, addrReg, TR::RealRegister::NoReg, TR_GPR, cg);
+   TR::addDependency(deps, tempReg, TR::RealRegister::NoReg, TR_GPR, cg);
+
+   TR::LabelSymbol *callLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+   TR::LabelSymbol *incLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+   TR::LabelSymbol *loopLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+   TR::LabelSymbol *doneLabel = TR::LabelSymbol::create(cg->trHeapMemory(),cg);
+
+   generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addimmx, node, addrReg, objReg, lwOffset); // ldxr/stxr instructions does not take immediate offset
+   generateLabelInstruction(cg, TR::InstOpCode::label, node, loopLabel);
+
+   op = fej9->generateCompressedLockWord() ? TR::InstOpCode::ldxrw : TR::InstOpCode::ldxrx;
+   generateTrg1MemInstruction(cg, op, node, dataReg, new (cg->trHeapMemory()) TR::MemoryReference(addrReg, (int32_t)0, cg));
+   generateCompareBranchInstruction(cg, TR::InstOpCode::cbnzx, node, dataReg, incLabel, NULL);
+
+   op = fej9->generateCompressedLockWord() ? TR::InstOpCode::stxrw : TR::InstOpCode::stxrx;
+   generateTrg1MemSrc1Instruction(cg, op, node, tempReg, new (cg->trHeapMemory()) TR::MemoryReference(addrReg, (int32_t)0, cg), metaReg);
+   generateCompareBranchInstruction(cg, TR::InstOpCode::cbnzx, node, tempReg, loopLabel, NULL);
+
+   generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, 0xF); // dmb SY
+
+   generateLabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, deps);
+
+   TR::Snippet *snippet = new (cg->trHeapMemory()) TR::ARM64MonitorEnterSnippet(cg, node, incLabel, callLabel, doneLabel);
+   cg->addSnippet(snippet);
+   doneLabel->setEndInternalControlFlow();
+
+   cg->decReferenceCount(objNode);
+   cg->machine()->setLinkRegisterKilled(true);
+   return NULL;
    }
 
 TR::Register *
@@ -674,29 +825,102 @@ static void VMoutlinedHelperWrtbarEvaluator(TR::Node *node, TR::Register *srcReg
 TR::Register *
 J9::ARM64::TreeEvaluator::ArrayStoreCHKEvaluator(TR::Node *node, TR::CodeGenerator *cg)
    {
-   TR::Node *wrtBarNode = node->getFirstChild();
-   TR::Node *srcNode = wrtBarNode->getSecondChild();
-   TR::Node *dstNode = wrtBarNode->getThirdChild();
-   TR::Register *srcReg = cg->evaluate(srcNode);
-   TR::Register *dstReg = cg->evaluate(dstNode);
+   TR::Compilation *comp = cg->comp();
+   TR::Node *firstChild = node->getFirstChild();
+   TR::Node *sourceChild = firstChild->getSecondChild();
+   TR::Node *dstNode = firstChild->getThirdChild();
 
-   if (!srcNode->isNull())
+   bool usingCompressedPointers = false;
+   if (comp->useCompressedPointers() && firstChild->getOpCode().isIndirect())
+      {
+      // pattern match the sequence
+      // ArrayStoreCHK     ArrayStoreCHK
+      //   awrtbari          awrtbari               <- firstChild
+      //     aladd             aladd
+      //       ...               ...
+      //     value             l2i
+      //     aload               lshr
+      //                           lsub
+      //                             a2l
+      //                               value        <- sourceChild
+      //                             lconst HB
+      //                           iconst shftKonst
+      //                       aload                <- dstNode
+      //
+      // -or- if the value is known to be null
+      // ArrayStoreCHK
+      //    awrtbari
+      //      aladd
+      //        ...
+      //      l2i
+      //        a2l
+      //          value  <- sourceChild
+      //      aload      <- dstNode
+      //
+      TR::Node *translatedNode = sourceChild;
+      if (translatedNode->getOpCode().isConversion())
+         translatedNode = translatedNode->getFirstChild();
+      if (translatedNode->getOpCode().isRightShift()) // optional
+         translatedNode = translatedNode->getFirstChild();
+
+      bool usingLowMemHeap = false;
+      if (TR::Compiler->vm.heapBaseAddress() == 0 || sourceChild->isNull())
+         usingLowMemHeap = true;
+
+      if ((translatedNode->getOpCode().isSub()) || usingLowMemHeap)
+         usingCompressedPointers = true;
+
+      if (usingCompressedPointers)
+         {
+         while ((sourceChild->getNumChildren() > 0) && (sourceChild->getOpCodeValue() != TR::a2l))
+            sourceChild = sourceChild->getFirstChild();
+         if (sourceChild->getOpCodeValue() == TR::a2l)
+            sourceChild = sourceChild->getFirstChild();
+         }
+      }
+
+   TR::Register *srcReg;
+   TR::Register *dstReg = cg->evaluate(dstNode);
+   bool stopUsingSrc = false;
+   if (sourceChild->getReferenceCount() > 1 && (srcReg = sourceChild->getRegister()) != NULL)
+      {
+      TR::Register *tempReg = cg->allocateCollectedReferenceRegister();
+
+      // Source must be an object.
+      TR_ASSERT(!srcReg->containsInternalPointer(), "Stored value is an internal pointer");
+      generateMovInstruction(cg, node, tempReg, srcReg);
+      srcReg = tempReg;
+      stopUsingSrc = true;
+      }
+   else
+      {
+      srcReg = cg->evaluate(sourceChild);
+      }
+   if (!sourceChild->isNull())
       {
       VMoutlinedHelperArrayStoreCHKEvaluator(node, srcReg, dstReg, cg);
       }
+   TR::InstOpCode::Mnemonic storeOp = usingCompressedPointers ? TR::InstOpCode::strimmw : TR::InstOpCode::strimmx;
+   TR::Register *translatedSrcReg = usingCompressedPointers ? cg->evaluate(firstChild->getSecondChild()) : srcReg;
+   int32_t sizeofMR = usingCompressedPointers ? TR::Compiler->om.sizeofReferenceField() : TR::Compiler->om.sizeofReferenceAddress();
 
-   TR::MemoryReference *storeMR = new (cg->trHeapMemory()) TR::MemoryReference(wrtBarNode, TR::Compiler->om.sizeofReferenceAddress(), cg);
-   generateMemSrc1Instruction(cg, TR::InstOpCode::strimmx, node, storeMR, srcReg);
+   TR::MemoryReference *storeMR = new (cg->trHeapMemory()) TR::MemoryReference(firstChild, sizeofMR, cg);
+   generateMemSrc1Instruction(cg, storeOp, node, storeMR, translatedSrcReg);
 
-   if (!srcNode->isNull())
+   if (!sourceChild->isNull())
       {
-      VMoutlinedHelperWrtbarEvaluator(wrtBarNode, srcReg, dstReg, cg);
+      VMoutlinedHelperWrtbarEvaluator(firstChild, srcReg, dstReg, cg);
       }
 
-   cg->decReferenceCount(srcNode);
+   if (comp->useCompressedPointers() && firstChild->getOpCode().isIndirect())
+      firstChild->setStoreAlreadyEvaluated(true);
+
+   cg->decReferenceCount(firstChild->getSecondChild());
    cg->decReferenceCount(dstNode);
    storeMR->decNodeReferenceCounts(cg);
-   cg->decReferenceCount(wrtBarNode);
+   cg->decReferenceCount(firstChild);
+   if (stopUsingSrc)
+      cg->stopUsingRegister(srcReg);
 
    return NULL;
    }
@@ -842,6 +1066,72 @@ TR::Instruction *J9::ARM64::TreeEvaluator::generateVFTMaskInstruction(TR::CodeGe
    return J9::ARM64::TreeEvaluator::generateVFTMaskInstruction(cg, node, reg, reg, preced);
    }
 
+TR::Register *
+J9::ARM64::TreeEvaluator::loadaddrEvaluator(TR::Node *node, TR::CodeGenerator *cg)
+   {
+   TR::Register *resultReg;
+   TR::Symbol *sym = node->getSymbol();
+   TR::Compilation *comp = cg->comp();
+   TR::MemoryReference *mref = new (cg->trHeapMemory()) TR::MemoryReference(node, node->getSymbolReference(), 0, cg);
+
+   if (mref->getUnresolvedSnippet() != NULL)
+      {
+      resultReg = sym->isLocalObject() ? cg->allocateCollectedReferenceRegister() : cg->allocateRegister();
+      if (mref->useIndexedForm())
+         {
+         TR_ASSERT(false, "Unresolved indexed snippet is not supported");
+         }
+      else
+         {
+         generateTrg1MemInstruction(cg, TR::InstOpCode::addx, node, resultReg, mref);
+         }
+      }
+   else
+      {
+      if (mref->useIndexedForm())
+         {
+         resultReg = sym->isLocalObject() ? cg->allocateCollectedReferenceRegister() : cg->allocateRegister();
+         generateTrg1Src2Instruction(cg, TR::InstOpCode::addx, node, resultReg, mref->getBaseRegister(), mref->getIndexRegister());
+         }
+      else
+         {
+         int32_t offset = mref->getOffset();
+         if (mref->hasDelayedOffset() || offset != 0)
+            {
+            resultReg = sym->isLocalObject() ? cg->allocateCollectedReferenceRegister() : cg->allocateRegister();
+            if (mref->hasDelayedOffset())
+               {
+               generateTrg1MemInstruction(cg, TR::InstOpCode::addimmx, node, resultReg, mref);
+               }
+            else
+               {
+               if (offset >= 0 && constantIsUnsignedImm12(offset))
+                  {
+                  generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addimmx, node, resultReg, mref->getBaseRegister(), offset);
+                  }
+               else
+                  {
+                  loadConstant64(cg, node, offset, resultReg);
+                  generateTrg1Src2Instruction(cg, TR::InstOpCode::addx, node, resultReg, mref->getBaseRegister(), resultReg);
+                  }
+               }
+            }
+         else
+            {
+            resultReg = mref->getBaseRegister();
+            if (resultReg == cg->getMethodMetaDataRegister())
+               {
+               resultReg = cg->allocateRegister();
+               generateMovInstruction(cg, node, resultReg, mref->getBaseRegister());
+               }
+            }
+         }
+      }
+   node->setRegister(resultReg);
+   mref->decNodeReferenceCounts(cg);
+   return resultReg;
+   }
+
 TR::Register *J9::ARM64::TreeEvaluator::fremHelper(TR::Node *node, TR::CodeGenerator *cg, bool isSinglePrecision)
    {
    TR::Register *trgReg      = isSinglePrecision ? cg->allocateSinglePrecisionRegister() : cg->allocateRegister(TR_FPR);
@@ -949,9 +1239,8 @@ J9::ARM64::TreeEvaluator::evaluateNULLCHKWithPossibleResolve(TR::Node *node, boo
    TR::ILOpCode &opCode = firstChild->getOpCode();
    TR::Node *reference = NULL;
    TR::Compilation *comp = cg->comp();
-   bool useCompressedPointers = comp->useCompressedPointers();
 
-   if (useCompressedPointers && firstChild->getOpCodeValue() == TR::l2a)
+   if (comp->useCompressedPointers() && firstChild->getOpCodeValue() == TR::l2a)
       {
       TR::ILOpCodes loadOp = cg->comp()->il.opCodeForIndirectLoad(TR::Int32);
       TR::ILOpCodes rdbarOp = cg->comp()->il.opCodeForIndirectReadBarrier(TR::Int32);
@@ -971,10 +1260,26 @@ J9::ARM64::TreeEvaluator::evaluateNULLCHKWithPossibleResolve(TR::Node *node, boo
    TR::Snippet *snippet = new (cg->trHeapMemory()) TR::ARM64HelperCallSnippet(cg, node, snippetLabel, node->getSymbolReference(), NULL);
    cg->addSnippet(snippet);
    TR::Register *referenceReg = cg->evaluate(reference);
-   TR::InstOpCode::Mnemonic compareOp = useCompressedPointers ? TR::InstOpCode::cbzw : TR::InstOpCode::cbzx;
-   TR::Instruction *cbzInstruction = generateCompareBranchInstruction(cg, compareOp, node, referenceReg, snippetLabel, NULL);
+   TR::Instruction *cbzInstruction = generateCompareBranchInstruction(cg, TR::InstOpCode::cbzx, node, referenceReg, snippetLabel, NULL);
    cbzInstruction->setNeedsGCMap(0xffffffff);
    snippet->gcMap().setGCRegisterMask(0xffffffff);
+
+   if (comp->useCompressedPointers()
+         && reference->getOpCodeValue() == TR::l2a)
+      {
+      TR::Node *n = reference->getFirstChild();
+      reference->setIsNonNull(true);
+      TR::ILOpCodes loadOp = cg->comp()->il.opCodeForIndirectLoad(TR::Int32);
+      TR::ILOpCodes rdbarOp = cg->comp()->il.opCodeForIndirectReadBarrier(TR::Int32);
+      while ((n->getOpCodeValue() != loadOp) && (n->getOpCodeValue() != rdbarOp))
+         {
+         n->setIsNonZero(true);
+         n = n->getFirstChild();
+         }
+      n->setIsNonZero(true);
+      }
+
+   reference->setIsNonNull(true);
 
    /*
    * If the first child is a load with a ref count of 1, just decrement the reference count on the child.
@@ -996,7 +1301,7 @@ J9::ARM64::TreeEvaluator::evaluateNULLCHKWithPossibleResolve(TR::Node *node, boo
       }
    else
       {
-      if (useCompressedPointers)
+      if (comp->useCompressedPointers())
          {
          bool fixRefCount = false;
          if (firstChild->getOpCode().isStoreIndirect()

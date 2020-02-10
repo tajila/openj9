@@ -1,4 +1,4 @@
-# Copyright (c) 2017, 2019 IBM Corp. and others
+# Copyright (c) 2017, 2020 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -37,8 +37,16 @@ ARG omr_repo=https://github.com/eclipse/openj9-omr.git
 
 RUN apt-get update \
   && apt-get install -qq -y --no-install-recommends \
+    g++-7 \
+    gcc-7 \
     libssl-dev \
   && rm -rf /var/lib/apt/lists/*
+
+# JITServer needs to be built with a newer GCC
+RUN ln -sf /usr/bin/g++ /usr/bin/c++ \
+ && ln -sf /usr/bin/g++-7 /usr/bin/g++ \
+ && ln -sf /usr/bin/gcc /usr/bin/cc \
+ && ln -sf /usr/bin/gcc-7 /usr/bin/gcc
 
 # Install protobuf
 WORKDIR /
@@ -62,5 +70,5 @@ RUN git clone https://github.com/ibmruntimes/openj9-openjdk-jdk8 \
 # We only need the jitserver executable
 FROM openj9:latest 
 COPY --from=jitserver_build /root/openj9-openjdk-jdk8/build/linux-x86_64-normal-server-release/images/j2sdk-image /root/j2sdk-image
-ENTRYPOINT ["/root/j2sdk-image/jre/bin/java", "-XX:StartAsJITServer", "-Xjit:verbose={JITServer}"]
+ENTRYPOINT ["/root/j2sdk-image/jre/bin/jitserver", "-Xjit:verbose={JITServer}"]
 EXPOSE 38400

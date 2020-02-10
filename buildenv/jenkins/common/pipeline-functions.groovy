@@ -216,12 +216,13 @@ def build(BUILD_JOB_NAME, OPENJDK_REPO, OPENJDK_BRANCH, OPENJDK_SHA, OPENJ9_REPO
     }
 }
 
-def build_with_one_upstream(JOB_NAME, UPSTREAM_JOB_NAME, UPSTREAM_JOB_NUMBER, NODE, OPENJ9_REPO, OPENJ9_BRANCH, OPENJ9_SHA, VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, EXTRA_OPTIONS) {
+def build_with_one_upstream(JOB_NAME, UPSTREAM_JOB_NAME, UPSTREAM_JOB_NUMBER, NODE, OPENJ9_REPO, OPENJ9_BRANCH, OPENJ9_SHA, VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, extraTestLabels, keepReportDir) {
     stage ("${JOB_NAME}") {
         return build_with_slack(JOB_NAME, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER,
             [string(name: 'UPSTREAM_JOB_NAME', value: UPSTREAM_JOB_NAME),
             string(name: 'UPSTREAM_JOB_NUMBER', value: "${UPSTREAM_JOB_NUMBER}"),
             string(name: 'LABEL', value: NODE),
+            string(name: 'LABEL_ADDITION', value: extraTestLabels),
             string(name: 'ADOPTOPENJDK_REPO', value: ADOPTOPENJDK_REPO),
             string(name: 'ADOPTOPENJDK_BRANCH', value: ADOPTOPENJDK_BRANCH),
             string(name: 'OPENJ9_REPO', value: OPENJ9_REPO),
@@ -233,17 +234,18 @@ def build_with_one_upstream(JOB_NAME, UPSTREAM_JOB_NAME, UPSTREAM_JOB_NUMBER, NO
             string(name: 'VENDOR_TEST_DIRS', value: VENDOR_TEST_DIRS),
             string(name: 'USER_CREDENTIALS_ID', value: USER_CREDENTIALS_ID),
             string(name: 'TEST_FLAG', value: TEST_FLAG),
+            string(name: 'KEEP_REPORTDIR', value: keepReportDir),
             string(name: 'BUILD_IDENTIFIER', value: BUILD_IDENTIFIER),
-            booleanParam(name: 'IS_PARALLEL', value: IS_PARALLEL),
-            string(name: 'EXTRA_OPTIONS', value: EXTRA_OPTIONS)])
+            booleanParam(name: 'IS_PARALLEL', value: IS_PARALLEL)])
 
     }
 }
 
-def build_with_artifactory(JOB_NAME, NODE, OPENJ9_REPO, OPENJ9_BRANCH, OPENJ9_SHA, VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, CUSTOMIZED_SDK_URL, ARTIFACTORY_CREDS, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, EXTRA_OPTIONS) {
+def build_with_artifactory(JOB_NAME, NODE, OPENJ9_REPO, OPENJ9_BRANCH, OPENJ9_SHA, VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, CUSTOMIZED_SDK_URL, ARTIFACTORY_CREDS, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, extraTestLabels, keepReportDir) {
     stage ("${JOB_NAME}") {
         return build_with_slack(JOB_NAME, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER,
             [string(name: 'LABEL', value: NODE),
+            string(name: 'LABEL_ADDITION', value: extraTestLabels),
             string(name: 'ADOPTOPENJDK_REPO', value: ADOPTOPENJDK_REPO),
             string(name: 'ADOPTOPENJDK_BRANCH', value: ADOPTOPENJDK_BRANCH),
             string(name: 'OPENJ9_REPO', value: OPENJ9_REPO),
@@ -257,9 +259,9 @@ def build_with_artifactory(JOB_NAME, NODE, OPENJ9_REPO, OPENJ9_BRANCH, OPENJ9_SH
             string(name: 'CUSTOMIZED_SDK_URL', value: CUSTOMIZED_SDK_URL),
             string(name: 'CUSTOMIZED_SDK_URL_CREDENTIAL_ID', value: ARTIFACTORY_CREDS),
             string(name: 'TEST_FLAG', value: TEST_FLAG),
+            string(name: 'KEEP_REPORTDIR', value: keepReportDir),
             string(name: 'BUILD_IDENTIFIER', value: BUILD_IDENTIFIER),
-            booleanParam(name: 'IS_PARALLEL', value: IS_PARALLEL),
-            string(name: 'EXTRA_OPTIONS', value: EXTRA_OPTIONS)])
+            booleanParam(name: 'IS_PARALLEL', value: IS_PARALLEL)])
     }
 }
 
@@ -403,9 +405,8 @@ def workflow(SDK_VERSION, SPEC, SHAS, OPENJDK_REPO, OPENJDK_BRANCH, OPENJ9_REPO,
         cleanup_artifactory(ARTIFACTORY_MANUAL_CLEANUP, BUILD_JOB_NAME, ARTIFACTORY_SERVER, ARTIFACTORY_REPO, ARTIFACTORY_NUM_ARTIFACTS)
     }
 
-    if (TESTS_TARGETS.trim() != "none") {
+    if (TARGET_NAMES) {
         def testjobs = [:]
-        def TARGET_NAMES = get_test_target_names()
 
         if (SHAS['VENDOR_TEST']) {
             // the downstream job is expecting comma separated SHAs
@@ -419,10 +420,12 @@ def workflow(SDK_VERSION, SPEC, SHAS, OPENJDK_REPO, OPENJDK_BRANCH, OPENJ9_REPO,
         if (params.ghprbPullId && params.ghprbGhRepository == 'eclipse/openj9' ) {
             SHAS['OPENJ9'] = "origin/pr/${params.ghprbPullId}/merge"
         }
+
         for (name in TARGET_NAMES) {
+            target = get_target_name(name)
             // Checking to see if the test should be excluded
-            if (EXCLUDED_TESTS.contains(get_target_name(name))){
-                echo "The '${name}' test suite will be excluded"
+            if (EXCLUDED_TESTS.contains(target)){
+                echo "The '${target}' test suite will be excluded"
                 continue
             }
             // Add a TEST_FLAG to a specific target if one was passed with the test target. Eg. sanity.functional+aot
@@ -431,30 +434,26 @@ def workflow(SDK_VERSION, SPEC, SHAS, OPENJDK_REPO, OPENJDK_BRANCH, OPENJ9_REPO,
                 TEST_FLAG = (TEST_FLAG) ? TEST_FLAG + ',' + temp_test_flag : temp_test_flag
             }
             echo "TEST_FLAG:'${TEST_FLAG}'"
-            def TEST_JOB_NAME = get_test_job_name(get_target_name(name), SPEC, SDK_VERSION, BUILD_IDENTIFIER)
+
+            def extraTestLabels = EXTRA_TEST_LABELS[target]
+            def keepReportDir = TEST_KEEP_REPORTDIR[target]
+            echo "Target:'${target}' extraTestLabels:'${extraTestLabels}', keepReportDir:'${keepReportDir}'"
+
+            def TEST_JOB_NAME = get_test_job_name(target, SPEC, SDK_VERSION, BUILD_IDENTIFIER)
 
             def IS_PARALLEL = false
             if (TEST_JOB_NAME.contains("special.system")){
                 IS_PARALLEL = true
             }
-
-            def EXTRA_OPTIONS = ""
-            if (TEST_JOB_NAME.contains("jck")){
-                EXTRA_OPTIONS = "-Xfuture"
-                if (TEST_JOB_NAME.contains("next")){
-                    EXTRA_OPTIONS += " --enable-preview"
-                }
-            }
-
             testjobs["${TEST_JOB_NAME}"] = {
                 if (params.ghprbPullId) {
                     cancel_running_builds(TEST_JOB_NAME, BUILD_IDENTIFIER)
                 }
                 if (ARTIFACTORY_CREDS) {
                     cleanup_artifactory(ARTIFACTORY_MANUAL_CLEANUP, TEST_JOB_NAME, ARTIFACTORY_SERVER, ARTIFACTORY_REPO, ARTIFACTORY_NUM_ARTIFACTS)
-                    jobs["${TEST_JOB_NAME}"] = build_with_artifactory(TEST_JOB_NAME, TEST_NODE, OPENJ9_REPO, OPENJ9_BRANCH, SHAS['OPENJ9'], VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, CUSTOMIZED_SDK_URL, ARTIFACTORY_CREDS, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, EXTRA_OPTIONS)
+                    jobs["${TEST_JOB_NAME}"] = build_with_artifactory(TEST_JOB_NAME, TEST_NODE, OPENJ9_REPO, OPENJ9_BRANCH, SHAS['OPENJ9'], VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, CUSTOMIZED_SDK_URL, ARTIFACTORY_CREDS, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, extraTestLabels, keepReportDir)
                 } else {
-                    jobs["${TEST_JOB_NAME}"] = build_with_one_upstream(TEST_JOB_NAME, BUILD_JOB_NAME, jobs["build"].getNumber(), TEST_NODE, OPENJ9_REPO, OPENJ9_BRANCH, SHAS['OPENJ9'], VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, EXTRA_OPTIONS)
+                    jobs["${TEST_JOB_NAME}"] = build_with_one_upstream(TEST_JOB_NAME, BUILD_JOB_NAME, jobs["build"].getNumber(), TEST_NODE, OPENJ9_REPO, OPENJ9_BRANCH, SHAS['OPENJ9'], VENDOR_TEST_REPOS, VENDOR_TEST_BRANCHES, VENDOR_TEST_SHAS, VENDOR_TEST_DIRS, USER_CREDENTIALS_ID, TEST_FLAG, BUILD_IDENTIFIER, ghprbGhRepository, ghprbActualCommit, GITHUB_SERVER, ADOPTOPENJDK_REPO, ADOPTOPENJDK_BRANCH, IS_PARALLEL, extraTestLabels, keepReportDir)
                 }
             }
         }
@@ -468,36 +467,11 @@ def workflow(SDK_VERSION, SPEC, SHAS, OPENJDK_REPO, OPENJDK_BRANCH, OPENJ9_REPO,
     return jobs
 }
 
-def get_test_target_names() {
-    def targetNames = []
-
-    if (TESTS_TARGETS && TESTS_TARGETS.trim() != 'none') {
-        for (target in TESTS_TARGETS.trim().replaceAll("\\s","").toLowerCase().tokenize(',')) {
-            if (VARIABLES.tests_targets && VARIABLES.tests_targets."${target}") {
-                // we might be dealing with a map or a list depending if the variables file has been updated
-                // to use inheritance or not
-                def test_target_names =  VARIABLES.tests_targets."${target}"
-                switch(test_target_names){
-                case Map:
-                    targetNames.addAll(test_target_names.keySet())
-                default:
-                    targetNames.addAll(test_target_names)
-                }
-            } else {
-                targetNames.add(target)
-            }
-        }
-    }
-
-    return targetNames
-}
-
 def get_target_name(name) {
     if (name.contains('+')) {
         name = name.substring(0, name.indexOf('+'))
     }
-
-    return name
+    return name.toString()
 }
 
 def get_build_job_name(spec, version, identifier) {
@@ -588,7 +562,7 @@ def get_downstream_job_names(spec, version, identifier) {
     downstreamJobNames = [:]
     downstreamJobNames.put('build', get_build_job_name(spec, version, identifier))
 
-    for (target in get_test_target_names().sort()) {
+    for (target in TARGET_NAMES.sort()) {
         target = get_target_name(target)
         downstreamJobNames.put(target, get_test_job_name(target, spec, version, identifier))
     }
