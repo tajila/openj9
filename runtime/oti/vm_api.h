@@ -35,6 +35,7 @@
 #include "j9comp.h"
 #include "jni.h"
 #include "omrthread.h"
+#include "SnapshotFileFormat.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,7 @@ extern "C" {
 #define J9_CREATEJAVAVM_ARGENCODING_UTF8 4
 #define J9_CREATEJAVAVM_ARGENCODING_PLATFORM 8
 #define J9_CREATEJAVAVM_START_JITSERVER 16
+#define J9_CREATEJAVAVM_RAM_CACHE 32
 
 typedef struct J9CreateJavaVMParams {
 	UDATA j2seVersion;
@@ -54,6 +56,9 @@ typedef struct J9CreateJavaVMParams {
 	J9JavaVM **globalJavaVM;
 	J9PortLibrary *portLibrary;
 	UDATA flags;
+#if defined(J9VM_OPT_SNAPSHOTS)
+	const char *ramCache;
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 } J9CreateJavaVMParams;
 
 /* ---------------- FastJNI.cpp ---------------- */
@@ -959,6 +964,9 @@ growJavaStack(J9VMThread * vmThread, UDATA newStackSize);
 */
 void
 initializeMethodRunAddress(J9VMThread *vmThread, J9Method *method);
+
+void
+initializeMethodRunAddressImpl(J9VMThread *vmThread, J9Method *method, BOOLEAN runHook);
 
 
 /**
@@ -3112,6 +3120,13 @@ findMemorySegment(J9JavaVM *javaVM, J9MemorySegmentList *segmentList, UDATA valu
 J9MemorySegmentList *
 allocateMemorySegmentListWithFlags(J9JavaVM * javaVM, U_32 numberOfMemorySegments, UDATA flags, U_32 memoryCategory);
 
+/**
+ * @breif Allocate segment in segment list
+ *
+ * @param currentMemorySegmentList
+ */
+J9MemorySegment *
+allocateMemorySegmentListEntry(J9MemorySegmentList *segmentList);
 
 /* ---------------- statistics.c ---------------- */
 /**
@@ -4626,6 +4641,144 @@ void
 throwNativeOOMError(JNIEnv *env, U_32 moduleName, U_32 messageNumber);
 void
 throwNewJavaIoIOException(JNIEnv *env, const char *message);
+
+/* VMSnapshotImpl C wrappers */
+
+/**
+ * Allocate memory in image heap
+ *
+ * @param portLibrary[in] the default port library
+ * @param byteAmount[in] size to allocate
+ * @param callSite[in] location memory allocation is called from
+ * @param category[in] category of memory allocation
+ *
+ * @return pointer to allocated memory on success, NULL on failure
+ */
+void* image_mem_allocate_memory(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category);
+
+/**
+ * Free memory in heap image
+ *
+ * @param portLibrary[in] the default port library
+ * @param memoryPointer[in] pointer of address to free
+ */
+void image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPointer);
+
+/**
+ * Creates and allocates the jvm image and its' heap
+ *
+ * @param javaVM[in] the java vm
+ *
+ * @return 0 on fail, 1 on success
+ */
+void *
+initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isColdRun, const char* ramCache);
+
+/**
+ * Initialize VMSnapshotImpl
+ *
+ * @param VMSnapshotImpl[in] jvmImage
+ * @param javaVM[in] vm token
+ */
+void
+setupVMSnapshotImpl(void *jvmImage, J9JavaVM *vm);
+
+/**
+ * Retrieve javaVM from JVm image
+ *
+ * @param VMSnapshotImpl[in] jvmImage
+ * @return vm token
+ */
+J9JavaVM *
+getJ9JavaVMFromVMSnapshotImpl(void *jvmImage);
+
+/**
+ * Retrieve jvmImage portlib from JVM image
+ *
+ * @param VMSnapshotImpl[in] jvmImage
+ * @return portlib
+ */
+VMSnapshotImplPortLibrary *
+getPortLibraryFromVMSnapshotImpl(void *vmSnapshotImpl);
+
+/**
+ * Initializes class object. Mimics behaviour of internalCreateRAMClass
+ *
+ * @param javaVM[in] the java vm
+ * @param classLoader the class loader loading the class
+ * @param clazz the class being loader
+ *
+ * @return class object if object allocation passes otherwise null
+ */
+J9Class* initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLoader, J9Class *clazz);
+
+/**
+ * Initializes class loader object. Mimics behaviour of internalAllocateClassLoader
+ *
+ * @param javaVM[in] the java vm
+ * @param classLoader[in] the J9ClassLoader struct
+ * @param classLoaderObject[in] unwrapped class loader object ref
+ */
+void initializeImageClassLoaderObject(J9JavaVM *javaVM, J9ClassLoader *classLoader, j9object_t classLoaderObject);
+
+/**
+ * Shut down sequence of VMSnapshotImpl
+ * Frees memory of heap variables and vmsnapshotimpl instance
+ *
+ *
+ * @param vmSnapshotImplPortLibrary[in] the vmSnapshotImplPortLibrary
+ */
+void shutdownVMSnapshotImpl(VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary);
+
+/**
+ * Called on cold run to perform fixup of the image heap memory
+ * Fixup of J9Class, J9ClassLoader, and J9CPEntry performed. Also
+ * writes the JVM state to the image.
+ *
+ *
+ *
+ * @param javaVM[in] the java vm
+ */
+void teardownVMSnapshotImpl(J9JavaVM *javaVM);
+
+/**
+ * Stores the JavaVM initial methods in snapshotheader. Done for cold runs.
+ *
+ * @param javaVM[in] the java vm
+ * @param cInitialStaticMethod[in] the initial static method
+ * @param cInitialSpecialMethod[in] the initial special method
+ * @param cInitialVirtualMethod[in] the initial virtual method
+ */
+ void storeInitialVMMethods(J9JavaVM *javaVM, J9Method *cInitialStaticMethod, J9Method *cInitialSpecialMethod, J9Method *cInitialVirtualMethod);
+
+/**
+ * Sets JavaVM initial methods to address stored in snapshotheader. Needed for warm runs.
+ *
+ *
+ * @param javaVM[in] the java vm
+ * @param cInitialStaticMethod[in] the initial static method
+ * @param cInitialSpecialMethod[in] the initial special method
+ * @param cInitialVirtualMethod[in] the initial virtual method
+ */
+void setInitialVMMethods(J9JavaVM *javaVM, J9Method **cInitialStaticMethod, J9Method **cInitialSpecialMethod, J9Method **cInitialVirtualMethod);
+
+/**
+ * Run classload hooks and assign class object to J9Class
+ *
+ * @param[in] vmThread vmthread token
+ * @param[in] classLoader classloader of clazz
+ * @param[in] clazz clazz to be loaded
+ */
+BOOLEAN loadWarmClass(J9VMThread* vmThread, J9ClassLoader* classLoader, J9Class *clazz);
+
+/**
+ * Perform post-image fixups on J9Class
+ *
+ * @param[in] javaVM vm token
+ * @param[in[ clazz j9class to be initialized
+ */
+void initializeImageJ9Class(J9JavaVM *javaVM, J9Class *clazz);
+
 
 #ifdef __cplusplus
 }

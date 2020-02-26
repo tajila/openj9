@@ -27,6 +27,9 @@
 #include "omrlinkedlist.h"
 #include "j9protos.h"
 #include "j9port.h"
+#if defined(J9VM_OPT_SNAPSHOTS)
+#include "j9port_generated.h"
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 #include "omrthread.h"
 #include "j9user.h"
 #include "jimage.h"
@@ -84,8 +87,9 @@ freeClassLoaderEntries(J9VMThread * vmThread, J9ClassPathEntry * entries, UDATA 
 		cpEntry->pathLength = 0;
 		cpEntry++;
 	}
-	j9mem_free_memory(entries);
 
+	j9mem_free_memory(entries);
+	
 	Trc_VM_freeClassLoaderEntries_Exit(vmThread);
 }
 

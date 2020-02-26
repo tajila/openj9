@@ -374,6 +374,11 @@ J9InternalVMFunctions J9InternalFunctions = {
 #endif /* JAVA_SPEC_VERSION >= 11 */
 	areValueTypesEnabled,
 	peekClassHashTable,
+#if defined(J9VM_OPT_SNAPSHOTS)
+	initializeImageClassLoaderObject,
+	initializeImageClassObject,
+	loadWarmClass,
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 #if defined(J9VM_OPT_JITSERVER)
 	isJITServerEnabled,
 #endif /* J9VM_OPT_JITSERVER */

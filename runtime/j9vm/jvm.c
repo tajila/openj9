@@ -1237,6 +1237,9 @@ typedef struct J9SpecialArguments {
 	UDATA *argEncoding;
 	IDATA *ibmMallocTraceSet;
 	const char *executableJarPath;
+#if defined(J9VM_OPT_SNAPSHOTS)
+	char *ramCache;
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 } J9SpecialArguments;
 /**
  * Look for special options:
@@ -1283,6 +1286,11 @@ initialArgumentScan(JavaVMInitArgs *args, J9SpecialArguments *specialArgs)
 		} else if (0 == strcmp(args->options[argCursor].optionString, VMOPT_XARGENCODINGLATIN)) {
 			*(specialArgs->argEncoding) = ARG_ENCODING_LATIN;
 		}
+#if defined(J9VM_OPT_SNAPSHOTS)
+		else if (0 == strncmp(args->options[argCursor].optionString, VMOPT_XSNAPSHOT, sizeof(VMOPT_XSNAPSHOT) - 1)) {
+			specialArgs->ramCache = args->options[argCursor].optionString + strlen(VMOPT_XSNAPSHOT);
+		}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 	}
 
 	if ((NULL != classPathValue) && (NULL != javaCommandValue) && (strcmp(javaCommandValue, classPathValue) == 0)) {
@@ -1913,6 +1921,12 @@ JNI_CreateJavaVM_impl(JavaVM **pvm, void **penv, void *vm_args, BOOLEAN isJITSer
 	launcherArgumentsSize = initialArgumentScan(args, &specialArgs);
 	localVerboseLevel = specialArgs.localVerboseLevel;
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (NULL != specialArgs.ramCache) {
+		createParams.flags |= J9_CREATEJAVAVM_RAM_CACHE;
+		createParams.ramCache = specialArgs.ramCache;
+	}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 	if (VERBOSE_INIT == localVerboseLevel) {
 		createParams.flags |= J9_CREATEJAVAVM_VERBOSE_INIT;
 	}

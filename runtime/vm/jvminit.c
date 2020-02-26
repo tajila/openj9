@@ -565,6 +565,12 @@ void OMRNORETURN exitJavaVM(J9VMThread * vmThread, IDATA rc)
 		omrthread_monitor_enter(vm->classLoaderBlocksMutex);
 #endif
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+		if (IS_SNAPSHOT_RUN(vm)) {
+			teardownVMSnapshotImpl(vm);
+		}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
 #if defined(COUNT_BYTECODE_PAIRS)
 		printBytecodePairs(vm);
 #endif /* COUNT_BYTECODE_PAIRS */
@@ -636,6 +642,12 @@ freeJavaVM(J9JavaVM * vm)
 		runShutdownStage(vm, INTERPRETER_SHUTDOWN, NULL, 0);
 	}
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_SNAPSHOTTING_ENABLED(vm)) {
+		teardownVMSnapshotImpl(vm);
+	}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
 	/* Kill global hot field class info pool and its monitor if dynamicBreadthFirstScanOrdering is enabled */
 	if (NULL != vm->memoryManagerFunctions) {
 		hotReferenceFieldRequired = vm->memoryManagerFunctions->j9gc_hot_reference_field_required(vm);
@@ -652,6 +664,7 @@ freeJavaVM(J9JavaVM * vm)
 			omrthread_monitor_destroy(vm->globalHotFieldPoolMutex);
 		}
 	}
+	
 
 	if (NULL != vm->classMemorySegments) {
 		J9ClassWalkState classWalkState;
@@ -880,7 +893,17 @@ freeJavaVM(J9JavaVM * vm)
 		vm->realtimeSizeClasses = NULL;
 	}
 
-	j9mem_free_memory(vm);
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_SNAPSHOTTING_ENABLED(vm)) {
+		VMSnapshotImplPortLibrary* imagePortLibrary = vm->vmSnapshotImplPortLibrary;
+		PORT_ACCESS_FROM_PORT((J9PortLibrary *) imagePortLibrary);
+		j9mem_free_memory(vm); /* kinda weird ??? */
+		shutdownVMSnapshotImpl(imagePortLibrary);
+	} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	{
+		j9mem_free_memory(vm);
+	}
 
 	if (NULL != tmpLib->self_handle) {
 		tmpLib->port_shutdown_library(tmpLib);
@@ -968,11 +991,46 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 	if (FALSE == isValidProcessorAndOperatingSystem(portLibrary)) {
 		return JNI_ERR;
 	}
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RAM_CACHE)) {
+		BOOLEAN isSnapShotRun = TRUE;
+		void *vmSnapshotImpl = NULL; /* hack to get around the lack of C++ */
 
-	/* Allocate the VM, including the extra OMR structures */
-	vm = allocateJavaVMWithOMR(portLibrary);
-	if (vm == NULL) {
-		return JNI_ENOMEM;
+		/* TODO need to use portlib functions */
+		if (-1 != access(createParams->ramCache, F_OK)) {
+			isSnapShotRun = FALSE;
+		}
+
+		vmSnapshotImpl = initializeVMSnapshotImpl(portLibrary, isSnapShotRun, createParams->ramCache);
+
+		if (NULL == vmSnapshotImpl) {
+			return JNI_ENOMEM;
+		}
+		if (isSnapShotRun) {
+			vm = allocateJavaVMWithOMR((J9PortLibrary *)getPortLibraryFromVMSnapshotImpl(vmSnapshotImpl));
+		} else {
+			vm = getJ9JavaVMFromVMSnapshotImpl(vmSnapshotImpl);
+		}
+
+		if (vm == NULL) {
+			return JNI_ENOMEM;
+		}
+
+		setupVMSnapshotImpl(vmSnapshotImpl, vm);
+
+		if (isSnapShotRun) {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN;
+		} else {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN;
+		}
+	} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	{
+		/* Allocate the VM, including the extra OMR structures */
+		vm = allocateJavaVMWithOMR(portLibrary);
+		if (vm == NULL) {
+			return JNI_ENOMEM;
+		}
 	}
 
 #if defined(J9VM_THR_ASYNC_NAME_UPDATE)
@@ -1344,9 +1402,11 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 	} else {
 		/* classPathEntryCount is for number of null characters */
 		UDATA classPathSize = (sizeof(J9ClassPathEntry) * classPathEntryCount) + classPathLength + classPathEntryCount;
-		J9ClassPathEntry *cpEntries = j9mem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
+		J9ClassPathEntry* cpEntries = NULL;
 
-	        if (NULL == cpEntries) {
+		cpEntries = j9mem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
+
+	    if (NULL == cpEntries) {
 			*classPathEntries = NULL;
 			classPathEntryCount = -1;
 		} else {
@@ -1385,7 +1445,7 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 				entryStart = entryEnd + 1;
 			}
 			*classPathEntries = cpEntries;
-	        }
+		}
 	}
 
 _end:
@@ -1910,6 +1970,12 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			}
 #endif
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+			/* still need to consume the arg even though it was parsed. We can get around this by convertng it to
+			 * XX options */
+			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XSNAPSHOT, NULL);
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
 			if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XDFPBD, NULL) >= 0) {
 				vm->runtimeFlags |= J9_RUNTIME_DFPBD;
 			}
@@ -2273,8 +2339,21 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				goto _error;
 #endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES)*/
 
-			if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader),  0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary))))
-				goto _error;
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+			/* in restore runs the immortal classloaders will have been restored by this point */
+			if (IS_SNAPSHOT_RUN(vm)) {
+				if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(VMSNAPSHOTIMPL_OMRPORT_FROM_JAVAVM(vm))))) {
+					goto _error;
+				}
+			} else if (!IS_RESTORE_RUN(vm))
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+			{
+				if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary)))) {
+					goto _error;
+				}
+			}
+
 			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				vm->modularityPool = pool_new(OMR_MAX(sizeof(J9Package),sizeof(J9Module)),  0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_MODULES, POOL_FOR_PORT(vm->portLibrary));
 				if (NULL == vm->modularityPool) {
@@ -2478,9 +2557,15 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 		case SYSTEM_CLASSLOADER_SET :
 
 			loadInfo = FIND_DLL_TABLE_ENTRY( FUNCTION_VM_INIT );
-			if (NULL == (vm->systemClassLoader = allocateClassLoader(vm))) {
-				loadInfo->fatalErrorStr = "cannot allocate system classloader";
-				goto _error;
+#if defined(J9VM_OPT_SNAPSHOTS)
+			/* classLoader is set on restore run */
+			if (!IS_RESTORE_RUN(vm))
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+			{
+				if (NULL == (vm->systemClassLoader = allocateClassLoader(vm))) {
+					loadInfo->fatalErrorStr = "cannot allocate system classloader";
+					goto _error;
+				}
 			}
 
 			if (J2SE_VERSION(vm) >= J2SE_V11) {
