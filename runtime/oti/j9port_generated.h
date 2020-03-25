@@ -811,6 +811,8 @@ typedef struct VMSnapshotImplPortLibrary {
 /* Standard allocation and free functions for image heap suballocator */
 #define vmsnapshot_allocate_memory(param1, category) VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary)->mem_allocate_memory(VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary),param1, J9_GET_CALLSITE(), category)
 #define vmsnapshot_free_memory(param1) VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary)->mem_free_memory(VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary),param1)
+#define vmsnapshot_allocate_memory32(param1, category) VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary)->mem_allocate_memory32(VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary),param1, J9_GET_CALLSITE(), category)
+#define vmsnapshot_free_memory32(param1) VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary)->mem_free_memory32(VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(privateImagePortLibrary),param1)
 
 #if defined(OMR_OPT_CUDA)
 

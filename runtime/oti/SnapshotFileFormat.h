@@ -54,29 +54,79 @@ typedef struct SavedJ9JavaVMStructures {
 } SavedJ9JavaVMStructures;
 
 /*
+ * Right now this is a fixed-sized list, in the future it will be a dynamic list.
+ * This represents the types of memory regions and also the order that they appear.
+ */
+typedef enum J9MemoryRegionType {
+	GENERAL = 0,
+	SUB4G,
+	NUM_OF_MEMORY_SECTIONS
+} J9MemoryRegionType;
+
+/*
+ * The memoryRegion header entry. Currently there are
+ * a fix number of memory regions, this will change in
+ * the future.
+ *
+ * Fields:
+ * fileOffset: The offset in the snapshot file where the region resides. Currently this
+ * 			must be page aligned in order to map the memory in. In the future this restriction
+ * 			will be removed once shared libraries are generated.
+ * startAddr: The address in which the memoryRegion is located
+ * alignedStartAddr: The address in which the memoryRegion is located shifted up to the page boundary.
+ * 			This is the address at which the memoryRegion will be mapped in on the restore run.
+ * totalSize: Size of the memoryRegion including padding
+ * mappableSize: Size of the memoryRegion excluding padding
+ * permissions: Protection flags for the memoryRegion
+ *
+ * type: This is the type of  memory region. Right now there are two , this will increase in the future.
+ * 			If we decide to be more thrifty on footprint we can bundle this with permissions.
+ *
+ * TODO Note: Page alignment will be less of a concern when we start writing to shared libraries. In
+ * 			future mappableSize and alignedStartAddr may not be needed.
+ *
+ */
+typedef struct J9MemoryRegion {
+	UDATA fileOffset;
+	void *startAddr;
+	void *alignedStartAddr;
+	UDATA totalSize;
+	UDATA mappableSize;
+	UDATA permissions;
+	J9MemoryRegionType type;
+} J9MemoryRegion;
+
+/*
  * Struct containing data about image heap and quick access variables
  *
  * Allows us to dump this struct into file and reload easier
  * Allocated space for image data is longer than sizeof(JVMImageHeader) and includes heap. see @ref JVMImage::allocateImageMemory
  * All quick access variables are J9WSRP to allow reallocation in future. TODO: Allow heap reallocation 
  */
-typedef struct SnapshotHeader {
+typedef struct J9SnapshotHeader {
 	UDATA imageSize; /* image size in bytes */
 	J9JavaVM *vm;
 	SavedJ9JavaVMStructures savedJavaVMStructs;
-	uintptr_t imageAddress;
-	uintptr_t imageAlignedAddress; /* TODO: Will be removed once PAGE alignment is not needed anymore */
-	/* TODO: only three main class loaders stored for prototype and quick access. Need to allow user defined classloaders */
-	J9WSRP systemClassLoader;
-	J9WSRP appClassLoader;
-	J9WSRP extensionClassLoader;
-	J9WSRP classLoaderTable;
-	J9WSRP classTable;
-	J9WSRP classPathEntryTable;
+	UDATA numOfMemorySections;
 	J9WSRP cInitialStaticMethod;
 	J9WSRP cInitialSpecialMethod;
 	J9WSRP cInitialVirtualMethod;
-} SnapshotHeader;
+} J9SnapshotHeader;
 
+/*
+ * Snapshot file layout
+ *
+ * --------------------
+ *   SnapshotHeader
+ * --------------------
+ *   MemoryRegion header
+ * --------------------
+ *   MemoryRegion 1
+ * --------------------
+ *         ...
+ * --------------------
+ *   MemoryRegion N
+ * --------------------
+ */
 
 #endif /* snapshotfileformat_h */

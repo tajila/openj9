@@ -42,8 +42,10 @@ class VMSnapshotImpl
 private:
 	J9JavaVM *_vm;
 	J9PortLibrary *_portLibrary;
-	SnapshotHeader *_snapshotHeader;
+	J9SnapshotHeader *_snapshotHeader;
+	J9MemoryRegion *_memoryRegions;
 	J9Heap *_heap;
+	J9Heap *_heap32;
 	J9ITable *_invalidITable;
 	const char *_ramCache;
 	omrthread_monitor_t _vmSnapshotImplMonitor;
@@ -53,7 +55,8 @@ protected:
 public:
 	/* TODO: reallocation will fail so initial heap size is large (Should be PAGE_SIZE aligned) */
 	/* TODO: initial image size restriction will be removed once MMAP MAP_FIXED removed. see @ref VMSnapshotImpl::readImageFromFile */
-	static const UDATA INITIAL_IMAGE_SIZE = 100 * 1024 * 1024;;
+	static const UDATA GENERAL_MEMORY_SECTION_SIZE = 100 * 1024 * 1024;
+	static const UDATA SUB4G_MEMORY_SECTION_SIZE = 100 * 1024 * 1024;
 	static const UDATA CLASS_LOADER_REMOVE_COUNT = 8;
 
 	/*
@@ -64,7 +67,7 @@ private:
 	bool initializeInvalidITable(void);
 
 	/* Image Heap initialization and allocation functions */
-	void* allocateImageMemory(UDATA size);
+	void* allocateImageMemory();
 	void* reallocateImageMemory(UDATA size); /* TODO: Function will be used once random memory loading is allowed. Function not used currently */
 	void* initializeHeap(void);
 
@@ -113,9 +116,9 @@ public:
 	void teardownImage(void);
 
 	/* Suballocator functions */
-	void* subAllocateMemory(uintptr_t byteAmount);
-	void* reallocateMemory(void *address, uintptr_t byteAmount);
-	void freeSubAllocatedMemory(void *memStart);
+	void* subAllocateMemory(uintptr_t byteAmount, bool sub4G);
+	void* reallocateMemory(void *address, uintptr_t byteAmount, bool sub4G);
+	void freeSubAllocatedMemory(void *memStart, bool sub4G);
 
 	void destroyMonitor(void);
 	VMSnapshotImplPortLibrary * getVMSnapshotImplPortLibrary(void) { return _vmSnapshotImplPortLibrary; }

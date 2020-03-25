@@ -27,11 +27,19 @@
 
 #include <sys/mman.h> /* TODO: Change to OMRPortLibrary MMAP functionality. Currently does not allow MAP_FIXED as it is not supported in all architectures */
 
+void image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPointer);
+void *image_mem_allocate_memory(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category);
+void image_mem_free_memory32(struct OMRPortLibrary *portLibrary, void *memoryPointer);
+void *image_mem_allocate_memory32(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category);
+
+
 VMSnapshotImpl::VMSnapshotImpl(J9PortLibrary *portLibrary, const char* ramCache) :
 	_vm(NULL),
 	_portLibrary(portLibrary),
 	_snapshotHeader(NULL),
+	_memoryRegions(NULL),
 	_heap(NULL),
+	_heap32(NULL),
 	_invalidITable(NULL),
 	_ramCache(ramCache),
 	_vmSnapshotImplMonitor(NULL),
@@ -62,10 +70,20 @@ VMSnapshotImpl::~VMSnapshotImpl()
 	PORT_ACCESS_FROM_JAVAVM(_vm);
 	destroyMonitor();
 	if (IS_SNAPSHOT_RUN(_vm)) {
-		j9mem_free_memory((void*)_snapshotHeader->imageAddress);
+		for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+			if (SUB4G == _memoryRegions[i].type) {
+				j9mem_free_memory32(_memoryRegions[i].startAddr);
+			} else {
+				j9mem_free_memory(_memoryRegions[i].startAddr);
+			}
+		}
 	} else {
-		munmap((void*)_snapshotHeader, _snapshotHeader->imageAlignedAddress);
+		for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+			munmap(_memoryRegions[i].alignedStartAddr, _memoryRegions[i].mappableSize);
+		}
 	}
+	j9mem_free_memory((void *)_memoryRegions);
+	j9mem_free_memory((void *)_snapshotHeader);
 }
 
 bool
@@ -97,7 +115,7 @@ VMSnapshotImpl::setInitialMethods(J9Method** cInitialStaticMethod, J9Method** cI
 bool
 VMSnapshotImpl::initializeInvalidITable(void)
 {
-	_invalidITable = (J9ITable *) subAllocateMemory(sizeof(J9ITable));
+	_invalidITable = (J9ITable *) subAllocateMemory(sizeof(J9ITable), J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm));
 	if (NULL == _invalidITable) {
 		return false;
 	}
@@ -154,7 +172,7 @@ bool
 VMSnapshotImpl::setupColdRun(void)
 {
 	bool success = true;
-	if (NULL == allocateImageMemory(INITIAL_IMAGE_SIZE)) {
+	if (NULL == allocateImageMemory()) {
 		success = false;
 		goto done;
 	}
@@ -179,21 +197,64 @@ done:
 }
 
 void *
-VMSnapshotImpl::allocateImageMemory(UDATA size)
+VMSnapshotImpl::allocateImageMemory()
 {
 	PORT_ACCESS_FROM_PORT(_portLibrary);
 	UDATA pageSize = j9vmem_supported_page_sizes()[0];
-	void *imageAddress = j9mem_allocate_memory(size + pageSize, J9MEM_CATEGORY_CLASSES);
-	if (NULL == imageAddress) {
-		return NULL;
+	void *generalMemorySection = NULL;
+	void *sub4GBMemorySection = NULL;
+
+	_snapshotHeader = (J9SnapshotHeader *) j9mem_allocate_memory(sizeof(J9SnapshotHeader), J9MEM_CATEGORY_CLASSES);
+	if (NULL == _snapshotHeader) {
+		goto done;
 	}
 
-	_snapshotHeader = (SnapshotHeader *) ROUND_UP_TO_POWEROF2((UDATA)imageAddress, pageSize);
-	_snapshotHeader->imageAddress = (uintptr_t)imageAddress;
-	_snapshotHeader->imageAlignedAddress = (uintptr_t)_snapshotHeader;
-	_snapshotHeader->imageSize = size;
+	_snapshotHeader->numOfMemorySections = NUM_OF_MEMORY_SECTIONS;
 
+	_memoryRegions = (J9MemoryRegion *) j9mem_allocate_memory(sizeof(J9MemoryRegion) * NUM_OF_MEMORY_SECTIONS, J9MEM_CATEGORY_CLASSES);
+	if (NULL == _memoryRegions) {
+		goto freeHeader;
+	}
+
+	generalMemorySection = j9mem_allocate_memory(GENERAL_MEMORY_SECTION_SIZE + pageSize, J9MEM_CATEGORY_CLASSES);
+	if (NULL == generalMemorySection) {
+		goto freeMemorySections;
+	}
+
+	_memoryRegions[GENERAL].startAddr = generalMemorySection;
+	_memoryRegions[GENERAL].alignedStartAddr = (void *) ROUND_UP_TO_POWEROF2((UDATA)generalMemorySection, pageSize);
+	_memoryRegions[GENERAL].totalSize = GENERAL_MEMORY_SECTION_SIZE + pageSize;
+	_memoryRegions[GENERAL].mappableSize = GENERAL_MEMORY_SECTION_SIZE;
+	_memoryRegions[GENERAL].permissions = PROT_READ | PROT_WRITE | PROT_EXEC;
+	_memoryRegions[GENERAL].type = GENERAL;
+
+	sub4GBMemorySection = j9mem_allocate_memory32(SUB4G_MEMORY_SECTION_SIZE + pageSize, J9MEM_CATEGORY_CLASSES);
+	if (NULL == sub4GBMemorySection) {
+		goto freeGeneralMemorySection;
+	}
+
+	_memoryRegions[SUB4G].startAddr = sub4GBMemorySection;
+	_memoryRegions[SUB4G].alignedStartAddr = (void *) ROUND_UP_TO_POWEROF2((UDATA)sub4GBMemorySection, pageSize);
+	_memoryRegions[SUB4G].totalSize = SUB4G_MEMORY_SECTION_SIZE + pageSize;
+	_memoryRegions[SUB4G].mappableSize = SUB4G_MEMORY_SECTION_SIZE;
+	_memoryRegions[SUB4G].permissions = PROT_READ | PROT_WRITE;
+	_memoryRegions[SUB4G].type = SUB4G;
+
+done:
 	return _snapshotHeader;
+
+freeGeneralMemorySection:
+	j9mem_free_memory(generalMemorySection);
+
+freeMemorySections:
+	j9mem_free_memory(_memoryRegions);
+	_memoryRegions = NULL;
+
+freeHeader:
+	j9mem_free_memory(_snapshotHeader);
+	_snapshotHeader = NULL;
+
+	goto done;
 }
 
 /* TODO: Currently reallocating image memory is broken since all references to memory inside of heap will fail (i.e. vm->classLoadingPool) */
@@ -209,10 +270,14 @@ void *
 VMSnapshotImpl::initializeHeap(void)
 {
 	PORT_ACCESS_FROM_PORT(_portLibrary);
-	UDATA pageSize = j9vmem_supported_page_sizes()[0];
 	
-	_heap = j9heap_create((J9Heap *)(_snapshotHeader + 1), ROUND_DOWN_TO_POWEROF2(VMSnapshotImpl::INITIAL_IMAGE_SIZE - sizeof(_snapshotHeader), pageSize), 0);
+	_heap = j9heap_create((J9Heap *)_memoryRegions[GENERAL].alignedStartAddr, _memoryRegions[GENERAL].mappableSize, 0);
 	if (NULL == _heap) {
+		return NULL;
+	}
+
+	_heap32 = j9heap_create((J9Heap *)_memoryRegions[SUB4G].alignedStartAddr, _memoryRegions[SUB4G].mappableSize, 0);
+	if (NULL == _heap32) {
 		return NULL;
 	}
 
@@ -220,18 +285,20 @@ VMSnapshotImpl::initializeHeap(void)
 }
 
 void *
-VMSnapshotImpl::subAllocateMemory(uintptr_t byteAmount)
+VMSnapshotImpl::subAllocateMemory(uintptr_t byteAmount, bool sub4G)
 {
 	Trc_VM_SubAllocateImageMemory_Entry(_snapshotHeader, byteAmount);
+
+	J9Heap *heap = sub4G ? _heap32 : _heap;
 
 	omrthread_monitor_enter(_vmSnapshotImplMonitor);
 
 	OMRPortLibrary *portLibrary = VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(_vmSnapshotImplPortLibrary);
-	void *memStart = portLibrary->heap_allocate(portLibrary, _heap, byteAmount);	
+	void *memStart = portLibrary->heap_allocate(portLibrary, heap, byteAmount);
 	/* image memory is not large enough and needs to be reallocated */
 	if (NULL == memStart) {
 		reallocateImageMemory(_snapshotHeader->imageSize * 2 + byteAmount); /* guarantees size of heap will accomodate byteamount */
-		memStart = portLibrary->heap_allocate(portLibrary, _heap, byteAmount);
+		memStart = portLibrary->heap_allocate(portLibrary, heap, byteAmount);
 	}
 
 	omrthread_monitor_exit(_vmSnapshotImplMonitor);
@@ -242,16 +309,18 @@ VMSnapshotImpl::subAllocateMemory(uintptr_t byteAmount)
 }
 
 void*
-VMSnapshotImpl::reallocateMemory(void *address, uintptr_t byteAmount)
+VMSnapshotImpl::reallocateMemory(void *address, uintptr_t byteAmount, bool sub4G)
 {
+	J9Heap *heap = sub4G ? _heap32 : _heap;
+
 	omrthread_monitor_enter(_vmSnapshotImplMonitor);
 
 	OMRPortLibrary *portLibrary = VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(_vmSnapshotImplPortLibrary);
-	void *memStart = portLibrary->heap_reallocate(portLibrary, _heap, address, byteAmount);
+	void *memStart = portLibrary->heap_reallocate(portLibrary, heap, address, byteAmount);
 	/* image memory is not large enough and needs to be reallocated */
 	if (NULL == memStart) {
 		reallocateImageMemory(_snapshotHeader->imageSize * 2 + byteAmount); /* guarantees size of heap will accomodate byteamount */
-		memStart = portLibrary->heap_reallocate(portLibrary, _heap, address, byteAmount);
+		memStart = portLibrary->heap_reallocate(portLibrary, heap, address, byteAmount);
 	}
 
 	omrthread_monitor_exit(_vmSnapshotImplMonitor);
@@ -260,12 +329,14 @@ VMSnapshotImpl::reallocateMemory(void *address, uintptr_t byteAmount)
 }
 
 void
-VMSnapshotImpl::freeSubAllocatedMemory(void *address)
+VMSnapshotImpl::freeSubAllocatedMemory(void *address, bool sub4G)
 {
+	J9Heap *heap = sub4G ? _heap32 : _heap;
+
 	omrthread_monitor_enter(_vmSnapshotImplMonitor);
 
 	OMRPortLibrary *portLibrary = VMSNAPSHOTIMPL_OMRPORT_FROM_VMSNAPSHOTIMPLPORT(_vmSnapshotImplPortLibrary);
-	portLibrary->heap_free(portLibrary, _heap, address);
+	portLibrary->heap_free(portLibrary, heap, address);
 
 	omrthread_monitor_exit(_vmSnapshotImplMonitor);
 }
@@ -659,42 +730,80 @@ VMSnapshotImpl::fixupConstantPool(J9Class *ramClass)
 bool
 VMSnapshotImpl::readImageFromFile(void)
 {
+	bool rc = true;
 	Trc_VM_ReadImageFromFile_Entry(_heap, _ramCache);
+	PORT_ACCESS_FROM_PORT(_portLibrary);
 
 	OMRPORT_ACCESS_FROM_OMRPORT(&_portLibrary->omrPortLibrary);
 
-	intptr_t fileDescriptor = omrfile_open(_ramCache, EsOpenRead | EsOpenWrite, 0444);
+	IDATA fileDescriptor = omrfile_open(_ramCache, EsOpenRead, 0444);
 	if (-1 == fileDescriptor) {
-		printf("falied to open ramCache file file=%s \n", _ramCache);
-		return false;
+		j9tty_printf(PORTLIB, "falied to open ramCache file=%s errno=%d\n", _ramCache, errno);
+		rc = false;
+		goto done;
 	}
 
-	/* Read image header size and location then mmap the rest of the image (heap) into memory */
-	SnapshotHeader imageHeaderBuffer;
-	if (-1 == omrfile_read(fileDescriptor, (void *)&imageHeaderBuffer, sizeof(SnapshotHeader))) {
-		return false;
+	_snapshotHeader = (J9SnapshotHeader *) j9mem_allocate_memory(sizeof(J9SnapshotHeader), J9MEM_CATEGORY_CLASSES);
+	if (NULL == _snapshotHeader) {
+		rc = false;
+		goto done;
 	}
 
-	/* TODO: currently mmap uses sys/mman.h and MAP_FIXED. Once random memory loading is complete it will change to omr mmap without MAP_FIXED */
-	_snapshotHeader = (SnapshotHeader *)mmap(
-		(void *)imageHeaderBuffer.imageAlignedAddress,
-		imageHeaderBuffer.imageSize,
-		PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, fileDescriptor, 0);
-	if (-1 == (IDATA)_snapshotHeader) {
-		return false;
+	_memoryRegions = (J9MemoryRegion *) j9mem_allocate_memory(sizeof(J9MemoryRegion) * NUM_OF_MEMORY_SECTIONS, J9MEM_CATEGORY_CLASSES);
+	if (NULL == _memoryRegions) {
+		rc = false;
+		goto freeSnapshotHeader;
 	}
-	if (imageHeaderBuffer.imageAlignedAddress != (UDATA) _snapshotHeader) {
-		return false;
+
+	/* Read snapshot header and memory regions then mmap the rest of the image (heap) into memory */
+	if (-1 == omrfile_read(fileDescriptor, (void *)_snapshotHeader, sizeof(J9SnapshotHeader))) {
+		rc = false;
+		goto freeMemorySections;
+
 	}
-	_heap = (J9Heap *)(_snapshotHeader + 1);
+
+	if (-1 == omrfile_read(fileDescriptor, (void *)_memoryRegions, sizeof(J9MemoryRegion) * NUM_OF_MEMORY_SECTIONS)) {
+		rc = false;
+		goto freeMemorySections;
+	}
+
+	for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+		void *mappedSection = mmap(
+				(void *)_memoryRegions[i].alignedStartAddr,
+				_memoryRegions[i].mappableSize,
+				_memoryRegions[i].permissions, MAP_PRIVATE | MAP_FIXED, fileDescriptor,
+				_memoryRegions[i].fileOffset);
+		if (MAP_FAILED == mappedSection) {
+			j9tty_printf(PORTLIB, "map failed: fileOffset=%d alignedStartAddr=%p errno=%d\n", _memoryRegions[i].fileOffset, _memoryRegions[i].alignedStartAddr, errno);
+			rc = false;
+			goto freeMemorySections;
+		}
+	}
+
+	_heap = (J9Heap *)_memoryRegions[GENERAL].alignedStartAddr;
+	_heap32 = (J9Heap *)_memoryRegions[SUB4G].alignedStartAddr;
 	_vm = _snapshotHeader->vm;
 	_vm->ramStateFilePath = (char*) _ramCache;
 
-	omrfile_close(fileDescriptor);
+done:
+	if (-1 != fileDescriptor) {
+		omrfile_close(fileDescriptor);
+	}
 
 	Trc_VM_ReadImageFromFile_Exit();
 
-	return true;
+
+	return rc;
+
+freeMemorySections:
+	j9mem_free_memory(_memoryRegions);
+	_memoryRegions = NULL;
+
+freeSnapshotHeader:
+	j9mem_free_memory(_snapshotHeader);
+	_snapshotHeader = NULL;
+
+	goto done;
 }
 
 /**
@@ -741,25 +850,70 @@ VMSnapshotImpl::restoreJ9JavaVMStructures(void)
 bool
 VMSnapshotImpl::writeImageToFile(void)
 {
-	Trc_VM_WriteImageToFile_Entry(_heap, _ramCache);
-
 	OMRPortLibrary *portLibrary = (OMRPortLibrary *) _portLibrary;
 	OMRPORT_ACCESS_FROM_OMRPORT(portLibrary);
+	Trc_VM_WriteImageToFile_Entry(_heap, _ramCache);
+	bool rc = true;
+	UDATA bytesWritten = 0;
+	UDATA currentFileOffset = 0;
+	UDATA pageSize = omrvmem_supported_page_sizes()[0];
+
+	/* calculate aligned file offsets of memory regions */
+	UDATA offset = sizeof(J9SnapshotHeader) + (NUM_OF_MEMORY_SECTIONS * sizeof(J9MemoryRegion));
+	for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+		 offset = ROUND_UP_TO_POWEROF2(offset, pageSize);
+		_memoryRegions[i].fileOffset = offset;
+		offset += _memoryRegions[i].totalSize;
+	}
+
+	_snapshotHeader->imageSize = offset;
 
 	intptr_t fileDescriptor = omrfile_open(_ramCache, EsOpenCreate | EsOpenCreateAlways | EsOpenWrite, 0666);
 	if (-1 == fileDescriptor) {
-		return false;
+		rc = false;
+		goto done;
 	}
 
-	if ((intptr_t)_snapshotHeader->imageSize != omrfile_write(fileDescriptor, (void *)_snapshotHeader, _snapshotHeader->imageSize)) {
-		return false;
+	bytesWritten = omrfile_write(fileDescriptor, (void *)_snapshotHeader, sizeof(J9SnapshotHeader));
+	if (sizeof(J9SnapshotHeader) != bytesWritten) {
+		rc = false;
+		goto done;
 	}
 
-	omrfile_close(fileDescriptor);
+	currentFileOffset += bytesWritten;
+	bytesWritten = omrfile_write(fileDescriptor, (void *)_memoryRegions, sizeof(J9MemoryRegion) * NUM_OF_MEMORY_SECTIONS);
+	if ((NUM_OF_MEMORY_SECTIONS * sizeof(J9MemoryRegion)) != bytesWritten) {
+		rc = false;
+		goto done;
+	}
+
+	for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+		currentFileOffset += bytesWritten;
+		/* pad until aligned file offset */
+		UDATA padbytes = _memoryRegions[i].fileOffset - currentFileOffset;
+
+		if (omrfile_seek(fileDescriptor, padbytes, EsSeekCur) != (IDATA)_memoryRegions[i].fileOffset) {
+			rc = false;
+			goto done;
+		}
+
+		bytesWritten = omrfile_write(fileDescriptor, (void *)_memoryRegions[i].alignedStartAddr, _memoryRegions[i].totalSize);
+		if (_memoryRegions[i].totalSize != bytesWritten) {
+			rc = false;
+			goto done;
+		}
+
+		bytesWritten += padbytes;
+	}
+
+done:
+	if (-1 == fileDescriptor) {
+		omrfile_close(fileDescriptor);
+	}
 
 	Trc_VM_WriteImageToFile_Exit();
 
-	return true;
+	return rc;
 }
 
 void
@@ -770,7 +924,10 @@ VMSnapshotImpl::teardownImage(void)
 	fixupClassLoaders();
 	fixupClasses();
 	saveJ9JavaVMStructures();
-	writeImageToFile();
+	if(!writeImageToFile()) {
+		PORT_ACCESS_FROM_PORT(_portLibrary);
+		j9tty_printf(PORTLIB, "failed to write snapshot to file\n");
+	}
 }
 
 VMSnapshotImplPortLibrary *
@@ -783,6 +940,8 @@ setupVMSnapshotImplPortLibrary(J9PortLibrary *portLibrary)
 	memcpy(&(vmSnapshotImplPortLibrary->portLibrary), privateOmrPortLibrary, sizeof(OMRPortLibrary));
 	vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory = image_mem_allocate_memory;
 	vmSnapshotImplPortLibrary->portLibrary.mem_free_memory = image_mem_free_memory;
+	vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory32 = image_mem_allocate_memory32;
+	vmSnapshotImplPortLibrary->portLibrary.mem_free_memory32 = image_mem_free_memory32;
 	vmSnapshotImplPortLibrary->vmSnapshotImpl = NULL;
 
 	return vmSnapshotImplPortLibrary;
@@ -813,7 +972,7 @@ initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, cons
 
 _error:
 	shutdownVMSnapshotImpl(vmSnapshotImplPortLibrary);
-	vmSnapshotImpl->destroyMonitor();
+	vmSnapshotImpl->~VMSnapshotImpl();
 	return NULL;
 }
 
@@ -916,8 +1075,6 @@ shutdownVMSnapshotImpl(VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary)
 		if (NULL != vmSnapshotImpl) {
 			vmSnapshotImpl->~VMSnapshotImpl();
 			j9mem_free_memory(vmSnapshotImpl);
-			/* TODO */
-			//j9mem_free_memory(VMSNAPSHOTIMPLPORT_FROM_JAVAVM(javaVM));
 		}
 		j9mem_free_memory(vmSnapshotImplPortLibrary);
 	}
@@ -954,22 +1111,42 @@ setInitialVMMethods(J9JavaVM* javaVM, J9Method** cInitialStaticMethod, J9Method*
 	vmSnapshotImpl->setInitialMethods(cInitialStaticMethod, cInitialSpecialMethod, cInitialVirtualMethod);
 }
 
-extern "C" void *
+void *
+image_mem_allocate_memory32(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category)
+{
+	VMSnapshotImpl *vmSnapshotImpl = (VMSnapshotImpl *)((VMSnapshotImplPortLibrary *)portLibrary)->vmSnapshotImpl;
+
+	Assert_VM_notNull(vmSnapshotImpl);
+
+	void *pointer = vmSnapshotImpl->subAllocateMemory(byteAmount, true);
+	return pointer;
+}
+
+void
+image_mem_free_memory32(struct OMRPortLibrary *portLibrary, void *memoryPointer)
+{
+	VMSnapshotImpl *vmSnapshotImpl = (VMSnapshotImpl *)((VMSnapshotImplPortLibrary *)portLibrary)->vmSnapshotImpl;
+	Assert_VM_notNull(vmSnapshotImpl);
+
+	vmSnapshotImpl->freeSubAllocatedMemory(memoryPointer, true);
+}
+
+void *
 image_mem_allocate_memory(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category)
 {
 	VMSnapshotImpl *vmSnapshotImpl = (VMSnapshotImpl *)((VMSnapshotImplPortLibrary *)portLibrary)->vmSnapshotImpl;
 
 	Assert_VM_notNull(vmSnapshotImpl);
 
-	void *pointer = vmSnapshotImpl->subAllocateMemory(byteAmount);
+	void *pointer = vmSnapshotImpl->subAllocateMemory(byteAmount, false);
 	return pointer;
 }
 
-extern "C" void
+void
 image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPointer)
 {
 	VMSnapshotImpl *vmSnapshotImpl = (VMSnapshotImpl *)((VMSnapshotImplPortLibrary *)portLibrary)->vmSnapshotImpl;
 	Assert_VM_notNull(vmSnapshotImpl);
 
-	vmSnapshotImpl->freeSubAllocatedMemory(memoryPointer);
+	vmSnapshotImpl->freeSubAllocatedMemory(memoryPointer, false);
 }

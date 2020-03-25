@@ -139,8 +139,7 @@ void freeMemorySegment(J9JavaVM *javaVM, J9MemorySegment *segment, BOOLEAN freeD
 #if defined(J9VM_OPT_SNAPSHOTS)
 			if (IS_SNAPSHOTTING_ENABLED(javaVM)) {
 				if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
-					/* There is no support for compressedRefs yet */
-					Assert_VM_unreachable();
+					vmsnapshot_free_memory32(segment->baseAddress);
 				} else {
 					vmsnapshot_free_memory(segment->baseAddress);
 				}
@@ -286,8 +285,7 @@ allocateMemoryForSegment(J9JavaVM *javaVM,J9MemorySegment *segment, J9PortVmemPa
 #if defined(J9VM_OPT_SNAPSHOTS)
 		if (IS_SNAPSHOTTING_ENABLED(javaVM)) {
 			if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
-				/* There is no support for compressedRefs yet */
-				Assert_VM_unreachable();
+				tmpAddr = vmsnapshot_allocate_memory32(segment->size, memoryCategory);
 			} else {
 				tmpAddr = vmsnapshot_allocate_memory(segment->size, memoryCategory);
 			}
