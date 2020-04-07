@@ -721,7 +721,14 @@ freeJavaVM(J9JavaVM * vm)
 #endif /* J9VM_INTERP_ATOMIC_FREE_JNI_USES_FLUSH */
 
 	freeNativeMethodBindTable(vm);
-	freeHiddenInstanceFieldsList(vm);
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (!IS_SNAPSHOTTING_ENABLED(vm)) {
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+		freeHiddenInstanceFieldsList(vm);
+#if defined(J9VM_OPT_SNAPSHOTS)
+	}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
 	cleanupLockwordConfig(vm);
 
 	destroyJvmInitArgs(vm->portLibrary, vm->vmArgsArray);

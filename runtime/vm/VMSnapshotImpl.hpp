@@ -89,6 +89,8 @@ private:
 	bool restorePrimitiveAndArrayClasses(void);
 	bool restoreJ9JavaVMStructures(void);
 	void savePrimitiveAndArrayClasses(void);
+	void saveHiddenInstanceFields(void);
+	void restoreHiddenInstanceFields(void);
 	bool isImmortalClassLoader(J9ClassLoader *classLoader);
 	J9MemorySegmentList* copyUnPersistedMemorySegmentsToNewList(J9MemorySegmentList *oldMemorySegmentList);
 
@@ -114,6 +116,7 @@ public:
 	void fixupJITVtable(J9Class *ramClass);
 	void fixupVMStructures(void);
 	void teardownImage(void);
+	void freeJ9JavaVMStructures(void);
 
 	/* Suballocator functions */
 	void* subAllocateMemory(uintptr_t byteAmount, bool sub4G);

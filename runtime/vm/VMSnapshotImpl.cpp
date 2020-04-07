@@ -806,6 +806,18 @@ freeSnapshotHeader:
 	goto done;
 }
 
+void
+VMSnapshotImpl::saveHiddenInstanceFields(void)
+{
+	_snapshotHeader->savedJavaVMStructs.hiddenInstanceFields = _vm->hiddenInstanceFields;
+}
+
+void
+VMSnapshotImpl::restoreHiddenInstanceFields(void)
+{
+	_vm->hiddenInstanceFields = _snapshotHeader->savedJavaVMStructs.hiddenInstanceFields;
+}
+
 /**
  * Will be removed once the J9JavaVM struct is fully persisted
  */
@@ -815,6 +827,8 @@ VMSnapshotImpl::saveJ9JavaVMStructures(void)
 	saveClassLoaderBlocks();
 	saveMemorySegments();
 	savePrimitiveAndArrayClasses();
+	saveHiddenInstanceFields();
+
 	_snapshotHeader->vm = _vm;
 }
 
@@ -829,6 +843,7 @@ VMSnapshotImpl::restoreJ9JavaVMStructures(void)
 
 	restoreClassLoaderBlocks();
 	restoreMemorySegments();
+	restoreHiddenInstanceFields();
 
 
 	if (omrthread_monitor_init_with_name(&_vm->classMemorySegments->segmentMutex, 0, "VM class mem segment list")) {
@@ -914,6 +929,16 @@ done:
 	Trc_VM_WriteImageToFile_Exit();
 
 	return rc;
+}
+
+void
+VMSnapshotImpl::freeJ9JavaVMStructures(void)
+{
+	/* TODO Temporary function to free VM structures since snapshot is being created at shutdown.
+	 * Some structures cannot be freed at their normal position because they need to be kept
+	 * around so they can be written into the image. This will be removed in the future.
+	 */
+	freeHiddenInstanceFieldsList(_vm);
 }
 
 void
@@ -1091,6 +1116,7 @@ teardownVMSnapshotImpl(J9JavaVM *javaVM)
 	} else {
 		vmSnapshotImpl->saveMemorySegments();
 	}
+	vmSnapshotImpl->freeJ9JavaVMStructures();
 }
 
 extern "C" void
