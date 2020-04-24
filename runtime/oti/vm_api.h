@@ -46,7 +46,8 @@ extern "C" {
 #define J9_CREATEJAVAVM_ARGENCODING_UTF8 4
 #define J9_CREATEJAVAVM_ARGENCODING_PLATFORM 8
 #define J9_CREATEJAVAVM_START_JITSERVER 16
-#define J9_CREATEJAVAVM_RAM_CACHE 32
+#define J9_CREATEJAVAVM_RESTORE 32
+#define J9_CREATEJAVAVM_SNAPSHOT 64
 
 typedef struct J9CreateJavaVMParams {
 	UDATA j2seVersion;
@@ -57,7 +58,8 @@ typedef struct J9CreateJavaVMParams {
 	J9PortLibrary *portLibrary;
 	UDATA flags;
 #if defined(J9VM_OPT_SNAPSHOTS)
-	const char *ramCache;
+	J9SnapshotParams snapshotParams;
+	J9RestoreParams restoreParams;
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 } J9CreateJavaVMParams;
 

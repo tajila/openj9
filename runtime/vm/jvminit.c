@@ -997,41 +997,36 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 		return JNI_ERR;
 	}
 #if defined(J9VM_OPT_SNAPSHOTS)
-	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RAM_CACHE)) {
-		BOOLEAN isSnapShotRun = TRUE;
-		void *vmSnapshotImpl = NULL; /* hack to get around the lack of C++ */
+	void *vmSnapshotImpl = NULL;
 
-		/* TODO need to use portlib functions */
-		if (-1 != access(createParams->ramCache, F_OK)) {
-			isSnapShotRun = FALSE;
-		}
-
-		vmSnapshotImpl = initializeVMSnapshotImpl(portLibrary, isSnapShotRun, createParams->ramCache);
-
+	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RESTORE | J9_CREATEJAVAVM_SNAPSHOT)) {
+		fprintf(stderr, "Error: Cannot snapshot and restore in a single run\n");
+		return JNI_ERR;
+	} else if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_SNAPSHOT)) {
+		vmSnapshotImpl = initializeVMSnapshotImpl(portLibrary, TRUE, createParams->snapshotParams.filename);
 		if (NULL == vmSnapshotImpl) {
 			return JNI_ENOMEM;
 		}
-		if (isSnapShotRun) {
-			vm = allocateJavaVMWithOMR((J9PortLibrary *)getPortLibraryFromVMSnapshotImpl(vmSnapshotImpl));
-		} else {
-			vm = getJ9JavaVMFromVMSnapshotImpl(vmSnapshotImpl);
-		}
-
+		vm = allocateJavaVMWithOMR((J9PortLibrary *)getPortLibraryFromVMSnapshotImpl(vmSnapshotImpl));
 		if (vm == NULL) {
 			return JNI_ENOMEM;
 		}
-
 		setupVMSnapshotImpl(vmSnapshotImpl, vm);
-
-		if (isSnapShotRun) {
-			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN;
-		} else {
-			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN;
+		vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN;
+	} else if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RESTORE)) {
+		vmSnapshotImpl = initializeVMSnapshotImpl(portLibrary, FALSE, createParams->restoreParams.filename);
+		if (NULL == vmSnapshotImpl) {
+			return JNI_ENOMEM;
 		}
+		vm = getJ9JavaVMFromVMSnapshotImpl(vmSnapshotImpl);
+		if (vm == NULL) {
+			return JNI_ENOMEM;
+		}
+		setupVMSnapshotImpl(vmSnapshotImpl, vm);
+		vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN;
 	} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 	{
-		/* Allocate the VM, including the extra OMR structures */
 		vm = allocateJavaVMWithOMR(portLibrary);
 		if (vm == NULL) {
 			return JNI_ENOMEM;
@@ -1976,9 +1971,10 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 #endif
 
 #if defined(J9VM_OPT_SNAPSHOTS)
-			/* still need to consume the arg even though it was parsed. We can get around this by convertng it to
-			 * XX options */
-			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XSNAPSHOT, NULL);
+			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XSNAPSHOT_COLON, NULL);
+			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XRESTORE_COLON, NULL);
+			FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XSNAPSHOT, NULL);
+			FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XRESTORE, NULL);
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 
 			if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XDFPBD, NULL) >= 0) {

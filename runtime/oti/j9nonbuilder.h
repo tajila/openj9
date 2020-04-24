@@ -1332,6 +1332,23 @@ typedef struct J9ShrCompositeCacheCommonInfo {
 
 #endif /* J9VM_OPT_SHARED_CLASSES */
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+
+typedef struct J9SnapshotParams {
+	char *filename;
+	char *trigger;
+	BOOLEAN enabled;
+	BOOLEAN verbose;
+} J9SnapshotParams;
+
+typedef struct J9RestoreParams {
+	char *filename;
+	BOOLEAN enabled;
+	BOOLEAN verbose;
+} J9RestoreParams;
+
+#endif /* J9VM_OPT_SNAPSHOTS */
+
 typedef struct J9RASSystemInfo {
 	struct J9RASSystemInfo* linkPrevious;
 	struct J9RASSystemInfo* linkNext;
