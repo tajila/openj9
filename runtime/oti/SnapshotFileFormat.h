@@ -52,6 +52,7 @@ typedef struct SavedJ9JavaVMStructures {
 	J9ClassLoader *extensionClassLoader;
 	J9ClassLoader *applicationClassLoader;
 	J9HiddenInstanceField *hiddenInstanceFields;
+	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary;
 } SavedJ9JavaVMStructures;
 
 /*

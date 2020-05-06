@@ -4706,9 +4706,10 @@ void initializeImageClassLoaderObject(J9JavaVM *javaVM, J9ClassLoader *classLoad
  * Frees memory of heap variables and vmsnapshotimpl instance
  *
  *
- * @param vmSnapshotImplPortLibrary[in] the vmSnapshotImplPortLibrary
+ * @param vmSnapshotImpl[in] the vmSnapshotImpl
+ * @param portLib[in] the portLibrary
  */
-void shutdownVMSnapshotImpl(VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary);
+void shutdownVMSnapshotImpl(void *vmSnapshotImpl, J9PortLibrary *portLib);
 
 /**
  * Called on cold run to perform fixup of the image heap memory

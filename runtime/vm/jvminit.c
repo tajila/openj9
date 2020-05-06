@@ -903,9 +903,7 @@ freeJavaVM(J9JavaVM * vm)
 #if defined(J9VM_OPT_SNAPSHOTS)
 	if (IS_SNAPSHOTTING_ENABLED(vm)) {
 		VMSnapshotImplPortLibrary* imagePortLibrary = vm->vmSnapshotImplPortLibrary;
-		PORT_ACCESS_FROM_PORT((J9PortLibrary *) imagePortLibrary);
-		j9mem_free_memory(vm); /* kinda weird ??? */
-		shutdownVMSnapshotImpl(imagePortLibrary);
+		shutdownVMSnapshotImpl(imagePortLibrary->vmSnapshotImpl, vm->portLibrary);
 	} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 	{

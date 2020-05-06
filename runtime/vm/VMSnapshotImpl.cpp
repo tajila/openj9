@@ -187,11 +187,6 @@ VMSnapshotImpl::setupColdRun(void)
 		goto done;
 	}
 	
-	if (!initializeInvalidITable()) {
-		success = false;
-		goto done;
-	}
-
 done:
 	return success;
 }
@@ -771,9 +766,9 @@ VMSnapshotImpl::readImageFromFile(void)
 		void *mappedSection = mmap(
 				(void *)_memoryRegions[i].alignedStartAddr,
 				_memoryRegions[i].mappableSize,
-				_memoryRegions[i].permissions, MAP_PRIVATE | MAP_FIXED, fileDescriptor,
+				_memoryRegions[i].permissions, MAP_PRIVATE, fileDescriptor,
 				_memoryRegions[i].fileOffset);
-		if (MAP_FAILED == mappedSection) {
+		if ((MAP_FAILED == mappedSection) || (_memoryRegions[i].alignedStartAddr != mappedSection)) {
 			j9tty_printf(PORTLIB, "map failed: fileOffset=%d alignedStartAddr=%p errno=%d\n", _memoryRegions[i].fileOffset, _memoryRegions[i].alignedStartAddr, errno);
 			rc = false;
 			goto freeMemorySections;
@@ -830,6 +825,7 @@ VMSnapshotImpl::saveJ9JavaVMStructures(void)
 	saveHiddenInstanceFields();
 
 	_snapshotHeader->vm = _vm;
+	_snapshotHeader->savedJavaVMStructs.vmSnapshotImplPortLibrary = _vm->vmSnapshotImplPortLibrary;
 }
 
 /**
@@ -955,19 +951,34 @@ VMSnapshotImpl::teardownImage(void)
 	}
 }
 
-VMSnapshotImplPortLibrary *
-setupVMSnapshotImplPortLibrary(J9PortLibrary *portLibrary)
+bool
+VMSnapshotImpl::postPortLibInitstage()
 {
-	PORT_ACCESS_FROM_PORT(portLibrary);
-	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary = (VMSnapshotImplPortLibrary*)j9mem_allocate_memory(sizeof(VMSnapshotImplPortLibrary), OMRMEM_CATEGORY_PORT_LIBRARY);
+	return initializeInvalidITable();
+}
 
+VMSnapshotImplPortLibrary *
+setupVMSnapshotImplPortLibrary(VMSnapshotImpl *vmSnapshotImpl, J9PortLibrary *portLibrary, BOOLEAN snapshotRun)
+{
+	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary = NULL;
 	OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
-	memcpy(&(vmSnapshotImplPortLibrary->portLibrary), privateOmrPortLibrary, sizeof(OMRPortLibrary));
-	vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory = image_mem_allocate_memory;
-	vmSnapshotImplPortLibrary->portLibrary.mem_free_memory = image_mem_free_memory;
-	vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory32 = image_mem_allocate_memory32;
-	vmSnapshotImplPortLibrary->portLibrary.mem_free_memory32 = image_mem_free_memory32;
-	vmSnapshotImplPortLibrary->vmSnapshotImpl = NULL;
+
+	if (snapshotRun) {
+		vmSnapshotImplPortLibrary = (VMSnapshotImplPortLibrary*)privateOmrPortLibrary->heap_allocate(privateOmrPortLibrary, vmSnapshotImpl->getSubAllocatorHeap(), sizeof(VMSnapshotImplPortLibrary));
+	} else {
+		vmSnapshotImplPortLibrary = vmSnapshotImpl->getSnapshotHeader()->savedJavaVMStructs.vmSnapshotImplPortLibrary;
+	}
+
+	if (NULL != vmSnapshotImplPortLibrary)  {
+		memcpy(&(vmSnapshotImplPortLibrary->portLibrary), privateOmrPortLibrary, sizeof(OMRPortLibrary));
+		vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory = image_mem_allocate_memory;
+		vmSnapshotImplPortLibrary->portLibrary.mem_free_memory = image_mem_free_memory;
+		vmSnapshotImplPortLibrary->portLibrary.mem_allocate_memory32 = image_mem_allocate_memory32;
+		vmSnapshotImplPortLibrary->portLibrary.mem_free_memory32 = image_mem_free_memory32;
+		vmSnapshotImplPortLibrary->vmSnapshotImpl = vmSnapshotImpl;
+
+		vmSnapshotImpl->setImagePortLib(vmSnapshotImplPortLibrary);
+	}
 
 	return vmSnapshotImplPortLibrary;
 }
@@ -976,14 +987,11 @@ setupVMSnapshotImplPortLibrary(J9PortLibrary *portLibrary)
 extern "C" void *
 initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, const char* ramCache)
 {
-	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary = setupVMSnapshotImplPortLibrary(portLibrary);
+	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary = NULL;
 	VMSnapshotImpl *vmSnapshotImpl = VMSnapshotImpl::createInstance(portLibrary, ramCache);
-	if (NULL == vmSnapshotImplPortLibrary || NULL == vmSnapshotImpl) {
+	if (NULL == vmSnapshotImpl) {
 		goto _error;
 	}
-
-	vmSnapshotImplPortLibrary->vmSnapshotImpl = vmSnapshotImpl;
-	((VMSnapshotImpl *)vmSnapshotImplPortLibrary->vmSnapshotImpl)->setImagePortLib(vmSnapshotImplPortLibrary);
 
 	if (isSnapShotRun && (!vmSnapshotImpl->setupColdRun())) {
 		goto _error;
@@ -993,11 +1001,19 @@ initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, cons
 		goto _error;
 	}
 
+	vmSnapshotImplPortLibrary = setupVMSnapshotImplPortLibrary(vmSnapshotImpl, portLibrary, isSnapShotRun);
+	if (NULL == vmSnapshotImplPortLibrary) {
+		goto _error;
+	}
+
+	if(!vmSnapshotImpl->postPortLibInitstage()) {
+		goto _error;
+	}
+
 	return vmSnapshotImpl;
 
 _error:
-	shutdownVMSnapshotImpl(vmSnapshotImplPortLibrary);
-	vmSnapshotImpl->~VMSnapshotImpl();
+	shutdownVMSnapshotImpl(vmSnapshotImpl, portLibrary);
 	return NULL;
 }
 
@@ -1089,19 +1105,12 @@ initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLoader, J9C
 }
 
 extern "C" void
-shutdownVMSnapshotImpl(VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary)
+shutdownVMSnapshotImpl(void *vmSnapshotImpl, J9PortLibrary *portLib)
 {
-	if (NULL != vmSnapshotImplPortLibrary->vmSnapshotImpl) {
-		PORT_ACCESS_FROM_PORT(((VMSnapshotImpl *)vmSnapshotImplPortLibrary->vmSnapshotImpl)->getJ9JavaVM()->portLibrary);
-		Assert_VM_notNull(vmSnapshotImplPortLibrary);
-
-		VMSnapshotImpl *vmSnapshotImpl = (VMSnapshotImpl *) vmSnapshotImplPortLibrary->vmSnapshotImpl;
-
-		if (NULL != vmSnapshotImpl) {
-			vmSnapshotImpl->~VMSnapshotImpl();
-			j9mem_free_memory(vmSnapshotImpl);
-		}
-		j9mem_free_memory(vmSnapshotImplPortLibrary);
+	if (NULL != vmSnapshotImpl) {
+		PORT_ACCESS_FROM_PORT(portLib);
+		((VMSnapshotImpl *)vmSnapshotImpl)->~VMSnapshotImpl();
+		j9mem_free_memory(vmSnapshotImpl);
 	}
 }
 

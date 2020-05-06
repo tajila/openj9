@@ -112,6 +112,7 @@ public:
 
 	bool setupWarmRun();
 	bool setupColdRun();
+	bool postPortLibInitstage();
 
 	void fixupJITVtable(J9Class *ramClass);
 	void fixupVMStructures(void);
@@ -131,6 +132,8 @@ public:
 	void setInitialMethods(J9Method **cInitialStaticMethod, J9Method **cInitialSpecialMethod, J9Method **cInitialVirtualMethod);
 
 	J9ITable* getInvalidITable(void) { return _invalidITable; }
+	J9SnapshotHeader* getSnapshotHeader(void) { return _snapshotHeader; }
+	J9Heap * getSubAllocatorHeap(void) { return _heap; }
 };
 
 #endif /* VMSNAPSHOTIMPLE_HPP_ */
