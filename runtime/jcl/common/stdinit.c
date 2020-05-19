@@ -422,21 +422,19 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 	}
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+	/* set app class loader object if restore run */
+	if (IS_RESTORE_RUN(vm)) {
+		vmFuncs->initializeImageClassLoaderObject(vm, vm->applicationClassLoader, J9_JNI_UNWRAP_REFERENCE(appClassLoader));
+	} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 	if (NULL == vm->applicationClassLoader) {
 		/* CMVC 201518
 		 * applicationClassLoader may be null due to lazy classloader initialization. Initialize
 		 * the applicationClassLoader now or vm will start throwing NoClassDefFoundException.
 		 */
 
-#if defined(J9VM_OPT_SNAPSHOTS)
-		/* set app class loader object if restore run */
-		if (IS_RESTORE_RUN(vm)) {
-			vmFuncs->initializeImageClassLoaderObject(vm, vm->applicationClassLoader, J9_JNI_UNWRAP_REFERENCE(appClassLoader));
-		} else
-#endif /* defined(J9VM_OPT_SNAPSHOTS) */
-		{
-			vm->applicationClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, J9_JNI_UNWRAP_REFERENCE(appClassLoader)));
-		}
+		vm->applicationClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, J9_JNI_UNWRAP_REFERENCE(appClassLoader)));
 		
 		if (NULL != vmThread->currentException) {
 			/* while this exception check and return statement seem un-necessary, it is added to prevent
@@ -464,16 +462,15 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 		}
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 
-		if (NULL == vm->extensionClassLoader) {
 #if defined(J9VM_OPT_SNAPSHOTS)
-			/* set extension class loader object if warm run */
-			if (IS_RESTORE_RUN(vm)) {
-				vmFuncs->initializeImageClassLoaderObject(vm, vm->extensionClassLoader, classLoaderObject);
-			} else
+		/* set extension class loader object if warm run */
+		if (IS_RESTORE_RUN(vm)) {
+			vmFuncs->initializeImageClassLoaderObject(vm, vm->extensionClassLoader, classLoaderObject);
+		} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
-			{
-				vm->extensionClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, classLoaderObject));
-			}
+		if (NULL == vm->extensionClassLoader) {
+
+			vm->extensionClassLoader = (void*)(UDATA)(vmFuncs->internalAllocateClassLoader(vm, classLoaderObject));
 
 			if (NULL != vmThread->currentException) {
 				/* while this exception check and return statement seem un-necessary, it is added to prevent
