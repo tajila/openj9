@@ -1553,6 +1553,19 @@ obj:
 		_arg0EA = newA0;
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
+		char *methodName = (char *) J9UTF8_DATA(J9ROMMETHOD_NAME(J9_ROM_METHOD_FROM_RAM_METHOD(_literals)));
+		if (0 == strncmp(methodName, "testCreateAssortedRefWithLongAlignment", strlen("testCreateAssortedRefWithLongAlignment"))) {
+			printf("calling the method :%s: \n", methodName);
+		}
+
+		if (0 == strncmp(methodName, "checkEqualTriangle2D", strlen("checkEqualTriangle2D"))) {
+			printf("calling the 2nd method :%s: \n", methodName);
+		}
+
+		if (0 == strncmp(methodName, "checkEqualPoint2D", strlen("checkEqualPoint2D"))) {
+			printf("calling the 2nd method :%s: \n", methodName);
+		}
+
 		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
 		if ((UDATA)_sp >= stackOverflowMark) {
 			if (methodIsSynchronized) {

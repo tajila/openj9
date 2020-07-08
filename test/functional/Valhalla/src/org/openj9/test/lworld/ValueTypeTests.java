@@ -170,7 +170,7 @@ public class ValueTypeTests {
 	static int[][] defaultLinePositions2 = {defaultPointPositions2, defaultPointPositions3};
 	static int[][] defaultLinePositions3 = {defaultPointPositions1, defaultPointPositions3};
 	static int[][] defaultLinePositionsEmpty = {defaultPointPositionsEmpty, defaultPointPositionsEmpty};
-	static int[][][] defaultTrianglePositions = {defaultLinePositions1, defaultLinePositions2, defaultLinePositions3};
+	static int[][][] defaultTrianglePositions = {{{0xCCCCCCCC,2222},{3333,4444}},{{5555,6666},{7777,8888}},{{9999,11110},{11111,12222}}};
 	static long defaultLong = Long.MAX_VALUE;
 	static int defaultInt = Integer.MAX_VALUE;
 	static double defaultDouble = Double.MAX_VALUE;
@@ -178,8 +178,10 @@ public class ValueTypeTests {
 	static Object defaultObject = (Object)0xEEFFEEFF;
 	static int[] defaultPointPositionsNew = {0xFF112233, 0xFF332211};
 	static int[][] defaultLinePositionsNew = {defaultPointPositionsNew, defaultPointPositions1};
-	static int[][][] defaultTrianglePositionsNew = {defaultLinePositionsNew, defaultLinePositions3, defaultLinePositions1};
-	static int[][][] defaultTrianglePositionsEmpty = {defaultLinePositionsEmpty, defaultLinePositionsEmpty, defaultLinePositionsEmpty};
+//	static int[][][] defaultTrianglePositionsNew = {defaultLinePositionsNew, defaultLinePositions3, defaultLinePositions1};
+//	static int[][][] defaultTrianglePositionsEmpty = {defaultLinePositionsEmpty, defaultLinePositionsEmpty, defaultLinePositionsEmpty};
+	static int[][][] defaultTrianglePositionsNew = {{{1,2},{3,4}},{{5,6},{7,8}},{{9,10},{11,12}}};
+	static int[][][] defaultTrianglePositionsEmpty = {{{11,22},{33,44}},{{55,66},{77,88}},{{99,110},{111,122}}};
 	static long defaultLongNew = -1234123L;
 	static int defaultIntNew = -1234123234;
 	static double defaultDoubleNew = -123412341.21341234d;
@@ -2495,6 +2497,7 @@ public class ValueTypeTests {
 			case "QTriangle2D;":
 				checkEqualTriangle2D(fieldAccessMHs[i][0].invoke(instance), defaultTrianglePositions);
 				Object triNew = createTriangle2D(defaultTrianglePositionsNew);
+				checkObject(defaultTrianglePositionsNew);
 				if (ifValue) {
 					instance = fieldAccessMHs[i][1].invoke(instance, triNew);
 				} else {

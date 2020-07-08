@@ -59,7 +59,7 @@ ObjectFieldInfo::countInstanceFields(void)
 					} else if (J9_ARE_ALL_BITS_SET(fieldClass->classFlags, J9ClassLargestAlignmentConstraintReference)) {
 						_totalFlatFieldRefBytes += (U_32) ROUND_UP_TO_POWEROF2(fieldClass->totalInstanceSize - fieldClass->backfillOffset, _referenceSize);
 					} else {
-						_totalFlatFieldSingleBytes += (U_32) (fieldClass->totalInstanceSize - fieldClass->backfillOffset);
+						_totalFlatFieldSingleBytes += (U_32) ROUND_UP_TO_POWEROF2(fieldClass->totalInstanceSize - fieldClass->backfillOffset, _referenceSize);
 					}
 				} else
 #endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
