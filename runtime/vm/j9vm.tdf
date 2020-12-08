@@ -840,3 +840,6 @@ TraceEvent=Trc_VM_ConvertMethodSignature_Signature_BufferSize Overhead=1 Level=4
 TraceEvent=Trc_VM_ConvertMethodSignature_Signature_Result Overhead=1 Level=4 Template="ConvertMethodSignature - result (%s) with resultLength %llu"
 
 TraceEvent=Trc_VM_initializeModulesPathEntry_loadJImageFailed NoEnv Overhead=1 Level=1 Template="initializeModulesPathEntry - attempt to load %.*s as jimage file failed with error=%d"
+
+TraceEvent=Trc_VM_Snapshot_TotalSavedMonitors NoEnv Overhead=1 Level=3 Template="Snapshot total saved monitors: %llu."
+TraceEvent=Trc_VM_Snapshot_NotPersistingThread NoEnv Overhead=1 Level=3 Template="Not persisting j9vmthread=%p."
