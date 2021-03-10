@@ -828,6 +828,8 @@ JVM_GetSystemPackage_Impl(JNIEnv* env, jstring pkgName)
 
 	Trc_SunVMI_GetSystemPackage_SearchingForPackage(vmThread, utfPkgName, utfPkgNameLen);
 
+	printf("vm=%p ctm=%p !!!\n", vm, vm->classTableMutex);
+
 	VM.monitorEnter(vm->classTableMutex);
 
 	/* find a representative class from the package in the bootstrap loader */

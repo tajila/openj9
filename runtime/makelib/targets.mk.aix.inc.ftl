@@ -33,9 +33,9 @@ $(UMA_DLLTARGET) : $(UMA_OBJECTS) $(UMA_TARGET_LIBRARIES)
 		$(VMLINK) $(UMA_LINK_PATH) -o $@ \
 		$(UMA_OBJECTS) \
 		$(UMA_DLL_LINK_POSTFLAGS)
-ifdef j9vm_uma_gnuDebugSymbols
+
 	cp $@ $(@:$(UMA_DOT_DLL)=.debuginfo)
-endif
+
 	strip -X32_64 -t $@
 </#assign>
 
@@ -46,9 +46,9 @@ $(UMA_EXETARGET) : $(UMA_OBJECTS) $(UMA_TARGET_LIBRARIES)
 		$(UMA_LINK_LIBRARIES) \
 		-o $@ -lm -lpthread -liconv -ldl \
 		$(UMA_EXE_LINK_POSTFLAGS)
-ifdef j9vm_uma_gnuDebugSymbols
+
 	cp $@ $(@:$(UMA_DOT_EXE)=.debuginfo)
-endif
+
 	strip -X32_64 -t $@
 </#assign>
 
@@ -73,8 +73,8 @@ ifdef UMA_DO_NOT_OPTIMIZE_CCODE
   CFLAGS += -O0
   CXXFLAGS += -O0
 else
-  CFLAGS += -O3
-  CXXFLAGS += -O3
+  CFLAGS += -O0 -g3
+  CXXFLAGS += -O0 -g3
 endif
 
 ifdef j9vm_uma_supportsIpv6
@@ -88,7 +88,6 @@ ifdef j9vm_uma_gnuDebugSymbols
   CFLAGS += -g
   CXXFLAGS += -g
   # except when compiling interpreters
-  FLAGS_TO_REMOVE += -g
 endif
 
 ifdef I5_VERSION
