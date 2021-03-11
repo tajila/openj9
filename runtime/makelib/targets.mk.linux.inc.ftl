@@ -115,7 +115,7 @@ ifndef UMA_DO_NOT_OPTIMIZE_CCODE
     <#elseif uma.spec.processor.x86>
       UMA_OPTIMIZATION_CFLAGS += -O0 -fno-strict-aliasing -march=pentium4 -mtune=prescott -mpreferred-stack-boundary=4
     <#elseif uma.spec.processor.arm>
-      UMA_OPTIMIZATION_CFLAGS += -g -O0 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
+      UMA_OPTIMIZATION_CFLAGS += -g3 -O0 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
     <#elseif uma.spec.processor.ppc>
       UMA_OPTIMIZATION_CFLAGS += -O0
       <#if uma.spec.flags.env_gcc.enabled>
@@ -141,7 +141,7 @@ ifndef UMA_DO_NOT_OPTIMIZE_CCODE
     <#elseif uma.spec.processor.x86>
       UMA_OPTIMIZATION_CXXFLAGS += -O0 -fno-strict-aliasing -march=pentium4 -mtune=prescott -mpreferred-stack-boundary=4
     <#elseif uma.spec.processor.arm>
-      UMA_OPTIMIZATION_CXXFLAGS += -g -O0 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
+      UMA_OPTIMIZATION_CXXFLAGS += -g3 -O0 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
     <#elseif uma.spec.processor.ppc>
       UMA_OPTIMIZATION_CXXFLAGS += -O0
       <#if uma.spec.flags.env_gcc.enabled>
@@ -273,7 +273,7 @@ CPPFLAGS += -DLINUX -D_REENTRANT
 </#if>
 
 <#-- Add Position Independent compile flag -->
-<#if uma.spec.processor.amd64 || uma.spec.processor.arm || uma.spec.processor.s390 || uma.spec.processor.riscv64>
+<#if uma.spec.processor.amd64 || uma.spec.processor.arm || uma.spec.processor.aarch64 || uma.spec.processor.s390 || uma.spec.processor.riscv64>
   CFLAGS += -fPIC
   CXXFLAGS += -fPIC
 <#elseif uma.spec.processor.ppc>
@@ -517,6 +517,13 @@ endif
 </#if>
 
 <#if uma.spec.processor.ppc && !uma.spec.type.aix>
+
+<#if uma.spec.flags.env_littleEndian.enabled && uma.spec.flags.env_gcc.enabled>
+# special handling bcverify.c to deal with ppcle64-specific crash when compiling with gcc 7.5
+bcverify$(UMA_DOT_O) : bcverify.c
+	$(CC) $(CFLAGS) -O2 -c -o $@ $<
+</#if>
+
 ifdef USE_PPC_GCC
 
 # special handling MHInterpreterFull.cpp, MHInterpreterCompressed.cpp, BytecodeInterpreterFull.cpp, BytecodeInterpreterCompressed.cpp, DebugBytecodeInterpreterFull.cpp and DebugBytecodeInterpreterCompressed.cpp
