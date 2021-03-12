@@ -580,7 +580,6 @@ public:
     */
    bool supportVMInternalNatives();
 
-
    /**
     * \brief Determines whether the code generator supports stack allocations
     */

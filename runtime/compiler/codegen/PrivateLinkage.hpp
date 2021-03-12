@@ -28,6 +28,7 @@
 #include "compile/CompilationTypes.hpp"
 #include "infra/Assert.hpp"
 
+namespace TR { class Compilation; }
 namespace TR { class CodeGenerator; }
 
 namespace J9
@@ -56,8 +57,16 @@ public:
     */
    class LinkageInfo
       {
+   private:
+      static const uint32_t INVALID_LINKAGE_INFO = 0xFFFFFFFF;
+
    public:
-      static LinkageInfo *get(void *startPC) { return reinterpret_cast<LinkageInfo *>(((uint32_t*)startPC)-1); }
+      static LinkageInfo *get(void *startPC);
+      static LinkageInfo *get(TR::Compilation *comp);
+
+      void init(LinkageInfo *other) { _word = other->_word; }
+      void invalidate() { _word = INVALID_LINKAGE_INFO; }
+      bool isInvalid() { return (_word == INVALID_LINKAGE_INFO); }
 
       void setCountingMethodBody() { _word |= CountingPrologue; }
       void setSamplingMethodBody() { _word |= SamplingPrologue; }
@@ -91,6 +100,7 @@ public:
       inline void setReturnInfo(TR_ReturnInfo w) { _word |= (w & ReturnInfoMask); }
 
       inline uint32_t getWord() { return _word; }
+      inline void setWord(uint32_t w) { _word = w; }
 
       int32_t getJitEntryOffset()
          {
@@ -123,7 +133,7 @@ public:
       uint32_t _word;
 
    private:
-      LinkageInfo() {};
+      LinkageInfo() {}
       };
 
    /**

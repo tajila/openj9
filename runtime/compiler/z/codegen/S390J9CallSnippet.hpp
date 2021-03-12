@@ -23,6 +23,7 @@
 #ifndef TR_S390J9CALLSNIPPET_INCL
 #define TR_S390J9CALLSNIPPET_INCL
 
+#include "il/SymbolReference.hpp"
 #include "z/codegen/CallSnippet.hpp"
 #include "z/codegen/ConstantDataSnippet.hpp"
 #include "z/codegen/S390Instruction.hpp"
@@ -69,6 +70,28 @@ class S390J9CallSnippet : public TR::S390CallSnippet
    virtual uint8_t *emitSnippetBody();
    };
 
+class S390J9CallSnippetRX : public TR::S390CallSnippet
+   {
+   intptr_t callSnippetCCDataAddress;
+
+   TR::LabelSymbol *doneLabel;
+
+   public:
+   S390J9CallSnippetRX(
+      TR::CodeGenerator *cg,
+      TR::Node *callNode,
+      TR::LabelSymbol *lab,
+      TR::LabelSymbol *doneLabel,
+      TR::SymbolReference *symRef,
+      int32_t s,
+      intptr_t callSnippetCCDataAddress) :
+   TR::S390CallSnippet(cg, callNode, lab, symRef, s), doneLabel(doneLabel), callSnippetCCDataAddress(callSnippetCCDataAddress)  {}
+
+   virtual Kind getKind() { return IsCallReadOnly; }
+   void setCallSnippetCCDataAddress(intptr_t ccDataAddress) { callSnippetCCDataAddress = ccDataAddress; }
+   virtual uint8_t *emitSnippetBody();
+   virtual uint32_t getLength(int32_t estimatedSnippetStart);
+   };
 
 class S390UnresolvedCallSnippet : public TR::S390J9CallSnippet
    {
@@ -136,6 +159,48 @@ class S390VirtualUnresolvedSnippet : public TR::S390VirtualSnippet
 
    TR::Instruction *setIndirectCallInstruction(TR::Instruction *i) {return indirectCallInstruction = i;}
    TR::Instruction *getIndirectCallInstruction() {return indirectCallInstruction;}
+   };
+
+class S390VirtualUnresolvedReadOnlySnippet : public TR::Snippet
+   {
+   intptr_t resolveVirtualDataAddress;
+
+   TR::LabelSymbol *loadVTableOffsetLabel;
+
+   TR::LabelSymbol *doneLabel;
+
+   TR::LabelSymbol *snippetCallNextInstrLabel;
+
+   public:
+   S390VirtualUnresolvedReadOnlySnippet(TR::CodeGenerator *cg, TR::Node *callNode, TR::LabelSymbol *lab, TR::LabelSymbol *loadVTableOffsetLabel, TR::LabelSymbol *doneLabel, TR::LabelSymbol *snippetCallNextInstrLabel, intptr_t resolveVirtualDataAddress)
+      : TR::Snippet(cg, callNode, lab, false), loadVTableOffsetLabel(loadVTableOffsetLabel), doneLabel(doneLabel), snippetCallNextInstrLabel(snippetCallNextInstrLabel), resolveVirtualDataAddress(resolveVirtualDataAddress)
+      {
+      }
+   
+   virtual Kind getKind() { return IsResolveVirtualDispatchReadOnlyData; }
+
+   virtual uint8_t *emitSnippetBody();
+
+   virtual uint32_t getLength(int32_t estimatedSnippetStart);
+   };
+
+class S390InterfaceCallReadOnlySnippet : public TR::Snippet
+   {
+   intptr_t interfaceCallPICSlotDataAddress;
+
+   TR::LabelSymbol *doneLabel;
+
+   public:
+   S390InterfaceCallReadOnlySnippet(TR::CodeGenerator *cg, TR::Node *callNode, TR::LabelSymbol *lab, TR::LabelSymbol *doneLabel, intptr_t interfaceCallPICSlotDataAddress)
+      : TR::Snippet(cg, callNode, lab, false), doneLabel(doneLabel), interfaceCallPICSlotDataAddress(interfaceCallPICSlotDataAddress)
+      {
+      }
+
+   virtual Kind getKind() { return IsInterfaceCallDataReadOnly; }
+
+   virtual uint8_t *emitSnippetBody();
+
+   virtual uint32_t getLength(int32_t estimiateSnippetStart);
    };
 
 class J9S390InterfaceCallDataSnippet : public TR::S390ConstantDataSnippet

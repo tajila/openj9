@@ -66,7 +66,16 @@ TR_PersistentCHTable::TR_PersistentCHTable(TR_PersistentMemory *trPersistentMemo
    memset(_buffer, 0, sizeof(TR_LinkHead<TR_PersistentClassInfo>) * (CLASSHASHTABLE_SIZE + 1));
    _classes = static_cast<TR_LinkHead<TR_PersistentClassInfo> *>(static_cast<void *>(_buffer));
 
-   setActive();
+#if defined(J9VM_OPT_SNAPSHOTS)
+   if (IS_RESTORE_RUN(::jitConfig->javaVM))
+      {
+      resetStatus();
+      }
+   else
+#endif
+      {
+      setActive();
+      }
    }
 
 

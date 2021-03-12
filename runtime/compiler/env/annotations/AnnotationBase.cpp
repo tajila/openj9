@@ -298,6 +298,9 @@ TR_AnnotationBase::getAnnotationInfoEntry(TR::SymbolReference *symRef,const char
    int32_t annotationj9Type;
    bool trace = false;
    J9JavaVM * javaVM = ((TR_J9VMBase *)_comp->fej9())->_jitConfig->javaVM;
+#if defined(J9VM_OPT_SNAPSHOTS)
+   VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(javaVM);
+#endif
    PORT_ACCESS_FROM_JAVAVM(javaVM);
    memberName = memberSignature = NULL;
 
@@ -322,7 +325,18 @@ TR_AnnotationBase::getAnnotationInfoEntry(TR::SymbolReference *symRef,const char
       memberSignature = vmSym->signatureChars();
       int32_t nameLen = vmSym->nameLength();
       int32_t sigLen = vmSym->signatureLength();
-      nameBuf = (char *)j9mem_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+      if (IS_SNAPSHOT_RUN(javaVM))
+         {
+         nameBuf = (char *)vmsnapshot_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+         }
+      else
+#endif
+         {
+         nameBuf = (char *)j9mem_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+         }
+
       if (!nameBuf)
          return NULL;
 
@@ -344,7 +358,18 @@ TR_AnnotationBase::getAnnotationInfoEntry(TR::SymbolReference *symRef,const char
          // need to remove
          // replace space with a null and we'll have two strings
          char *name = symRef->getOwningMethod(_comp)->fieldName(symRef->getCPIndex(), length, _comp->trMemory());
-         nameBuf = (char *)j9mem_allocate_memory(length+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+         if (IS_SNAPSHOT_RUN(javaVM))
+            {
+            nameBuf = (char *)vmsnapshot_allocate_memory(length+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+            }
+         else
+#endif
+            {
+            nameBuf = (char *)j9mem_allocate_memory(length+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+            }
+
          if (!nameBuf)
             return NULL;
 
@@ -404,7 +429,18 @@ TR_AnnotationBase::getAnnotationInfoEntry(TR::SymbolReference *symRef,const char
       int32_t nameLen = vmSym->nameLength();
       int32_t sigLen = vmSym->signatureLength();
       memberSignature = vmSym->signatureChars();
-      nameBuf = (char *)j9mem_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+      if (IS_SNAPSHOT_RUN(javaVM))
+         {
+         nameBuf = (char *)vmsnapshot_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+         }
+      else
+#endif
+         {
+         nameBuf = (char *)j9mem_allocate_memory(nameLen+sigLen+2 * sizeof(char), J9MEM_CATEGORY_JIT);
+         }
+
       if (!nameBuf)
          return NULL;
 
@@ -439,7 +475,18 @@ TR_AnnotationBase::getAnnotationInfoEntry(TR::SymbolReference *symRef,const char
 
 
    if(NULL != nameBuf)
-      j9mem_free_memory(nameBuf);
+      {
+#if defined(J9VM_OPT_SNAPSHOTS)
+      if (IS_SNAPSHOT_RUN(javaVM))
+         {
+         vmsnapshot_free_memory(nameBuf);
+         }
+      else
+#endif
+         {
+         j9mem_free_memory(nameBuf);
+         }
+      }
    return annotationInfoEntryPtr;
 
 

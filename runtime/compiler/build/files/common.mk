@@ -70,6 +70,7 @@ JIT_PRODUCT_BACKEND_SOURCES+=\
     compiler/optimizer/VPBCDConstraint.cpp \
     compiler/optimizer/TreeLowering.cpp \
     omr/compiler/codegen/Analyser.cpp \
+    omr/compiler/codegen/CCData.cpp \
     omr/compiler/codegen/CodeGenGC.cpp \
     omr/compiler/codegen/CodeGenPrep.cpp \
     omr/compiler/codegen/CodeGenRA.cpp \

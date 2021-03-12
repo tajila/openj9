@@ -3395,8 +3395,15 @@ retry:
 			classFlags |= J9ClassHasReferences;
 		}
 #endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+#if defined(J9VM_OPT_SNAPSHOTS)
+		if (IS_RESTORE_RUN(javaVM)) {
+			/* needed to make sure class hooks are only run once */
+			classFlags |= J9ClassIsLoadedFromImage;
+		}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 
 		result->classFlags = classFlags;
+
 	}
 
 	return result;

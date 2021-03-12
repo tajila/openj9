@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -48,15 +48,15 @@ namespace TR { class CompilationInfo; }
 class TR_PersistentCHTable
    {
    private:
+
    /**
     * @brief Enum to denote the state of the CH Table:
     *
-    *        reset:            CH Table is not active.
-    *        active:           Data in the CH Table can be used and updated.
-    *        activating:       CH Table is in the process of being activated;
-    *                          this state is used when the CH Table is
-    *                          being populated in the restore run.
-    *        activationFailed: CH Table failed activation.
+    *        active: Data in the CH Table can be used and updated.
+    *        activating: CH Table is in the process of being activated;
+    *                    this state is used when the CH Table is
+    *                    being populated in the restore run.
+    *        reset: CH Table is not active.
     */
    enum Status
       {
@@ -168,6 +168,7 @@ class TR_PersistentCHTable
    void dumpStats(TR_FrontEnd *);
 #endif
 
+
    bool isActive() { return _status == Status::active; }
    bool isActivating() { return _status == Status::activating; }
    bool isAccessible() { return (isActive() || isActivating()); }
@@ -179,7 +180,6 @@ class TR_PersistentCHTable
 
    private:
    Status _status;
-
    /**
     * @brief Collects all subclasses of a given class into the ClassList container passed in; assumes
     *        that the class hierarchy mutex has been acquired
@@ -220,8 +220,6 @@ class TR_PersistentCHTable
 
    uint8_t _buffer[sizeof(TR_LinkHead<TR_PersistentClassInfo>) * (CLASSHASHTABLE_SIZE + 1)];
    TR_LinkHead<TR_PersistentClassInfo> *_classes;
-
-   protected:
    TR_PersistentMemory *_trPersistentMemory;
    };
 

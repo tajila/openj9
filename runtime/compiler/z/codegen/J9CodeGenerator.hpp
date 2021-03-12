@@ -67,6 +67,8 @@ public:
    void lowerTreesPreChildrenVisit(TR::Node * parent, TR::TreeTop * treeTop, vcount_t visitCount);
    void lowerTreesPostChildrenVisit(TR::Node * parent, TR::TreeTop * treeTop, vcount_t visitCount);
 
+   void createObjectFormat();
+   
    void lowerTreeIfNeeded(TR::Node *node, int32_t childNumber, TR::Node *parent, TR::TreeTop *tt);
 
    TR::S390EyeCatcherDataSnippet *CreateEyeCatcher(TR::Node *);

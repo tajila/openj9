@@ -47,6 +47,8 @@
 #include "il/SymbolReference.hpp"
 #include "infra/Assert.hpp"
 #include "env/VMJ9.h"
+#include "objectfmt/GlobalFunctionCallData.hpp"
+#include "objectfmt/ObjectFormat.hpp"
 #include "runtime/Runtime.hpp"
 #include "x/codegen/CheckFailureSnippet.hpp"
 #include "x/codegen/HelperCallSnippet.hpp"
@@ -762,21 +764,9 @@ J9::X86::AMD64::JNILinkage::generateMethodDispatch(
 
    TR_ASSERT(reloTypes[reloType] != TR_NoRelocation, "There shouldn't be direct JNI interface calls!");
 
-   TR::X86RegInstruction *patchedInstr=
-   generateRegImm64Instruction(
-      MOV8RegImm64,
-      callNode,
-      _JNIDispatchInfo.dispatchTrampolineRegister,
-      targetAddress,
-      cg(), reloTypes[reloType]);
-
-   TR::X86RegInstruction *instr = generateRegInstruction(
-      CALLReg,
-      callNode,
-      _JNIDispatchInfo.dispatchTrampolineRegister,
-      _JNIDispatchInfo.callPostDeps,
-      cg());
-   cg()->getJNICallSites().push_front(new (trHeapMemory()) TR_Pair<TR_ResolvedMethod, TR::Instruction>(callSymbol->getResolvedMethod(), patchedInstr));
+   TR::GlobalFunctionCallData data(methodSymRef, callNode, _JNIDispatchInfo.dispatchTrampolineRegister, targetAddress, _JNIDispatchInfo.callPostDeps, reloTypes[reloType], false, cg());
+   TR::Instruction *instr = cg()->getObjFmt()->emitGlobalFunctionCall(data);
+   cg()->getObjFmt()->registerJNICallSite(data);
 
    if (isJNIGCPoint)
       instr->setNeedsGCMap(_systemLinkage->getProperties().getPreservedRegisterMapForGC());
@@ -869,7 +859,8 @@ void J9::X86::AMD64::JNILinkage::releaseVMAccess(TR::Node *callNode)
    {
    TR_OutlinedInstructionsGenerator og(longReleaseSnippetLabel, callNode, cg());
    auto helper = comp()->getSymRefTab()->findOrCreateReleaseVMAccessSymbolRef(comp()->getMethodSymbol());
-   generateImmSymInstruction(CALLImm4, callNode, (uintptr_t)helper->getMethodAddress(), helper, cg());
+   TR::GlobalFunctionCallData data(helper, callNode, 0, 0, 0, TR_NoRelocation, true, cg());
+   cg()->getObjFmt()->emitGlobalFunctionCall(data);
    generateLabelInstruction(JMP4, callNode, longReleaseRestartLabel, cg());
    og.endOutlinedInstructionSequence();
    }
@@ -967,7 +958,8 @@ void J9::X86::AMD64::JNILinkage::acquireVMAccess(TR::Node *callNode)
    {
    TR_OutlinedInstructionsGenerator og(longReacquireSnippetLabel, callNode, cg());
    auto helper = comp()->getSymRefTab()->findOrCreateAcquireVMAccessSymbolRef(comp()->getMethodSymbol());
-   generateImmSymInstruction(CALLImm4, callNode, (uintptr_t)helper->getMethodAddress(), helper, cg());
+   TR::GlobalFunctionCallData data(helper, callNode, 0, 0, 0, TR_NoRelocation, true, cg());
+   cg()->getObjFmt()->emitGlobalFunctionCall(data);
    generateLabelInstruction(JMP4, callNode, longReacquireRestartLabel, cg());
    og.endOutlinedInstructionSequence();
    }
@@ -1019,7 +1011,8 @@ void J9::X86::AMD64::JNILinkage::releaseVMAccessAtomicFree(TR::Node *callNode)
 
    TR_OutlinedInstructionsGenerator og(longReleaseSnippetLabel, callNode, cg());
    auto helper = comp()->getSymRefTab()->findOrCreateReleaseVMAccessSymbolRef(comp()->getMethodSymbol());
-   generateImmSymInstruction(CALLImm4, callNode, (uintptr_t)helper->getMethodAddress(), helper, cg());
+   TR::GlobalFunctionCallData data(helper, callNode, 0, 0, 0, TR_NoRelocation, true, cg());
+   cg()->getObjFmt()->emitGlobalFunctionCall(data);
    generateLabelInstruction(JMP4, callNode, longReleaseRestartLabel, cg());
    og.endOutlinedInstructionSequence();
    }
@@ -1057,7 +1050,8 @@ void J9::X86::AMD64::JNILinkage::acquireVMAccessAtomicFree(TR::Node *callNode)
 
    TR_OutlinedInstructionsGenerator og(longAcquireSnippetLabel, callNode, cg());
    auto helper = comp()->getSymRefTab()->findOrCreateAcquireVMAccessSymbolRef(comp()->getMethodSymbol());
-   generateImmSymInstruction(CALLImm4, callNode, (uintptr_t)helper->getMethodAddress(), helper, cg());
+   TR::GlobalFunctionCallData data(helper, callNode, 0, 0, 0, TR_NoRelocation, true, cg());
+   cg()->getObjFmt()->emitGlobalFunctionCall(data);
    generateLabelInstruction(JMP4, callNode, longAcquireRestartLabel, cg());
    og.endOutlinedInstructionSequence();
    }
@@ -1178,7 +1172,8 @@ void J9::X86::AMD64::JNILinkage::cleanupJNIRefPool(TR::Node *callNode)
    generateLabelInstruction(LABEL, callNode, refPoolRestartLabel, cg());
 
    TR_OutlinedInstructionsGenerator og(refPoolSnippetLabel, callNode, cg());
-   generateHelperCallInstruction(callNode, TR_AMD64jitCollapseJNIReferenceFrame, NULL, cg());
+   TR::GlobalFunctionCallData data(TR_AMD64jitCollapseJNIReferenceFrame, callNode, 0, cg());
+   cg()->getObjFmt()->emitGlobalFunctionCall(data);
    generateLabelInstruction(JMP4, callNode, refPoolRestartLabel, cg());
    og.endOutlinedInstructionSequence();
    }

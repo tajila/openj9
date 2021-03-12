@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -1384,7 +1384,7 @@ inlineBigDecimalFromPackedConverter(
       cg->stopUsingRegister(valRegister);
       }
 
-   // load and sign extend the exponent
+   // load and sign extend the the exponent
    TR::Register * expRegister = NULL;
    clobbered = false;
    if (node->getChild(2)->getReferenceCount() > 1)
@@ -2640,7 +2640,7 @@ deloadHelper(TR::Node * node, TR::CodeGenerator * cg, TR::MemoryReference * srcM
    TR::MemoryReference * hiMR;
    if (loMR == NULL)
       {
-      loMR =  TR::MemoryReference::create(cg, node);
+      loMR = TR::MemoryReference::create(cg, node);
       }
    hiMR = generateS390MemoryReference(*loMR, 8, cg);
    // FP reg pairs for long double: FPR0 & FPR2, FPR4 & FPR6, FPR1 & FPR3, FPR5 & FPR7 etc..
@@ -2675,7 +2675,7 @@ destoreHelper(TR::Node * node, TR::CodeGenerator * cg)
       valueChild = node->getFirstChild();
       }
   // source returns a reg pair, so... TODO
-   TR::Register * srcReg = cg->evaluate(valueChild);
+  TR::Register * srcReg = cg->evaluate(valueChild);
 
    TR::MemoryReference * loMR = TR::MemoryReference::create(cg, node);
    TR::MemoryReference * hiMR = generateS390MemoryReference(*loMR, 8, cg);

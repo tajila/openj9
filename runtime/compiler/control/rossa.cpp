@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corp. and others
+ * Copyright (c) 2000, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -114,10 +114,9 @@
 #include "net/LoadSSLLibs.hpp"
 #include "runtime/JITClientSession.hpp"
 #include "runtime/Listener.hpp"
-#include "runtime/JITServerSharedROMClassCache.hpp"
 #include "runtime/JITServerStatisticsThread.hpp"
 #include "runtime/JITServerIProfiler.hpp"
-#endif /* defined(J9VM_OPT_JITSERVER) */
+#endif
 
 extern "C" int32_t encodeCount(int32_t count);
 
@@ -205,19 +204,14 @@ char *compilationErrorNames[]={
    "compilationAOTValidateTMFailure", //52
    "compilationILGenUnsupportedValueTypeOperationFailure", //53
    "compilationAOTRelocationRecordGenerationFailure", //54
-   "compilationAotPatchedCPConstant", //55
-   "compilationAotHasInvokeSpecialInterface", //56
-   "compilationAotValidateExceptionHookFailure", //57
-   "compilationAotBlockFrequencyReloFailure", //58
-   "compilationAotRecompQueuedFlagReloFailure", //59
-   "compilationAOTValidateOSRFailure", //60
 #if defined(J9VM_OPT_JITSERVER)
-   "compilationStreamFailure", //compilationFirstJITServerFailure=61
-   "compilationStreamLostMessage", // compilationFirstJITServerFailure+1
-   "compilationStreamMessageTypeMismatch", //compilationFirstJITServerFailure+2
-   "compilationStreamVersionIncompatible", //compilationFirstJITServerFailure+3
-   "compilationStreamInterrupted", //compilationFirstJITServerFailure+4
+   "compilationStreamFailure", //55
+   "compilationStreamLostMessage", // 56
+   "compilationStreamMessageTypeMismatch", // 57
+   "compilationStreamVersionIncompatible", // 58
+   "compilationStreamInterrupted", // 59
 #endif /* defined(J9VM_OPT_JITSERVER) */
+   "compilationAotHasInvokeSpecialInterface", //60
    "compilationMaxError",
 };
 
@@ -927,6 +921,11 @@ compileClasses(J9VMThread * vmThread, const char * pattern)
    TR::CompilationInfo * compInfo = TR::CompilationInfo::get(jitConfig);
    if (!compInfo)
       return foundClassToCompile;
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+   VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(javaVM);
+#endif
+
    PORT_ACCESS_FROM_JAVAVM(javaVM);
    J9ClassWalkState classWalkState;
 
@@ -1015,7 +1014,9 @@ compileClasses(J9VMThread * vmThread, const char * pattern)
             }
 
          if (freeClassNameString)
+            {
             j9mem_free_memory(classNameString);
+            }
          } // end if
 
       clazz = javaVM->internalVMFunctions->allLiveClassesNextDo(&classWalkState);
@@ -1024,7 +1025,9 @@ compileClasses(J9VMThread * vmThread, const char * pattern)
    javaVM->internalVMFunctions->allLiveClassesEndDo(&classWalkState);
 
    if (freePatternString)
+      {
       j9mem_free_memory(patternString);
+      }
 
    // now compile all classes from the list
    TR_ClassHolder * trj9class;
@@ -1066,6 +1069,10 @@ onLoadInternal(
       void *reserved0,
       I_32 xnojit)
    {
+#if defined(J9VM_OPT_SNAPSHOTS)
+   VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(javaVM);
+#endif
+
    PORT_ACCESS_FROM_JAVAVM(javaVM);
 
    jitConfig->javaVM = javaVM;
@@ -1091,6 +1098,7 @@ onLoadInternal(
 
    /* Allocate the privateConfig structure.  Note that the AOTRT DLL does not allocate this structure */
    jitConfig->privateConfig = j9mem_allocate_memory(sizeof(TR_JitPrivateConfig), J9MEM_CATEGORY_JIT);
+
    if (jitConfig->privateConfig == NULL)  // Memory Allocation Failure.
       return -1;
 
@@ -1210,17 +1218,6 @@ onLoadInternal(
       //jitConfig->codeCacheKB = J9_JIT_CODE_CACHE_SIZE / 1024;  // bytes -> k
       jitConfig->dataCacheKB = 512;  // bytes -> k
 #endif
-#endif
-
-
-#if defined(J9VM_OPT_JITSERVER)
-   if (javaVM->internalVMFunctions->isJITServerEnabled(javaVM))
-      {
-      // Use smaller caches on the server because
-      // just one method's data is going to be stored there at a time
-      jitConfig->codeCacheKB = 1024;
-      jitConfig->dataCacheKB = 1024;
-      }
 #endif
 
    if (fe->isAOT_DEPRECATED_DO_NOT_USE())
@@ -1363,7 +1360,7 @@ onLoadInternal(
    memset(aotStats, 0, sizeof(TR_AOTStats));
    ((TR_JitPrivateConfig*)jitConfig->privateConfig)->aotStats = aotStats;
 
-   TR::CodeCacheManager *codeCacheManager = (TR::CodeCacheManager *) j9mem_allocate_memory(sizeof(TR::CodeCacheManager), J9MEM_CATEGORY_JIT);
+   TR::CodeCacheManager *codeCacheManager = (TR::CodeCacheManager *) j9mem_allocate_memory(sizeof(TR::CodeCacheManager), J9MEM_CATEGORY_JIT);;
    if (codeCacheManager == NULL)
       return -1;
    memset(codeCacheManager, 0, sizeof(TR::CodeCacheManager));
@@ -1410,7 +1407,8 @@ onLoadInternal(
    codeCacheConfig._verbosePerformance = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerbosePerformance);
    codeCacheConfig._verboseReclamation = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCodeCacheReclamation);
    codeCacheConfig._doSanityChecks = TR::Options::getCmdLineOptions()->getOption(TR_CodeCacheSanityCheck);
-   codeCacheConfig._codeCacheTotalKB = jitConfig->codeCacheTotalKB;
+   codeCacheConfig._codeCacheTotalKB = 64*1024;
+   codeCacheConfig._dataAreaTotalKB = jitConfig->codeCacheTotalKB;
    codeCacheConfig._codeCacheKB = jitConfig->codeCacheKB;
    codeCacheConfig._codeCachePadKB = jitConfig->codeCachePadKB;
    codeCacheConfig._codeCacheAlignment = jitConfig->codeCacheAlignment;
@@ -1460,7 +1458,17 @@ onLoadInternal(
 
       #if defined(TR_TARGET_S390)
          // allocate 4K
-         jitConfig->pseudoTOC = j9mem_allocate_memory(4096, J9MEM_CATEGORY_JIT);
+#if defined(J9VM_OPT_SNAPSHOTS)
+         if (IS_SNAPSHOT_RUN(javaVM))
+            {
+            jitConfig->pseudoTOC = vmsnapshot_allocate_memory(4096, J9MEM_CATEGORY_JIT);
+            }
+         else
+#endif
+            {
+            jitConfig->pseudoTOC = j9mem_allocate_memory(4096, J9MEM_CATEGORY_JIT);
+            }
+
          if (!jitConfig->pseudoTOC)
             return -1;
 
@@ -1689,17 +1697,6 @@ onLoadInternal(
       if (!JITServer::loadLibsslAndFindSymbols())
          return -1;
       }
-   else if ((compInfo->getPersistentInfo()->getRemoteCompilationMode() == JITServer::SERVER) &&
-            TR::Options::_shareROMClasses)
-      {
-      // ROMClass sharing uses a hash implementation from SSL. Disable it if we can't load the library.
-      if (!JITServer::loadLibsslAndFindSymbols())
-         {
-         if (TR::Options::getVerboseOption(TR_VerboseJITServer))
-            TR_VerboseLog::writeLineLocked(TR_Vlog_JITServer, "Failed to load SSL library, disabling ROMClass sharing");
-         TR::Options::_shareROMClasses = false;
-         }
-      }
 
    if (compInfo->getPersistentInfo()->getRemoteCompilationMode() == JITServer::SERVER)
       {
@@ -1729,17 +1726,6 @@ onLoadInternal(
          {
          ((TR_JitPrivateConfig*)(jitConfig->privateConfig))->statisticsThreadObject = NULL;
          }
-
-      //NOTE: This must be done only after the SSL library has been successfully loaded
-      if (TR::Options::_shareROMClasses)
-         {
-         size_t numPartitions = std::max(1, TR::Options::_sharedROMClassCacheNumPartitions);
-         auto cache = new (PERSISTENT_NEW) JITServerSharedROMClassCache(numPartitions);
-         if (!cache)
-            return -1;
-         compInfo->setJITServerSharedROMClassCache(cache);
-         }
-
       }
    else if (compInfo->getPersistentInfo()->getRemoteCompilationMode() == JITServer::CLIENT)
       {
@@ -1781,6 +1767,8 @@ onLoadInternal(
 #ifdef J9VM_RAS_DUMP_AGENTS
    jitConfig->runJitdump = runJitdump;
 #endif
+
+   // STRATUM TODO: https://github.ibm.com/runtimes/openj9-stratum/issues/69
 
    jitConfig->printAOTHeaderProcessorFeatures = printAOTHeaderProcessorFeatures;
 
@@ -1871,12 +1859,6 @@ aboutToBootstrap(J9JavaVM * javaVM, J9JITConfig * jitConfig)
       return -1;
       }
 
-   if (!TR::Options::getCmdLineOptions()->allowRecompilation() || !TR::Options::getAOTCmdLineOptions()->allowRecompilation())
-      {
-      TR::Options::getCmdLineOptions()->setOption(TR_DisableCHOpts);
-      TR::Options::getAOTCmdLineOptions()->setOption(TR_DisableCHOpts);
-      }
-
    // Get local var names if available (ie. classfile was compiled with -g).
    // We just check getDebug() for lack of a reliable way to check whether there are any methods being logged.
    //
@@ -1935,35 +1917,49 @@ aboutToBootstrap(J9JavaVM * javaVM, J9JITConfig * jitConfig)
 
       if (validateSCC)
          {
-         /* If AOT Shared Classes is turned ON, perform compatibility checks for AOT Shared Classes
-          *
-          * This check has to be done after latePostProcessJIT so that all the necessary JIT options
-          * can be set
-          */
-         TR_J9VMBase *fe = TR_J9VMBase::get(jitConfig, curThread);
-         if (!compInfo->reloRuntime()->validateAOTHeader(fe, curThread))
+         if (TR::Options::getCmdLineOptions()->getOption(TR_ForceGenerateReadOnlyCode))
             {
-            TR_ASSERT_FATAL(static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader != TR_yes,
-                            "aotValidHeader is TR_yes after failing to validate AOT header\n");
-
-            /* If this is the second run, then failing to validate AOT header will cause aotValidHeader
-             * to be TR_no, in which case the SCC is not valid for use. However, if this is the first
-             * run, then aotValidHeader will be TR_maybe; try to store the AOT Header in this case.
+            /* Disable AOT entirely for the intial prototype. The reason is because
+             * enabling AOT in this mode is going to require some (likely small but) non-trivial
+             * changes in the control logic.
              */
-            if (static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader == TR_no
-                || !compInfo->reloRuntime()->storeAOTHeader(fe, curThread))
-               {
-               static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader = TR_no;
-               TR::Options::getAOTCmdLineOptions()->setOption(TR_NoLoadAOT);
-               TR::Options::getAOTCmdLineOptions()->setOption(TR_NoStoreAOT);
-               TR::Options::setSharedClassCache(false);
-               TR_J9SharedCache::setSharedCacheDisabledReason(TR_J9SharedCache::AOT_DISABLED);
-               }
+            static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader = TR_no;
+            TR::Options::getAOTCmdLineOptions()->setOption(TR_NoLoadAOT);
+            TR::Options::getAOTCmdLineOptions()->setOption(TR_NoStoreAOT);
+            TR::Options::setSharedClassCache(false);
+            TR_J9SharedCache::setSharedCacheDisabledReason(TR_J9SharedCache::AOT_DISABLED);
             }
          else
             {
-            TR::Compiler->relocatableTarget.cpu = TR::CPU::customize(compInfo->reloRuntime()->getProcessorDescriptionFromSCC(fe, curThread));
-            jitConfig->relocatableTargetProcessor = TR::Compiler->relocatableTarget.cpu.getProcessorDescription();
+            /* If AOT Shared Classes is turned ON, perform compatibility checks for AOT Shared Classes
+             *
+             * This check has to be done after latePostProcessJIT so that all the necessary JIT options
+             * can be set
+             */
+            TR_J9VMBase *fe = TR_J9VMBase::get(jitConfig, curThread);
+            if (!compInfo->reloRuntime()->validateAOTHeader(fe, curThread))
+               {
+               TR_ASSERT_FATAL(static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader != TR_yes,
+                               "aotValidHeader is TR_yes after failing to validate AOT header\n");
+
+               /* If this is the second run, then failing to validate AOT header will cause aotValidHeader
+                * to be TR_no, in which case the SCC is not valid for use. However, if this is the first
+                * run, then aotValidHeader will be TR_maybe; try to store the AOT Header in this case.
+                */
+               if (static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader == TR_no
+                   || !compInfo->reloRuntime()->storeAOTHeader(fe, curThread))
+                  {
+                  static_cast<TR_JitPrivateConfig *>(jitConfig->privateConfig)->aotValidHeader = TR_no;
+                  TR::Options::getAOTCmdLineOptions()->setOption(TR_NoLoadAOT);
+                  TR::Options::getAOTCmdLineOptions()->setOption(TR_NoStoreAOT);
+                  TR::Options::setSharedClassCache(false);
+                  TR_J9SharedCache::setSharedCacheDisabledReason(TR_J9SharedCache::AOT_DISABLED);
+                  }
+               }
+            else
+               {
+               TR::Compiler->relocatableTarget.cpu = TR::CPU::customize(compInfo->reloRuntime()->getProcessorDescriptionFromSCC(fe, curThread));
+               }
             }
          }
 

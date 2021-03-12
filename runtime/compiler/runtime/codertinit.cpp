@@ -31,6 +31,7 @@
 #include "j9cfg.h"
 #include "j9consts.h"
 #include "j9protos.h"
+#include "jithash.h"
 #include "stackwalk.h"
 #include "control/Recompilation.hpp"
 #include "control/RecompilationInfo.hpp"
@@ -159,6 +160,49 @@ void * getRuntimeHelperValue(int32_t h)
 
 }
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+static void restoreJitArtifacts(J9JavaVM *vm)
+   {
+   J9AVLTree *translationArtifacts = vm->jitConfig->translationArtifacts;
+   J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+
+   // Create a tree node representing all of the code in the image.
+   //
+   avl_insert(translationArtifacts, (J9AVLTreeNode *)hash_jit_allocate(vm, (UDATA)vm->jitConfig->imageCodeCacheStart, (UDATA)vm->jitConfig->imageCodeCacheEnd));
+
+   // Add to that node all of the named class metadatas, which are reachable from their classloaders.
+   //
+   pool_state classLoaderWalkState = {0};
+   J9ClassLoader *currentClassLoader = (J9ClassLoader *)pool_startDo(vm->classLoaderBlocks, &classLoaderWalkState);
+   while (NULL != currentClassLoader)
+      {
+      for (J9JITExceptionTable *metadata = currentClassLoader->jitMetaDataList; metadata != NULL; metadata = J9JITEXCEPTIONTABLE_NEXTMETHOD_GET(metadata))
+         {
+         metadata->runtimeAssumptionList = NULL;
+         jit_artifact_insert(vm, translationArtifacts, metadata);
+         }
+
+      currentClassLoader = (J9ClassLoader *) pool_nextDo(&classLoaderWalkState);
+      }
+
+   // Add to that node all of the anonymous class metadatas, which are only reachable from the
+   // anonymous classes themselves.
+   //
+   J9ClassWalkState classWalkState = {0};
+   J9Class* clazz = vmFuncs->allClassesStartDo(&classWalkState, vm, vm->anonClassLoader);
+   while (NULL != clazz)
+      {
+      for (J9JITExceptionTable *metadata = clazz->jitMetaDataList; metadata != NULL; metadata = J9JITEXCEPTIONTABLE_NEXTMETHOD_GET(metadata))
+         {
+         metadata->runtimeAssumptionList = NULL;
+         jit_artifact_insert(vm, translationArtifacts, metadata);
+         }
+      clazz = vmFuncs->allClassesNextDo(&classWalkState);
+      }
+   vmFuncs->allClassesEndDo(&classWalkState);
+   }
+#endif
+
 #ifdef LINUX
 #include <sys/types.h>
 #include <signal.h>
@@ -169,8 +213,18 @@ void * getRuntimeHelperValue(int32_t h)
 J9JITConfig * codert_onload(J9JavaVM * javaVM)
    {
    J9JITConfig * jitConfig = NULL;
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+   VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(javaVM);
+#endif
    PORT_ACCESS_FROM_JAVAVM(javaVM);
    OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+
+   bool conditionalInit = true;
+#if defined(J9VM_OPT_SNAPSHOTS)
+   if (IS_RESTORE_RUN(javaVM))
+      conditionalInit = false;
+#endif
 
    #if defined(TR_HOST_X86) && !defined(TR_HOST_64BIT)
       vmThreadTLSKey = (U_32) javaVM->omrVM->_vmThreadKey;
@@ -195,12 +249,25 @@ J9JITConfig * codert_onload(J9JavaVM * javaVM)
 
    TR_ASSERT(!javaVM->jitConfig, "jitConfig already initialized.");
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+   if (IS_SNAPSHOT_RUN(javaVM))
+      {
+      javaVM->jitConfig = (J9JITConfig *) vmsnapshot_allocate_memory(sizeof(J9JITConfig), J9MEM_CATEGORY_JIT);
+      }
+   else if (!IS_RESTORE_RUN(javaVM))
+      {
+      javaVM->jitConfig = (J9JITConfig *) j9mem_allocate_memory(sizeof(J9JITConfig), J9MEM_CATEGORY_JIT);
+      }
+#else
    javaVM->jitConfig = (J9JITConfig *) j9mem_allocate_memory(sizeof(J9JITConfig), J9MEM_CATEGORY_JIT);
+#endif
 
    if (!javaVM->jitConfig)
       goto _abort;
 
-   memset(javaVM->jitConfig, 0, sizeof(J9JITConfig));
+   if (conditionalInit)
+      memset(javaVM->jitConfig, 0, sizeof(J9JITConfig));
+
    jitConfig = javaVM->jitConfig;
    jitConfig->sampleInterruptHandlerKey = -1;
 
@@ -208,7 +275,7 @@ J9JITConfig * codert_onload(J9JavaVM * javaVM)
    if (J9HookInitializeInterface(J9_HOOK_INTERFACE(jitConfig->hookInterface), OMRPORTLIB, sizeof(jitConfig->hookInterface)))
       goto _abort;
 
-   if (j9ThunkTableAllocate(javaVM))
+   if (conditionalInit && j9ThunkTableAllocate(javaVM))
       goto _abort;
 
    /* initialize assumptionTableMutex */
@@ -225,7 +292,7 @@ J9JITConfig * codert_onload(J9JavaVM * javaVM)
 #elif defined(TR_HOST_X86)
    jitConfig->codeCacheAlignment = 32;
 #elif defined(TR_HOST_S390)
-   // On IBM Z, it can generate load and store quadword instructions from 
+   // On IBM Z, it can generate load and store quadword instructions from
    // Snippet. This requires quadword alignment.
    jitConfig->codeCacheAlignment = 16;
 #elif defined(TR_HOST_64BIT)
@@ -234,7 +301,14 @@ J9JITConfig * codert_onload(J9JavaVM * javaVM)
    jitConfig->codeCacheAlignment = 4;
 #endif
 
-   jitConfig->translationArtifacts = jit_allocate_artifacts(javaVM->portLibrary);
+   jitConfig->translationArtifacts = jit_allocate_artifacts(javaVM);
+#if defined(J9VM_OPT_SNAPSHOTS)
+   if (!conditionalInit)
+      {
+      restoreJitArtifacts(javaVM);
+      }
+#endif
+
    if (!jitConfig->translationArtifacts)
       goto _abort;
 
@@ -277,19 +351,41 @@ void codert_freeJITConfig(J9JavaVM * javaVM)
 
    if (jitConfig)
       {
+#if defined(J9VM_OPT_SNAPSHOTS)
+      VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(javaVM);
+#endif
       PORT_ACCESS_FROM_JAVAVM(javaVM);
 
       j9ThunkTableFree(javaVM);
 
-      if (jitConfig->translationArtifacts)
-         avl_jit_artifact_free_all(javaVM, jitConfig->translationArtifacts);
+      // STRATUM TODO: https://github.ibm.com/runtimes/openj9-stratum/issues/68
+      bool freeTranslationArtifacts = true;
+#if defined(J9VM_OPT_SNAPSHOTS)
+      if (IS_RESTORE_RUN(javaVM))
+         freeTranslationArtifacts = false;
+#endif
+      if (freeTranslationArtifacts)
+         if (jitConfig->translationArtifacts)
+            avl_jit_artifact_free_all(javaVM, jitConfig->translationArtifacts);
 
       if (jitConfig->codeCacheList)
          javaVM->internalVMFunctions->freeMemorySegmentList(javaVM, jitConfig->codeCacheList);
 
 #if defined(TR_TARGET_S390)
       if (jitConfig->pseudoTOC)
-         j9mem_free_memory(jitConfig->pseudoTOC);
+         {
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+         if (IS_SNAPSHOT_RUN(javaVM))
+            {
+            vmsnapshot_free_memory(jitConfig->pseudoTOC);
+            }
+         else
+#endif
+            {
+            j9mem_free_memory(jitConfig->pseudoTOC);
+            }
+         }
 #endif
 
       if (jitConfig->compilationInfo)
@@ -375,12 +471,22 @@ void codert_freeJITConfig(J9JavaVM * javaVM)
       if (jitConfig->privateConfig)
          {
          if (((TR_JitPrivateConfig*)jitConfig->privateConfig)->aotStats)
+            {
             j9mem_free_memory(((TR_JitPrivateConfig*)jitConfig->privateConfig)->aotStats);
+            }
 
          j9mem_free_memory(jitConfig->privateConfig);
          jitConfig->privateConfig = NULL;
          }
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+      if (IS_SNAPSHOT_RUN(javaVM))
+         {
+         vmsnapshot_free_memory(jitConfig);
+         }
+#else
       j9mem_free_memory(jitConfig);
+#endif
 
       /* Finally break the connection between the VM and the JIT */
       javaVM->jitConfig = NULL;
@@ -598,3 +704,16 @@ TR_X86CPUIDBuffer *queryX86TargetCPUID(void * javaVM)
    return result;
    }
 
+
+void codert_initRestoreVM(J9JavaVM *vm)
+   {
+   initializeCodertFunctionTable(vm);
+
+   if (!vm->jitWalkStackFrames)
+       {
+       vm->jitWalkStackFrames = jitWalkStackFrames;
+       vm->jitExceptionHandlerSearch = jitExceptionHandlerSearch;
+       vm->jitGetOwnedObjectMonitors = jitGetOwnedObjectMonitors;
+       }
+
+   }

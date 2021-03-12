@@ -32,6 +32,8 @@
 #include "il/Node.hpp"
 #include "il/Node_inlines.hpp"
 #include "env/CompilerEnv.hpp"
+#include "objectfmt/JitCodeObjectFormat.hpp"
+#include "objectfmt/ELFJitCodeObjectFormat.hpp"
 
 void
 J9::X86::AMD64::CodeGenerator::initialize()
@@ -112,3 +114,18 @@ J9::X86::AMD64::CodeGenerator::createLinkage(TR_LinkageConventions lc)
    self()->setLinkage(lc, linkage);
    return linkage;
    }
+
+
+void
+J9::X86::AMD64::CodeGenerator::createObjectFormat()
+   {
+   if (self()->comp()->getGenerateReadOnlyCode())
+      {
+      self()->setObjFmt(new (self()->trHeapMemory()) TR::ELFJitCodeObjectFormat());
+      }
+   else
+      {
+      self()->setObjFmt(new (self()->trHeapMemory()) TR::JitCodeObjectFormat());
+      }
+   }
+

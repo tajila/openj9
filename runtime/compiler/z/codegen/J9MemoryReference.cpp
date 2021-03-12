@@ -24,6 +24,8 @@
 #pragma csect(STATIC,"TRJ9MRBase#S")
 #pragma csect(TEST,"TRJ9MRBase#T")
 
+#include "codegen/CCData.hpp"
+#include "codegen/CCData_inlines.hpp"
 #include "codegen/MemoryReference.hpp"
 #include "codegen/InstOpCode.hpp"
 #include "codegen/Machine.hpp"
@@ -43,6 +45,7 @@
 #include "env/FrontEnd.hpp"
 #include "codegen/InstOpCode.hpp"
 #include "codegen/Instruction.hpp"
+#include "codegen/J9UnresolvedDataReadOnlySnippet.hpp"
 #include "codegen/Linkage.hpp"
 #include "codegen/Linkage_inlines.hpp"
 #include "codegen/LiveRegister.hpp"
@@ -85,6 +88,8 @@
 #include "infra/Flags.hpp"
 #include "infra/List.hpp"
 #include "ras/Debug.hpp"
+#include "runtime/CodeCache.hpp"
+#include "runtime/CodeCacheManager.hpp"
 #include "z/codegen/EndianConversion.hpp"
 #include "z/codegen/S390Evaluator.hpp"
 #include "z/codegen/S390GenerateInstructions.hpp"
@@ -375,6 +380,107 @@ J9::Z::MemoryReference::setMemRefAndGetUnresolvedData(TR::Snippet *& snippet)
    {
    self()->getUnresolvedSnippet()->setMemoryReference(self());
    snippet = self()->getUnresolvedSnippet()->getUnresolvedData();
+   }
+
+TR::MemoryReference*
+J9::Z::MemoryReference::create(TR::CodeGenerator* cg, TR::Node* node)
+   {
+   if (cg->comp()->getGenerateReadOnlyCode() && node->getSymbolReference()->isUnresolved())
+      {
+      TR::Compilation *comp = cg->comp();
+
+      TR::Register *baseReg = NULL;
+      if (node->getOpCode().isIndirect())
+         {
+         baseReg = cg->evaluate(node->getFirstChild());
+         }
+
+      typedef J9::Z::UnresolvedDataReadOnlySnippet::CCUnresolvedData CCUnresolvedData;
+
+      TR::CCData *codeCacheData = cg->getCodeCache()->manager()->getCodeCacheData();
+      TR::CCData::index_t index;
+      if (!(codeCacheData->reserve(sizeof(CCUnresolvedData), alignof(CCUnresolvedData), NULL, index)))
+         {
+         comp->failCompilation<TR::CompilationException>("Could not allocate unresolved data metadata");
+         }
+
+      CCUnresolvedData* ccUnresolvedDataAddress = codeCacheData->get<CCUnresolvedData>(index);
+
+      TR::SymbolReference *symRef = node->getSymbolReference();
+
+      ccUnresolvedDataAddress->indexOrAddress = 0;
+      ccUnresolvedDataAddress->cpAddress = reinterpret_cast<intptr_t>(symRef->getOwningMethod(comp)->constantPool());
+      ccUnresolvedDataAddress->isVolatile = node->getOpCode().isStore() ? 1 : 0;
+
+      intptr_t unresolvedDataAddress = reinterpret_cast<intptr_t>(ccUnresolvedDataAddress);
+
+      TR::StaticSymbol *unresolvedDataSymbol =
+         TR::StaticSymbol::createWithAddress(
+            comp->trHeapMemory(),
+            symRef->getSymbol()->isShadow() ? TR::Int32 : TR::Address,
+            reinterpret_cast<void *>(unresolvedDataAddress + offsetof(CCUnresolvedData, indexOrAddress)));
+      unresolvedDataSymbol->setNotDataAddress();
+      TR::SymbolReference *unresolvedDataSymRef = new (comp->trHeapMemory()) TR::SymbolReference(comp->getSymRefTab(), unresolvedDataSymbol, 0);
+
+      TR::LabelSymbol *startResolveSequenceLabel = generateLabelSymbol(cg);
+      generateS390LabelInstruction(cg, TR::InstOpCode::LABEL, node, startResolveSequenceLabel);
+
+      TR::Register *indexOrAddrReg = cg->allocateRegister();
+      generateRILInstruction(cg, TR::InstOpCode::getLoadRelativeLongOpCode(), node, indexOrAddrReg, unresolvedDataSymRef, unresolvedDataSymbol->getStaticAddress());
+
+      TR::LabelSymbol *volatileFenceLabel = node->getOpCode().isStore() ? generateLabelSymbol(cg) : NULL;
+      TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+      TR::LabelSymbol *cFlowRegionEnd = generateLabelSymbol(cg);
+
+      TR::Snippet *snippet = (TR::Snippet*) new (comp->trHeapMemory()) J9::Z::UnresolvedDataReadOnlySnippet(
+         cg,
+         node,
+         symRef,
+         unresolvedDataAddress,
+         startResolveSequenceLabel,
+         volatileFenceLabel,
+         cFlowRegionEnd,
+         doneLabel);
+
+      cg->addSnippet(snippet);
+
+      TR::LabelSymbol *cFlowRegionStart = generateLabelSymbol(cg);
+      cFlowRegionStart->setStartInternalControlFlow();
+      cFlowRegionEnd->setEndInternalControlFlow();
+
+      TR::Register *raReg = cg->allocateRegister();
+
+      auto dependencies = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 2, cg);
+      dependencies->addPostCondition(indexOrAddrReg, TR::RealRegister::AssignAny);
+      dependencies->addPostCondition(raReg, cg->getReturnAddressRegister());
+
+      generateS390LabelInstruction(cg, TR::InstOpCode::LABEL, node, cFlowRegionStart);
+      generateRILInstruction(cg, TR::InstOpCode::getCmpImmOpCode(), node, indexOrAddrReg, 0);
+      auto cursor = new (INSN_HEAP) TR::S390RILInstruction(TR::InstOpCode::BRCL, node, 0x8, snippet, NULL, cg);
+      cursor->setNeedsGCMap(0xFFFFFFFF);
+      generateS390LabelInstruction(cg, TR::InstOpCode::LABEL, node, cFlowRegionEnd, dependencies);
+
+      TR::MemoryReference *loadStoreDataMR = NULL;
+      if (baseReg != NULL)
+         {
+         loadStoreDataMR = generateS390MemoryReference(baseReg, indexOrAddrReg, 0, cg);
+         loadStoreDataMR->setBaseNode(node->getFirstChild());
+         cg->decReferenceCount(node->getFirstChild());
+         }
+      else
+         {
+         loadStoreDataMR = generateS390MemoryReference(indexOrAddrReg, 0, cg);
+         }
+
+      cg->stopUsingRegister(indexOrAddrReg);
+      cg->stopUsingRegister(raReg);
+
+      return loadStoreDataMR;
+      }
+   else
+      {
+      return OMR::MemoryReferenceConnector::create(cg, node);
+      }
    }
 
 TR::MemoryReference *

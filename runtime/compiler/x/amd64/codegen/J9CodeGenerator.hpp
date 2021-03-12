@@ -60,6 +60,8 @@ public:
    void initialize();
 
    TR::Linkage *createLinkage(TR_LinkageConventions lc);
+
+   void createObjectFormat();
    };
 
 } // namespace AMD64
