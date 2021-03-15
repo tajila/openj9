@@ -22,6 +22,8 @@
 
 #include "j9cfg.h"
 
+#define DEBUG
+
 #if defined(J9VM_OPT_SNAPSHOTS)
 
 #include "VMSnapshotImpl.hpp"
@@ -695,7 +697,7 @@ VMSnapshotImpl::removeUnpersistedClassLoaders(void)
 
 
 void
-VMSnapshotImpl::fixupClasses(J9VMThread *currentThread)
+VMSnapshotImpl::fixupClasses(J9VMThread *currentThread, J9Pool *registeredNatives)
 {
 	pool_state classLoaderWalkState = {0};
 	J9ClassLoader *classloader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
@@ -707,7 +709,7 @@ VMSnapshotImpl::fixupClasses(J9VMThread *currentThread)
 			J9ROMClass *romClass = currentClass->romClass;
 
 			if (!J9ROMCLASS_IS_ARRAY(romClass)) {
-				fixupClass(currentThread, currentClass);
+				fixupClass(currentThread, currentClass, registeredNatives);
 			}
 
 			currentClass = allLiveClassesNextDo(&walkState);
@@ -721,9 +723,9 @@ VMSnapshotImpl::fixupClasses(J9VMThread *currentThread)
 }
 
 void
-VMSnapshotImpl::fixupClass(J9VMThread *currentThread, J9Class *clazz)
+VMSnapshotImpl::fixupClass(J9VMThread *currentThread, J9Class *clazz, J9Pool *registeredNatives)
 {
-	fixupMethodRunAddresses(currentThread, clazz);
+	fixupMethodRunAddresses(currentThread, clazz, registeredNatives);
 	clazz->customSpinOption = NULL;
 }
 
@@ -782,7 +784,7 @@ VMSnapshotImpl::fixupArrayClass(J9ArrayClass *clazz)
 }
 
 void
-VMSnapshotImpl::fixupMethodRunAddresses(J9VMThread *currentThread, J9Class *ramClass)
+VMSnapshotImpl::fixupMethodRunAddresses(J9VMThread *currentThread, J9Class *ramClass, J9Pool *registeredNatives)
 {
 	J9ROMClass *romClass = ramClass->romClass;
 
@@ -797,6 +799,11 @@ VMSnapshotImpl::fixupMethodRunAddresses(J9VMThread *currentThread, J9Class *ramC
 				|| J9_BCLOOP_SEND_TARGET_COMPILE_JNI_NATIVE == J9_BCLOOP_DECODE_SEND_TARGET(ramMethod->methodRunAddress)
 				|| J9_BCLOOP_SEND_TARGET_RUN_JNI_NATIVE == J9_BCLOOP_DECODE_SEND_TARGET(ramMethod->methodRunAddress)
 			) {
+				/* TODO need OOM check here */
+				VMRegisteredNative *native = (VMRegisteredNative *)pool_newElement(registeredNatives);
+				native->method = ramMethod;
+				native->methodRunAddress = ramMethod->methodRunAddress;
+				native->nativeAddr = ramMethod->extra;
 				initializeMethodRunAddressImpl(currentThread, ramMethod, FALSE, TRUE);
 				ramMethod->extra = (void*)(UDATA)J9_STARTPC_NOT_TRANSLATED;
 			}
@@ -969,10 +976,17 @@ VMSnapshotImpl::preWriteToImage(J9VMThread *currentThread, VMIntermediateSnapsho
 	_vm->omrVM = NULL;
 	_vm->omrRuntime = NULL;
 
-	fixupClasses(currentThread);
+	if (NULL == (intermediateSnapshotState->registeredNatives = pool_new(sizeof(VMRegisteredNative), 0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(_vm->portLibrary)))) {
+		rc = false;
+		goto done;
+	}
+
+
+	fixupClasses(currentThread, intermediateSnapshotState->registeredNatives);
 
 	_vm->extendedRuntimeFlags2 &= ~J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN;
 
+done:
 	return rc;
 }
 
@@ -994,8 +1008,24 @@ VMSnapshotImpl::postWriteToImage(J9VMThread *currentThread, VMIntermediateSnapsh
 	VM_OutOfLineINL_Helpers::restoreInternalNativeStackFrame(currentThread);
 	currentThread->arg0EA = VM_OutOfLineINL_Helpers::buildSpecialStackFrame(currentThread, J9SF_FRAME_TYPE_GENERIC_SPECIAL, J9_SSF_METHOD_ENTRY, false);
 
+	restoreRegisteredNatives(intermediateSnapshotState->registeredNatives);
+
+	pool_kill(intermediateSnapshotState->registeredNatives);
+
 done:
 	return rc;
+}
+
+void
+VMSnapshotImpl::restoreRegisteredNatives(J9Pool *registeredNatives)
+{
+	pool_state state = {0};
+	VMRegisteredNative *native = (VMRegisteredNative*) pool_startDo(registeredNatives, &state);
+	while (NULL != native) {
+		native->method->extra = native->nativeAddr;
+		native->method->methodRunAddress = native->methodRunAddress;
+		native = (VMRegisteredNative*) pool_nextDo(&state);
+	}
 }
 
 /**
@@ -1127,6 +1157,9 @@ VMSnapshotImpl::writeSnapshotImage(J9VMThread *currentThread)
 	VMIntermediateSnapshotState intermediateSnapshotState = {0};
 	OMRPORT_ACCESS_FROM_J9PORT(_portLibrary);
 
+#if defined(DEBUG)
+	omrtty_err_printf("Start snapshot\n");
+#endif /* defined(DEBUG) */
 	acquireExclusiveVMAccess(currentThread);
 
 	if (!enterSnapshotMode(currentThread)) {
@@ -1170,6 +1203,8 @@ VMSnapshotImpl::writeSnapshotImage(J9VMThread *currentThread)
 		omrtty_err_printf("=========================\n");
 
 	}
+
+	omrtty_err_printf("End snapshot\n");
 #endif /* defined(DEBUG) */
 
 done:

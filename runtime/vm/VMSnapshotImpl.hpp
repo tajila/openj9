@@ -42,8 +42,14 @@
 typedef struct {
 	OMR_Runtime *omrRuntime;
 	OMR_VM *omrVM;
-	J9HashTable *registeredNatives;
+	J9Pool *registeredNatives;
 } VMIntermediateSnapshotState;
+
+typedef struct {
+	J9Method *method;
+	void *nativeAddr;
+	void *methodRunAddress;
+} VMRegisteredNative;
 
 class VMSnapshotImpl
 {
@@ -96,10 +102,10 @@ private:
 
 	/* Fixup functions called during teardown sequence */
 	void fixupClassLoaders(void);
-	void fixupClasses(J9VMThread *currentThread);
-	void fixupClass(J9VMThread *currentThread, J9Class *clazz);
+	void fixupClasses(J9VMThread *currentThread, J9Pool *registeredNatives);
+	void fixupClass(J9VMThread *currentThread, J9Class *clazz, J9Pool *registeredNatives);
 	void fixupArrayClass(J9ArrayClass *clazz);
-	void fixupMethodRunAddresses(J9VMThread *currentThread, J9Class *ramClass);
+	void fixupMethodRunAddresses(J9VMThread *currentThread, J9Class *ramClass, J9Pool *registeredNatives);
 	void fixupConstantPool(J9Class *ramClass);
 	void fixupClassPathEntries(J9ClassLoader *classLoader);
 	void removeUnpersistedClassLoaders(void);
@@ -114,6 +120,7 @@ private:
 	void saveJITConfig(void);
 	bool preWriteToImage(J9VMThread *currentThread, VMIntermediateSnapshotState *intermediateSnapshotState);
 	bool postWriteToImage(J9VMThread *currentThread, VMIntermediateSnapshotState *intermediateSnapshotState);
+	void restoreRegisteredNatives(J9Pool *registeredNatives);
 
 protected:
 	void *operator new(size_t size, void *memoryPointer) { return memoryPointer; }
