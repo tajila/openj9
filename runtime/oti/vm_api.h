@@ -2604,6 +2604,12 @@ void *
 staticFieldAddress(J9VMThread *vmStruct, J9Class *clazz, U_8 *fieldName, UDATA fieldNameLength, U_8 *signature, UDATA signatureLength, J9Class **definingClass, UDATA *staticField, UDATA options, J9Class *sourceClass);
 
 /**
+ *
+ */
+J9ROMFieldShape*
+findFieldAndCheckVisibility (J9VMThread *currentThread, J9Class *clazz, U_8 *fieldName, UDATA fieldNameLength, U_8 *signature, UDATA signatureLength, J9Class **definingClass, UDATA *offsetOrAddress, UDATA options, J9Class *sourceClass);
+
+/**
 * @brief
 * @param *vm: Reference to the VM, used to locate the table.
 * @param *ramClass: key for the table

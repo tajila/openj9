@@ -68,6 +68,39 @@ alignedMemcpy(J9VMThread *vmStruct, void *dest, void *source, UDATA bytes, UDATA
 void
 alignedBackwardsMemcpy(J9VMThread *vmStruct, void *dest, void *source, UDATA bytes, UDATA alignment);
 
+/* ---------------- annhelp.c ---------------- */
+
+/**
+ * Check if a fieldref contains the specified Runtime Visible annotation. Fieldref
+ * must be resolved.
+ *
+ * @param currentThread Thread token
+ * @param clazz The class the field belongs to.
+ * @param cpIndex The constant pool index of the fieldref.
+ * @param annotationName The name of the annotation to check for.
+ * @return TRUE if the annotation is found, FALSE otherwise.
+ */
+BOOLEAN
+fieldContainsRuntimeAnnotation(J9VMThread *currentThread, J9Class *clazz, UDATA cpIndex, J9UTF8 *annotationName);
+
+#define J9VM_METHOD_CONTAINS_ANN_VIRTUAL 1
+#define J9VM_METHOD_CONTAINS_ANN_STATIC 2
+#define J9VM_METHOD_CONTAINS_ANN_SPECIAL 4
+#define J9VM_METHOD_CONTAINS_ANN_INTERFACE 8
+
+/**
+ * Check if a methodref contains the specified Runtime Visible annotation. Methodref
+ * must be resolved.
+ *
+ * @param currentThread Thread token
+ * @param clazz The class the method belongs to.
+ * @param cpIndex The constant pool index of the methodref.
+ * @param annotationName The name of the annotation to check for.
+ * @param type the type of method, static|virtual|special|interface
+ * @return TRUE if the annotation is found, FALSE otherwise.
+ */
+BOOLEAN
+methodContainsRuntimeAnnotation(J9VMThread *currentThread, J9Class *clazz, UDATA cpIndex, J9UTF8 *annotationName, UDATA type);
 
 /* ---------------- argbits.c ---------------- */
 

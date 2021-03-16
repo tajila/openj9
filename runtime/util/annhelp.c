@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015, 2015 IBM Corp. and others
+ * Copyright (c) 2015, 2021 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -22,9 +22,13 @@
 
 #include "cfreader.h"
 #include "j9protos.h"
+#include "rommeth.h"
+#include "ut_j9vmutil.h"
 
-static I_32
-skipAnnotationElement(J9ROMConstantPoolItem const * constantPool, U_8 const *data, U_8 const **pIndex, U_8 const * dataEnd);
+static I_32 skipAnnotationElement(J9ROMConstantPoolItem const *constantPool, U_8 const *data, U_8 const **pIndex, U_8 const *dataEnd);
+static I_32 getAnnotationByType(J9ROMConstantPoolItem const *constantPool, J9UTF8 const *searchString, U_32 const numAnnotations, U_8 const *data, U_8 const **pIndex,  U_8 const *dataEnd);
+static J9ROMMethod *getMethodFromMethodRef(J9ROMClass *romClass, J9ROMMethodRef *romMethodRef);
+static BOOLEAN findRuntimeVisibleAnnotation(U_8 *data, U_32 length, J9UTF8 *annotationName, J9ROMConstantPoolItem *constantPool);
 
 /**
  * @param (in) constantPool pointer to ROM class constant pool
@@ -138,4 +142,185 @@ skipAnnotationElement(J9ROMConstantPoolItem const * constantPool, U_8 const *dat
 _errorFound:
 	*pIndex = index;
 	return -1;
+}
+
+/**
+ * Check if a field contains the specified Runtime Visible annotation.
+ *
+ * @param clazz The class the field belongs to.
+ * @param cpIndex The constant pool index of the field.
+ * @param annotationName The name of the annotation to check for.
+ * @return TRUE if the annotation is found, FALSE otherwise.
+ */
+BOOLEAN
+fieldContainsRuntimeAnnotation(J9VMThread *currentThread, J9Class *clazz, UDATA cpIndex, J9UTF8 *annotationName)
+{
+	BOOLEAN annotationFound = FALSE;
+	J9ROMClass *romClass = NULL;
+	J9ROMConstantPoolItem *constantPool = NULL;
+	J9ROMFieldRef *romFieldRef = NULL;
+	J9ROMFieldShape *romFieldShape = NULL;
+	J9Class *declaringClass = NULL;
+	J9ROMNameAndSignature *nameAndSig = NULL;
+	J9UTF8 *name = NULL;
+	J9UTF8 *signature = NULL;
+	J9Class *definingClass = NULL;
+	J9ConstantPool *ramCP = (J9ConstantPool *)clazz->ramConstantPool;
+
+	Assert_VMUtil_true(NULL != clazz);
+	Assert_VMUtil_true(NULL != annotationName);
+
+	romClass = clazz->romClass;
+	constantPool = ramCP->romConstantPool;
+	romFieldRef = (J9ROMFieldRef *)&constantPool[cpIndex];
+
+	declaringClass = ((J9RAMClassRef *)&ramCP[romFieldRef->classRefCPIndex])->value;
+	nameAndSig = J9ROMFIELDREF_NAMEANDSIGNATURE(romFieldRef);
+	name = J9ROMNAMEANDSIGNATURE_NAME(nameAndSig);
+	signature = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
+
+	if (NULL != declaringClass) {
+		romFieldShape = currentThread->javaVM->internalVMFunctions->findFieldAndCheckVisibility(currentThread,
+																							declaringClass,
+																							J9UTF8_DATA(name),
+																							J9UTF8_LENGTH(name),
+																							J9UTF8_DATA(signature),
+																							J9UTF8_LENGTH(signature),
+																							&definingClass,
+																							NULL,
+																							J9_LOOK_NO_JAVA,
+																							clazz);
+
+		if (NULL != romFieldShape) {
+			U_32 *fieldAnnotationData = getFieldAnnotationsDataFromROMField(romFieldShape);
+
+			if (NULL != fieldAnnotationData) {
+				U_32 len = *fieldAnnotationData;
+				U_8 *data = (U_8 *)(fieldAnnotationData + 1);
+
+				annotationFound = findRuntimeVisibleAnnotation(data, len, annotationName, ((J9ConstantPool *)definingClass->ramConstantPool)->romConstantPool);
+			}
+		}
+	}
+
+	Trc_Util_annhelp_SearchForFieldAnnotation(J9UTF8_DATA(annotationName), cpIndex, clazz, romFieldShape, (UDATA) annotationFound);
+
+	return annotationFound;
+}
+
+/**
+ * Check if a method contains the specified Runtime Visible annotation.
+ *
+ * @param clazz The class the method belongs to.
+ * @param cpIndex The constant pool index of the method.
+ * @param annotationName The name of the annotation to check for.
+ * @param isStatic TRUE if underlying method is static
+ * @return TRUE if the annotation is found, FALSE otherwise.
+ */
+BOOLEAN
+methodContainsRuntimeAnnotation(J9VMThread *currentThread, J9Class *clazz, UDATA cpIndex, J9UTF8 *annotationName, UDATA type)
+{
+	BOOLEAN annotationFound = FALSE;
+	J9ROMClass *romClass = NULL;
+	J9ROMMethod *romMethod = NULL;
+	J9ConstantPool *ramCP = NULL;
+	J9Method *method = NULL;
+
+	Assert_VMUtil_true(NULL != clazz);
+	Assert_VMUtil_true(NULL != annotationName);
+
+	romClass = clazz->romClass;
+	ramCP = (J9ConstantPool *)clazz->ramConstantPool;
+
+	if (J9_ARE_ANY_BITS_SET(type, J9VM_METHOD_CONTAINS_ANN_STATIC|J9VM_METHOD_CONTAINS_ANN_SPECIAL)) {
+		method = ((J9RAMMethodRef *)&ramCP[cpIndex])->method;
+	} else if (J9_ARE_ANY_BITS_SET(type, J9VM_METHOD_CONTAINS_ANN_VIRTUAL)) {
+		J9ROMConstantPoolItem *romConstantPool = ramCP->romConstantPool;
+		J9ROMMethodRef *romMethodRef = (J9ROMMethodRef *)&romConstantPool[cpIndex];
+		J9Class *declaringClass = ((J9RAMClassRef *)&ramCP[romMethodRef->classRefCPIndex])->value;
+		UDATA methodAndArgsCount = ((J9RAMVirtualMethodRef *)&ramCP[cpIndex])->methodIndexAndArgCount;
+		UDATA vtableIndex = methodAndArgsCount >> 8;
+
+		method = *(J9Method**)((UDATA)declaringClass + vtableIndex);
+	} else if (J9_ARE_ANY_BITS_SET(type, J9VM_METHOD_CONTAINS_ANN_INTERFACE)) {
+
+	} else {
+		Assert_VMUtil_ShouldNeverHappen();
+	}
+
+	if (NULL != method) {
+		romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
+
+		if (NULL != romMethod) {
+			U_32 *methodAnnotationData = getMethodAnnotationsDataFromROMMethod(romMethod);
+
+			if (NULL != methodAnnotationData) {
+				J9ConstantPool *ramCP = (J9ConstantPool *)clazz->ramConstantPool;
+				U_32 len = *methodAnnotationData;
+				U_8 *data = (U_8 *)(methodAnnotationData + 1);
+
+				annotationFound = findRuntimeVisibleAnnotation(data, len, annotationName, method->constantPool->romConstantPool);
+			}
+		}
+	}
+
+	Trc_Util_annhelp_SearchForMethodAnnotation(J9UTF8_DATA(annotationName), cpIndex, clazz, romMethod, (UDATA) annotationFound);
+
+	return annotationFound;
+}
+
+/**
+ * Check if the provided Runtime Visible annotation data contains the specified annotation.
+ *
+ * @param data The Runtime Visible annotation data.
+ * @param length the length of the annotation data
+ * @param annotationName The annotation to check for.
+ * @param constantPool The constant pool where the data is located.
+ * @return TRUE if the annotation is found, FALSE otherwise.
+ */
+static BOOLEAN
+findRuntimeVisibleAnnotation(U_8 *data, U_32 length, J9UTF8 *annotationName, J9ROMConstantPoolItem *constantPool)
+{
+	U_8 *dataEnd = (U_8*)data + length;
+	U_32 errorCode = 0; /* used by CHECK_EOF */
+	U_32 offset = 0; /* used by CHECK_EOF */
+	U_8 const *index = data; /* used by CHECK_EOF */
+	U_32 attributeLength = 0;
+	U_32 numAnnotations = 0;
+	I_32 getAnnotationResult = -1;
+	BOOLEAN found = FALSE;
+	U_16 numOfAnnotations = 0;
+	U_16 i = 0;
+
+	CHECK_EOF(2);
+	NEXT_U16(numOfAnnotations, index);
+
+	for (; i < numOfAnnotations; i++) {
+		U_16 annotationIndex = 0;
+		U_16 numOfMembers = 0;
+		U_16 j = 0;
+		J9UTF8 *searchAnnotation = NULL;
+
+		CHECK_EOF(2);
+		NEXT_U16(annotationIndex, index);
+		searchAnnotation = J9ROMSTRINGREF_UTF8DATA((J9ROMStringRef *)&constantPool[annotationIndex]);
+
+		if (J9UTF8_EQUALS(searchAnnotation, annotationName)) {
+			found = TRUE;
+			break;
+		}
+
+		CHECK_EOF(2);
+		NEXT_U16(numOfMembers, index);
+
+		for (; j < numOfMembers; j++) {
+			U_16 memberIndex = 0;
+			CHECK_EOF(2);
+			/* Disregard value and only iterate through the members. */
+			NEXT_U16(memberIndex, index);
+		}
+	}
+
+_errorFound:
+	return found;
 }
