@@ -1964,7 +1964,7 @@ ensureJNIIDTable(J9VMThread *currentThread, J9Class* clazz)
 		J9Pool * idPool = NULL;
 #if defined(J9VM_OPT_SNAPSHOTS)
 		J9JavaVM *vm = currentThread->javaVM;
-		if (IS_SNAPSHOT_RUN(vm)) {
+		if (IS_SNAPSHOTTING_ENABLED(vm)) {
 			idPool = pool_new(sizeof(J9GenericJNIID),  16, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_JNI, POOL_FOR_PORT(VMSNAPSHOTIMPL_OMRPORT_FROM_JAVAVM(vm)));
 		} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
@@ -1988,7 +1988,7 @@ ensureJNIIDTable(J9VMThread *currentThread, J9Class* clazz)
 #if defined(J9VM_OPT_SNAPSHOTS)
 		J9JavaVM *vm = currentThread->javaVM;
 		VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(vm);
-		if (IS_SNAPSHOT_RUN(vm)) {
+		if (IS_SNAPSHOTTING_ENABLED(vm)) {
 			jniIDs = (void**)vmsnapshot_allocate_memory(size, J9MEM_CATEGORY_JNI);
 		} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */

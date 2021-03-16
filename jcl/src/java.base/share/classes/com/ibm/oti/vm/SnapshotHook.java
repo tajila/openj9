@@ -25,9 +25,11 @@ package com.ibm.oti.vm;
 public class SnapshotHook implements Comparable<SnapshotHook> {
 
 	enum SnapshotHookPriority {
-		LOW(0),
-		MED(1),
-		HIGH(2);
+		USER(0),
+		LOWEST(1),
+		LOW(2),
+		MED(3),
+		HIGH(4);
 
 		private int priority;
 
@@ -43,11 +45,12 @@ public class SnapshotHook implements Comparable<SnapshotHook> {
 	private final SnapshotHookPriority hookPriority;
 	private final Runnable hook;
 	private final String name;
+	private static int counter = 0;
 
 	public SnapshotHook(SnapshotHookPriority hookPriority, Runnable hook, String name) {
 		this.hookPriority = hookPriority;
 		this.hook = hook;
-		this.name = name;
+		this.name = name + " :" + counter++ + ":";
 	}
 
 	Runnable getHook() {

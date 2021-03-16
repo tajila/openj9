@@ -59,6 +59,7 @@ Java_java_lang_J9VMInternals_dumpString(JNIEnv * env, jclass clazz, jstring str)
 
 		if (utfChars != NULL) {
 			j9tty_printf(PORTLIB, "%s", utfChars);
+			printf("%s", utfChars);
 			(*env)->ReleaseStringUTFChars(env, str, utfChars);
 		}
 	}

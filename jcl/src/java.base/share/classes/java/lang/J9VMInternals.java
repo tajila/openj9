@@ -101,6 +101,7 @@ final class J9VMInternals {
 									"java.io.UnixFileSystem", //$NON-NLS-1$
 									"java.io.RandomAccessFile"}; //$NON-NLS-1$
 
+		String[] listOfClassesThatRequireInit = new String[] {"sun.nio.fs.UnixNativeDispatcher"};
 		
 		try {
 			SnapshotControlAPI.registerHighPriorityPostRestoreHooks(() -> {
@@ -108,6 +109,19 @@ final class J9VMInternals {
 				System.loadLibrary("nio"); //$NON-NLS-1$
 			}, "LoadLibrary: net+nio");
 			
+
+			Method registerNativesMethod = Unsafe.class.getDeclaredMethod("registerNatives", (Class []) null);
+			
+			SnapshotControlAPI.registerLowPriorityPostRestoreHooks(() -> {
+				try {
+					registerNativesMethod.setAccessible(true);
+					registerNativesMethod.invoke(null);
+
+				} catch (Throwable t) {
+					t.printStackTrace();
+					throw new InternalError(t);
+				}
+			}, "Register Unsafe natives");
 			
 			for (String className : listOfClassesThatRequireJNIIDInit) {
 				Class<?> clazz = Class.forName(className);
@@ -120,6 +134,20 @@ final class J9VMInternals {
 						throw new InternalError(t);
 					}
 				}, "initIDs:" + clazz.getSimpleName());
+			}
+			
+			for (String className : listOfClassesThatRequireInit) {
+				Class<?> clazz = Class.forName(className);
+				Method method = clazz.getDeclaredMethod("init", (Class []) null); //$NON-NLS-1$
+				method.setAccessible(true);
+				SnapshotControlAPI.registerPostRestoreHooks(() -> {
+					try {
+						method.setAccessible(true);
+						method.invoke(null);
+					} catch (Throwable t) {
+						throw new InternalError(t);
+					}
+				}, "init:" + clazz.getSimpleName());
 			}
 		} catch (ReflectiveOperationException e) {
 			throw new InternalError(e);

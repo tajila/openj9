@@ -53,7 +53,26 @@ public class SnapshotControlAPI {
 	public static void registerPreSnapshotHooks(Runnable hook) {
 		throw new UnsupportedOperationException();
 	}
-
+	/**
+	 * Registers a hook that will run after the snapshot is restored and before the JVM application resumes
+	 *
+	 * @param hook The runnable to run
+	 * @param name The name of the hook (for debugging purposes)
+	 */
+	public static void registerLowestPriorityPostRestoreHooks(Runnable hook, String name) {
+		postRestoreHooks.add(new SnapshotHook(SnapshotHookPriority.LOWEST, hook, name));
+	}
+	
+	/**
+	 * Registers a hook that will run after the snapshot is restored and before the JVM application resumes
+	 *
+	 * @param hook The runnable to run
+	 * @param name The name of the hook (for debugging purposes)
+	 */
+	public static void registerLowPriorityPostRestoreHooks(Runnable hook, String name) {
+		postRestoreHooks.add(new SnapshotHook(SnapshotHookPriority.LOW, hook, name));
+	}
+	
 	/**
 	 * Registers a hook that will run after the snapshot is restored and before the JVM application resumes
 	 *
@@ -80,9 +99,13 @@ public class SnapshotControlAPI {
 		// cause crashes here.
 		temparr = postRestoreHooks.toArray();
 		Arrays.sort(temparr);
+		
+		com.ibm.oti.vm.VM.dumpString("running hooks: \n");
 		for (Object hookWrapper : temparr) {
 			SnapshotHook h = ((SnapshotHook)hookWrapper);
+			com.ibm.oti.vm.VM.dumpString("running: " + h + "\n");
 			h.getHook().run();
+			
 		}
 	}
 }
