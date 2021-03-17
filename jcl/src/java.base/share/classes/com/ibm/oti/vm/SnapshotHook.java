@@ -45,8 +45,13 @@ public class SnapshotHook implements Comparable<SnapshotHook> {
 	private final SnapshotHookPriority hookPriority;
 	private final Runnable hook;
 	private final String name;
+	private boolean isRun = false;
 	private static int counter = 0;
 
+	public void runHookComplete() {
+		isRun = true;
+	}
+	
 	public SnapshotHook(SnapshotHookPriority hookPriority, Runnable hook, String name) {
 		this.hookPriority = hookPriority;
 		this.hook = hook;

@@ -102,10 +102,11 @@ public class SnapshotControlAPI {
 		
 		com.ibm.oti.vm.VM.dumpString("running hooks: \n");
 		for (Object hookWrapper : temparr) {
+			com.ibm.oti.vm.VM.dumpString("running: \n");
 			SnapshotHook h = ((SnapshotHook)hookWrapper);
-			com.ibm.oti.vm.VM.dumpString("running: " + h + "\n");
+			//com.ibm.oti.vm.VM.dumpString("running: " + h + "\n");
 			h.getHook().run();
-			
+			h.runHookComplete();
 		}
 	}
 }
