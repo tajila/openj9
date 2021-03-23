@@ -196,7 +196,7 @@ getStackTraceIterator(J9VMThread * vmThread, void * voidUserData, UDATA bytecode
 
 			if (NULL != ramClass) {
 				/* Fill in method class */
-				string = VM_VMHelpers::getClassNameString(vmThread, J9VM_J9CLASS_TO_HEAPCLASS(ramClass), JNI_TRUE);
+				string = mmfns->j9gc_createJavaLangString(vmThread, J9UTF8_DATA(utfClassName), J9UTF8_LENGTH(utfClassName), J9_STR_INTERN);
 				if (NULL == string) {
 					rc = FALSE;
 					/* exception is pending from the call */
