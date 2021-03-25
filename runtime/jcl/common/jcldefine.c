@@ -143,7 +143,7 @@ retry:
 		if (vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length) != NULL) {
 			/* Bad, we have already defined this class - fail */
 			omrthread_monitor_exit(vm->classTableMutex);
-			if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+			if (J9_ARE_NO_BITS_SET(*options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
 #if defined(J9VM_OPT_SNAPSHOTS)
 				/* TODO: We get here if someone does Classloader.findClass on a persisted class
 			 	* Once class objects are persisted we should never get here apart from error

@@ -5113,7 +5113,8 @@ typedef struct J9JavaVM {
 #if defined(J9VM_OPT_SNAPSHOTS)
 	VMSnapshotImplPortLibrary* vmSnapshotImplPortLibrary;
 	char* ramStateFilePath;
-#endif /* defined(J9VM_OPT_SNAPSHOTS) */	struct J9VMInterface vmInterface;
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	struct J9VMInterface vmInterface;
 	UDATA dynamicLoadClassAllocationIncrement;
 	struct J9TranslationBufferSet* dynamicLoadBuffers;
 	struct J9JImageIntf *jimageIntf;
@@ -5793,6 +5794,8 @@ typedef struct J9CInterpreterStackFrame {
 #error Unknown architecture
 #endif /* J9VM_ARCH_X86 */
 } J9CInterpreterStackFrame;
+
+#include "objectreferencesmacros_define.inc"
 
 /* Snapshot macros */
 #define IS_RESTORE_RUN(javaVM) J9_ARE_ALL_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN)

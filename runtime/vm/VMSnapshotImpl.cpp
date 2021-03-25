@@ -115,7 +115,7 @@ VMSnapshotImpl::setInitialMethods(J9Method** cInitialStaticMethod, J9Method** cI
 bool
 VMSnapshotImpl::initializeInvalidITable(void)
 {
-	_invalidITable = (J9ITable *) subAllocateMemory(sizeof(J9ITable), J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm));
+	_invalidITable = (J9ITable *) subAllocateMemory(sizeof(J9ITable), J9JAVAVM_COMPRESS_OBJECT_REFERENCES(_vm));
 	if (NULL == _invalidITable) {
 		return false;
 	}
