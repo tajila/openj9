@@ -1006,10 +1006,6 @@ initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, cons
 		goto _error;
 	}
 
-	if(!vmSnapshotImpl->postPortLibInitstage()) {
-		goto _error;
-	}
-
 	return vmSnapshotImpl;
 
 _error:
@@ -1022,6 +1018,7 @@ setupVMSnapshotImpl(void *vmSnapshotImpl, J9JavaVM* vm)
 {
 	((VMSnapshotImpl *)vmSnapshotImpl)->setJ9JavaVM(vm);
 	vm->vmSnapshotImplPortLibrary = ((VMSnapshotImpl *)vmSnapshotImpl)->getVMSnapshotImplPortLibrary();
+	((VMSnapshotImpl *)vmSnapshotImpl)->postPortLibInitstage();
 }
 
 extern "C" J9JavaVM *
