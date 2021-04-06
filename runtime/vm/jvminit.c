@@ -3932,6 +3932,7 @@ threadInitStages(J9JavaVM* vm, IDATA stage, void* reserved)
 			if (vm->defaultOSStackSize < J9_OS_STACK_SIZE) {
 				vm->defaultOSStackSize = J9_OS_STACK_SIZE;
 			}
+			printf("default OS stack size is %lu \n", vm->defaultOSStackSize);
 #endif /* defined(J9ZOS39064) */
 
 #if defined(J9VM_INTERP_GROWABLE_STACKS)

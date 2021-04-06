@@ -20,6 +20,9 @@ OpenJDK Assembly Exception [2].
 SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 -->
 
+j9vm_uma_gnuDebugSymbols=1
+UMA_DO_NOT_OPTIMIZE_CCODE=1
+
 <#assign lib_target_rule>
 $(UMA_LIBTARGET) : $(UMA_OBJECTS)
 	$(AR) $(UMA_LIB_LINKER_FLAGS) rcv $(UMA_LIBTARGET) $(UMA_OBJECTS)
@@ -40,6 +43,8 @@ endif
 </#assign>
 
 <#assign exe_target_rule>
+
+
 $(UMA_EXETARGET) : $(UMA_OBJECTS) $(UMA_TARGET_LIBRARIES)
 	$(UMA_EXE_LD) $(UMA_CC_MODE) -brtl $(UMA_SYS_LINK_PATH) $(UMA_LINK_PATH) $(VMLINK) \
 		$(UMA_OBJECTS) \

@@ -101,6 +101,13 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 #define VMTHR_INITIAL_STACK_SIZE vm->stackSize
 #endif
 
+	UDATA nativeStart = 0;
+	UDATA nativeEnd = 0;
+	UDATA res = omrthread_get_stack_range(osThread, (void*)&nativeStart, (void*)&nativeEnd);
+
+		printf("stack range %lu\n", res);
+
+
 	omrthread_monitor_enter(vm->vmThreadListMutex);
 
 	/* Allocate the stack */
@@ -194,6 +201,12 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 	newThread->stackObject = stack;
 	newThread->stackOverflowMark = newThread->stackOverflowMark2 = J9JAVASTACK_STACKOVERFLOWMARK(stack);
 	newThread->osThread = osThread;
+
+	printf("|||||+++create thread native sp=%p thread=%p spSize=%lu realSpsize=%lu natve start=%p  end=%p\n", &newThread, newThread, vm->defaultOSStackSize, nativeEnd-nativeStart,nativeStart, nativeEnd);
+	fflush(stdout);
+
+	newThread->spStart = nativeStart;
+	newThread->spEnd = nativeEnd;
 
 #ifdef J9VM_OPT_JAVA_OFFLOAD_SUPPORT
 	newThread->javaOffloadState = 0;
@@ -342,6 +355,8 @@ IDATA J9THREAD_PROC javaThreadProc(void *entryarg)
 	UDATA result;
 	
 	vmThread->gpProtected = 1;
+
+	printf("|||||create thread native sp=%p thread=%p spSize=%lu \n", &vm, vmThread, vm->defaultOSStackSize);
 
 	j9sig_protect(javaProtectedThreadProc, vmThread, 
 		structuredSignalHandler, vmThread,
@@ -1409,11 +1424,12 @@ allocateJavaStack(J9JavaVM * vm, UDATA stackSize, J9JavaStack * previousStack)
 		if (J9_ARE_ANY_BITS_SET(end, sizeof(UDATA))) {
 			end += sizeof(UDATA);
 		}
-#if 0
+#if 1
 		j9tty_printf(PORTLIB, "Allocated stack ending at 16r%p (stagger = %d, alignment = %d)\n", 
 			end, 
 			stagger, 
 			vm->thrStaggerMax ? end % vm->thrStaggerMax : 0);
+
 #endif
 
 		stack->end = (UDATA*)end;
@@ -2072,8 +2088,28 @@ javaProtectedThreadProc(J9PortLibrary* portLibrary, void * entryarg)
 
 	osStackFree = omrthread_current_stack_free();
 	if (osStackFree != 0) {
-		vmThread->currentOSStackFree = osStackFree - (osStackFree / J9VMTHREAD_RESERVED_C_STACK_FRACTION);
+		void *nativeStart = NULL;
+		void *nativeEnd = NULL;
+
+		UDATA res = omrthread_get_stack_range(vmThread->osThread, &nativeStart, &nativeEnd);
+		if (J9THREAD_SUCCESS == res) {
+			J9JavaVM *vm = vmThread->javaVM;
+			UDATA requestedNativeStackSize = vm->defaultOSStackSize;
+			UDATA reportedStackSize = (UDATA)nativeEnd - (UDATA)nativeStart;
+			UDATA ninetyPercent = (UDATA)(0.9 * (double)reportedStackSize);
+			Trc_VM_wmthreadStart_CheckRequestedStack(vmThread, ninetyPercent, requestedNativeStackSize, reportedStackSize);
+
+			if (requestedNativeStackSize < ninetyPercent) {
+				//bad things
+			}
+
+			vmThread->currentOSStackFree = (UDATA)&vmThread - (UDATA)nativeStart;
+		} else {
+			vmThread->currentOSStackFree = osStackFree - (osStackFree / J9VMTHREAD_RESERVED_C_STACK_FRACTION);
+		}
 	}
+
+	printf("|@|@|@|@ thread=%p osfree=%lu currentsp=%p \n", vmThread, osStackFree, &osStackFree);
 
 #if defined(LINUX)
 	omrthread_set_name(vmThread->osThread, (char*)vmThread->omrVMThread->threadName);

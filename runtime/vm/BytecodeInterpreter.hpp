@@ -344,6 +344,31 @@ retry:
 		thread->sp = _sp;
 		thread->pc = _pc;
 		thread->literals = _literals;
+		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
+		UDATA volatile stackOverflowMark2 = (UDATA)_currentThread->stackOverflowMark2;
+		int freeBytes = (int)(IDATA)((UDATA)_sp - stackOverflowMark);
+		int freeBytes2 = (int)(IDATA)((UDATA)_sp - stackOverflowMark2);
+		int currentUsed = (int)((UDATA)_currentThread->stackObject->end - (UDATA)_sp);
+		int freeNative = (int) ((UDATA)&thread - _currentThread->spStart);
+		if ((freeNative < 2048) || (freeBytes < 200)) {
+			printf("update 1: freeNative=%d hava stck=%lu osstck=%;u native sp=%p free java stack _sp=%p bytes=%d total free=%d currentUsed=%d thread=%p method=%p\n",freeNative, _vm->stackSize, _vm->defaultOSStackSize, &freeBytes, _sp, freeBytes, freeBytes2, currentUsed, _currentThread, _sendMethod);
+			fflush(stdout);
+		}
+	}
+
+	VMINLINE bool
+	checkNativeStackOverflow()
+	{
+		IDATA freeNativeBytes = _currentThread->currentOSStackFree;
+
+		IDATA usedBytes = ((UDATA)_currentThread->entryLocalStorage - (UDATA)&freeNativeBytes);
+		freeNativeBytes -= usedBytes;
+
+		if ((IDATA)freeNativeBytes < J9_OS_STACK_GUARD) {
+			printf("check os so free=%d thread=%p\n", freeNativeBytes, _currentThread);
+			return true;
+		}
+		return false;
 	}
 
 	VMINLINE void
@@ -354,6 +379,17 @@ retry:
 		_sp = thread->sp;
 		_pc = thread->pc;
 		_literals = thread->literals;
+
+		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
+		UDATA volatile stackOverflowMark2 = (UDATA)_currentThread->stackOverflowMark2;
+		int freeBytes = (int)(IDATA)((UDATA)_sp - stackOverflowMark);
+		int freeBytes2 = (int)(IDATA)((UDATA)_sp - stackOverflowMark2);
+		int currentUsed = (int)((UDATA)_currentThread->stackObject->end - (UDATA)_sp);
+
+		if ((currentUsed > 900000) || (freeBytes < 200)) {
+			printf("update 2: native sp=%p free java stack _sp=%p bytes=%d total free=%d currentUsed=%d thread=%p method=%p\n", &freeBytes, _sp, freeBytes, freeBytes2, currentUsed, _currentThread, _sendMethod);
+			fflush(stdout);
+		}
 	}
 
 	VMINLINE UDATA*
@@ -655,17 +691,21 @@ done:
 throwStackOverflow:
 						if (J9_ARE_ANY_BITS_SET(_currentThread->privateFlags, J9_PRIVATE_FLAGS_STACK_OVERFLOW)) {
 							// vmStruct already up-to-date in all paths to here
+							printf("faltal recursive so\n");
 							fatalRecursiveStackOverflow(_currentThread);
 						}
+						printf("j2i: throw overflow\n");
 						setCurrentExceptionUTF(_currentThread, J9VMCONSTANTPOOL_JAVALANGSTACKOVERFLOWERROR, NULL);
 						VMStructHasBeenUpdated(REGISTER_ARGS);
 						rc = GOTO_THROW_CURRENT_EXCEPTION;
+
 						goto done;
 					}
 					currentUsed += _vm->stackSizeIncrement;
 					if (currentUsed > maxStackSize) {
 						currentUsed = maxStackSize;
 					}
+					printf("j2i: grow stack\n");
 					if (0 != growJavaStack(_currentThread, currentUsed)) {
 						goto throwStackOverflow;
 					}
@@ -1557,6 +1597,26 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
+		UDATA volatile stackOverflowMark2 = (UDATA)_currentThread->stackOverflowMark2;
+		int freeBytes = (int)(IDATA)((UDATA)_sp - stackOverflowMark);
+		int freeBytes2 = (int)(IDATA)((UDATA)_sp - stackOverflowMark2);
+		UDATA stackUse = VM_VMHelpers::calculateStackUse(romMethod);
+		UDATA *checkSP = _sp - stackUse;
+		UDATA currentUsed = (UDATA)_currentThread->stackObject->end - (UDATA)checkSP;
+		int freeBytesAfterMethod = (int)(IDATA)((UDATA)checkSP - (UDATA)stackOverflowMark);
+		if ((freeBytes < 200)) {
+			printf("free java stack _sp=%p bytes=%d total free=%d after method=%d currentUsed=%d thread=%p method=%p\n", _sp, freeBytes, freeBytes2, freeBytesAfterMethod, (int) currentUsed, _currentThread, _sendMethod);
+			if ((freeBytes < 100)) {
+				printf("trigger stack grow\n");
+				fflush(stdout);
+				goto stackoverflow;
+			}
+		}
+		if (checkNativeStackOverflow()) {
+			rc = GOTO_JAVA_STACK_OVERFLOW;
+			goto done;
+		}
+
 		if ((UDATA)_sp >= stackOverflowMark) {
 			if (methodIsSynchronized) {
 				UDATA monitorRC = enterObjectMonitor(REGISTER_ARGS, syncObject);
@@ -1591,6 +1651,9 @@ obj:
 			rc = REPORT_METHOD_ENTER;
 #endif
 		} else {
+stackoverflow:
+			printf("inline send: gotto stack overflow\n");
+			printf("inline send: over flow java stack _sp=%p som=%p  bytes=%d total free=%d after method=%d currentUsed=%d thread=%p method=%p\n", _sp, stackOverflowMark, freeBytes, freeBytes2, freeBytesAfterMethod, (int) currentUsed, _currentThread, _sendMethod);
 			rc = GOTO_JAVA_STACK_OVERFLOW;
 		}
 done:
@@ -1669,20 +1732,27 @@ done:
 		VM_BytecodeAction rc = EXECUTE_BYTECODE;
 		J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_literals);
 		UDATA relativeBP = 0;
+		UDATA *checkSP = _sp - romMethod->maxStack;
+		UDATA currentUsed = (UDATA)_currentThread->stackObject->end - (UDATA)checkSP;
+		UDATA maxStackSize = _vm->stackSize;
 		if (*_sp & J9_STACK_FLAGS_J2_IFRAME) {
 			relativeBP = (((UDATA*)(((J9SFJ2IFrame*)_sp) + 1)) - 1) - _arg0EA;
 		} else {
 			relativeBP = (((UDATA*)(((J9SFStackFrame*)_sp) + 1)) - 1) - _arg0EA;
 		}
+		printf("------- stack overflow native sp=%p _sp=%p method=%p ------\n", &relativeBP,_sp, _literals);
 		/* See if we really overflowed the stack (SOM could be -1 to indicate an async pending) */
+
+		if (checkNativeStackOverflow()) {
+			goto throwStackOverflow;
+		}
+
 		if (VM_VMHelpers::shouldGrowForSP(_currentThread, _sp)) {
 			/* Attempt to grow the stack to prevent the StackOverflowError. The frame and temps are on stack,
 			 * but the maxStack (max pending pushes) must also be taken into account.
 			 */
-			UDATA *checkSP = _sp - romMethod->maxStack;
-			UDATA currentUsed = (UDATA)_currentThread->stackObject->end - (UDATA)checkSP;
-			UDATA maxStackSize = _vm->stackSize;
-			if (currentUsed > maxStackSize) {
+
+			if ((currentUsed + 100) > maxStackSize) {
 throwStackOverflow:
 				if (*_sp & J9_STACK_FLAGS_J2_IFRAME) {
 					/* Hide the J2I frame.  This means it will not show in the exception stack trace.
@@ -1703,6 +1773,8 @@ throwStackOverflow:
 					// vmStruct already up-to-date in all paths to here
 					fatalRecursiveStackOverflow(_currentThread);
 				}
+				printf("so: throw overflow\n");
+				fflush(stdout);
 				setCurrentExceptionUTF(_currentThread, J9VMCONSTANTPOOL_JAVALANGSTACKOVERFLOWERROR, NULL);
 				VMStructHasBeenUpdated(REGISTER_ARGS);
 				rc = GOTO_THROW_CURRENT_EXCEPTION;
@@ -1714,6 +1786,7 @@ throwStackOverflow:
 			}
 			currentUsed += _vm->stackSizeIncrement;
 			if (currentUsed > maxStackSize) {
+				printf(" ------ max stack size reached ---- used=%lu stacksize=%lu \n", currentUsed, maxStackSize);
 				currentUsed = maxStackSize;
 			}
 			/* Hide the current frame during grow to indicate method enter (i.e. keep object arguments alive) */
@@ -1723,10 +1796,22 @@ throwStackOverflow:
 			VMStructHasBeenUpdated(REGISTER_ARGS);
 			*(_arg0EA + relativeBP) &= ~(UDATA)J9SF_A0_INVISIBLE_TAG;
 			if (0 != growRC) {
+				printf("so: fail grow overflow 1.5\n");
 				goto throwStackOverflow;
 			}
 		}
 		{
+			UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
+			UDATA volatile stackOverflowMark2 = (UDATA)_currentThread->stackOverflowMark2;
+			int freeBytes = (int)(IDATA)((UDATA)_sp - stackOverflowMark);
+			int freeBytes2 = (int)(IDATA)((UDATA)_sp - stackOverflowMark2);
+			int currentUsed = (int)((UDATA)_currentThread->stackObject->end - (UDATA)_sp);
+
+
+				printf("so: free java stack _sp=%p bytes=%d total free=%d currentUsed=%d thread=%p method=%p\n", _sp, freeBytes, freeBytes2, currentUsed, _currentThread, _sendMethod);
+				fflush(stdout);
+
+			printf("so: throw overflow continue 2\n");
 			/* Stack did not fatally overflow - hide the frame and perform an async check */
 			*(_arg0EA + relativeBP) |= J9SF_A0_INVISIBLE_TAG;
 			buildGenericSpecialStackFrame(REGISTER_ARGS, 0);
@@ -1734,6 +1819,7 @@ throwStackOverflow:
 			UDATA action = javaCheckAsyncMessages(_currentThread, TRUE);
 			VMStructHasBeenUpdated(REGISTER_ARGS);
 			if (J9_CHECK_ASYNC_THROW_EXCEPTION == action) {
+				printf("so: throw overflow 3\n");
 				rc = GOTO_THROW_CURRENT_EXCEPTION;
 				goto done;
 			}
@@ -1749,6 +1835,7 @@ throwStackOverflow:
 				goto done;
 			}
 #endif
+			printf("so: throw overflow 4\n");
 			restoreSpecialStackFrameAndDrop(REGISTER_ARGS, _arg0EA);
 			*(_arg0EA + relativeBP) &= ~(UDATA)J9SF_A0_INVISIBLE_TAG;
 			/* If the method is synchronized, enter its monitor */
@@ -1781,11 +1868,13 @@ throwStackOverflow:
 					goto done;
 				}
 			}
+			printf("so: throw overflow 5\n");
 #if defined(DO_HOOKS)
 			rc = REPORT_METHOD_ENTER;
 #endif
 		}
 done:
+		printf("so: throw overflow fini 10\n");
 		return rc;
 	}
 
@@ -9500,16 +9589,27 @@ targetLargeStack: {
 	U_32 modifiers = romMethod->modifiers;
 	UDATA stackUse = VM_VMHelpers::calculateStackUse(romMethod);
 	UDATA *checkSP = _sp - stackUse;
+
+	UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
+	UDATA volatile stackOverflowMark2 = (UDATA)_currentThread->stackOverflowMark2;
+	int freeBytes = (int)(IDATA)((UDATA)_sp - stackOverflowMark);
+	int freeBytes2 = (int)(IDATA)((UDATA)_sp - stackOverflowMark2);
+	UDATA currentUsed = (UDATA)_currentThread->stackObject->end - (UDATA)checkSP;
+	UDATA maxStackSize = _vm->stackSize;
+		printf("large stack: free java stack bytes=%d total free=%d currentUsed=%lu thread=%p method=%p\n", freeBytes, freeBytes2, currentUsed, _currentThread, _sendMethod);
+		fflush(stdout);
+
 	if ((checkSP > _sp) || VM_VMHelpers::shouldGrowForSP(_currentThread, checkSP)) {
 		Trc_VM_VMprCheckStackAndSend_overflowDetected(_currentThread, checkSP, _currentThread->stackOverflowMark2);
 		if (J9_ARE_ANY_BITS_SET(_currentThread->privateFlags, J9_PRIVATE_FLAGS_STACK_OVERFLOW)) {
 			Trc_VM_VMprCheckStackAndSend_recursiveOverflow(_currentThread);
 		}
 		checkSP -= (sizeof(J9SFMethodFrame) / sizeof(UDATA));
-		UDATA currentUsed = (UDATA)_currentThread->stackObject->end - (UDATA)checkSP;
-		UDATA maxStackSize = _vm->stackSize;
+
+
 		buildMethodFrame(REGISTER_ARGS, _sendMethod, 0);
 		updateVMStruct(REGISTER_ARGS);
+		printf("large stack: check overflow\n");
 		if (currentUsed > maxStackSize) {
 throwStackOverflow:
 			if (J9_ARE_ANY_BITS_SET(_currentThread->privateFlags, J9_PRIVATE_FLAGS_STACK_OVERFLOW)) {
@@ -9519,12 +9619,14 @@ throwStackOverflow:
 			Trc_VM_VMprCheckStackAndSend_throwingError(_currentThread);
 			setCurrentExceptionUTF(_currentThread, J9VMCONSTANTPOOL_JAVALANGSTACKOVERFLOWERROR, NULL);
 			VMStructHasBeenUpdated(REGISTER_ARGS);
+			printf("large stack: throw overflow\n");
 			goto throwCurrentException;
 		}
 		currentUsed += _vm->stackSizeIncrement;
 		if (currentUsed > maxStackSize) {
 			currentUsed = maxStackSize;
 		}
+		printf("large stack: grow stack\n");
 		if (0 != growJavaStack(_currentThread, currentUsed)) {
 			goto throwStackOverflow;
 		}

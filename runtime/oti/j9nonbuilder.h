@@ -4923,7 +4923,7 @@ typedef struct J9VMThread {
 	U_8* profilingBufferEnd;
 	U_8* profilingBufferCursor;
 	UDATA* j2iFrame;
-	UDATA currentOSStackFree;
+	IDATA currentOSStackFree;
 	UDATA mgmtBlockedCount;
 	UDATA mgmtWaitedCount;
 	UDATA mgmtBlockedStart;
@@ -5000,6 +5000,8 @@ typedef struct J9VMThread {
 #endif /* OMR_GC_COMPRESSED_POINTERS */
 #endif /* OMR_GC_CONCURRENT_SCAVENGER */
 	UDATA safePointCount;
+	UDATA spStart;
+	UDATA spEnd;
 } J9VMThread;
 
 #define J9VMTHREAD_ALIGNMENT  0x100

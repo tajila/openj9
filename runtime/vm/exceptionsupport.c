@@ -583,6 +583,7 @@ internalSetCurrentExceptionWithCause(J9VMThread *currentThread, UDATA exceptionN
 		J9JavaVM * vm = currentThread->javaVM;
 		UDATA stackSize = vm->stackSize + OMR_MAX(J9_STACK_OVERFLOW_AND_HEADER_SIZE, vm->stackSizeIncrement);
 
+		printf("attempting to throw stackoverflow curretnt size=%lu max=%lu\n", currentThread->stackObject->size, stackSize);
 		if (currentThread->stackObject->size < stackSize) {
 			growJavaStack(currentThread, stackSize);
 		}

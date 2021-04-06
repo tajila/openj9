@@ -24,6 +24,9 @@
 OMRGLUE=$(UMA_PATH_TO_ROOT)oti $(UMA_PATH_TO_ROOT)include $(UMA_PATH_TO_ROOT)gc_glue_java $(UMA_PATH_TO_ROOT)gc_base $(UMA_PATH_TO_ROOT)gc_include $(UMA_PATH_TO_ROOT)gc_stats $(UMA_PATH_TO_ROOT)gc_structs
 include $(UMA_PATH_TO_ROOT)makelib/uma_macros.mk
 
+j9vm_uma_gnuDebugSymbols=1
+UMA_DO_NOT_OPTIMIZE_CCODE=1
+
 # Function to convert a system library name into a link command (i.e. m into -lm)
 addSystemLib=
 <#if uma.spec.type.unix>

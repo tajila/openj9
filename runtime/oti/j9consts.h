@@ -37,6 +37,8 @@ extern "C" {
  * Comments on the constants indicate how they were computed.
  */
 
+#define MIN_NATIVE_STACK (50*1024)
+
 #define J9_EVENT_SOM_VALUE UDATA_MAX
 
 #define J9_RUNTIME_STACK_FILL 0xDEADFACE

@@ -100,6 +100,8 @@ UDATA   growJavaStack(J9VMThread * vmThread, UDATA newStackSize)
 		rc = internalGrowJavaStack(vmThread, newStackSize);
 	}
 
+	printf("*** grow java stack thread=%p new size=%lu rc=%lu *** \n", vmThread, newStackSize, rc);
+	fflush(stdout);
 	return rc;
 }
 
@@ -254,9 +256,13 @@ poolElementAllocFailed:
 	}
 
 	Trc_VM_growJavaStack_Success(vmThread);
+	printf("*** grow java stack internal native sp=%p sp=%p oss=%p ose=%p nss=%p nse=%p thread=%p new size=%lu rc=%lu *** \n", &rc, vmThread->sp, oldStackStart, oldStackEnd, (UDATA)(newStack+1), (UDATA) (newStack->end), vmThread, newStackSize, rc);
+
 
 done:
 	Trc_VM_growJavaStack_Exit(vmThread);
+
+
 	vmThread->omrVMThread->vmState = oldState;
 	return rc;
 }

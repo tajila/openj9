@@ -1868,8 +1868,8 @@ JavaCoreDumpWriter::writeMonitorSection(void)
 	/* Stack-allocate a store for blocked thread information, to save having to re-walk the threads. First
 	 * check that we have enough stack space, and bail out if not (typically ~10,000 threads). See RTC 87530.
 	 */
-	UDATA freeStack = vmThread ? vmThread->currentOSStackFree : _VirtualMachine->defaultOSStackSize;
-	if (((_AllocatedVMThreadCount + 1) * sizeof(blocked_thread_record) + STACK_SAFETY_MARGIN) > freeStack) {
+	IDATA freeStack = vmThread ? vmThread->currentOSStackFree : _VirtualMachine->defaultOSStackSize;
+	if ((IDATA)((_AllocatedVMThreadCount + 1) * sizeof(blocked_thread_record) + STACK_SAFETY_MARGIN) > freeStack) {
 		_OutputStream.writeCharacters("1LKALLOCERR    Insufficient stack space for thread monitor walk\n");
 		/* Write the section trailer */
 		_OutputStream.writeCharacters(
@@ -2244,8 +2244,8 @@ JavaCoreDumpWriter::writeThreadsWithNativeStacks(void)
 	 * not got to the point where we set _ThreadsWalkStarted, the calling code in writeThreadSection()
 	 * will re-try, writing the Java threads and stacks only. See PR 81717 and PR 40206.
 	 */
-	UDATA freeStack = vmThread ? vmThread->currentOSStackFree : _VirtualMachine->defaultOSStackSize;
-	if ((_AllocatedVMThreadCount * sizeof(vmthread_avl_node) + STACK_SAFETY_MARGIN) > freeStack) {
+	IDATA freeStack = vmThread ? vmThread->currentOSStackFree : _VirtualMachine->defaultOSStackSize;
+	if ((IDATA)(_AllocatedVMThreadCount * sizeof(vmthread_avl_node) + STACK_SAFETY_MARGIN) > freeStack) {
 		_OutputStream.writeCharacters("NULL\n");
 		_OutputStream.writeCharacters("1XMWLKTHDINF   Insufficient stack space for native stack collection\n");
 		return; /* bail out, writeThreadSection() will retry with Java threads only */

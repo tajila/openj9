@@ -678,6 +678,14 @@ done:
 	shouldGrowForSP(J9VMThread *currentThread, UDATA *checkSP)
 	{
 		bool checkRequired = false;
+		int freeBytes = (int) ((UDATA)checkSP - (UDATA)currentThread->stackOverflowMark2);
+		if (freeBytes < 200) {
+			printf("VMHelpers:: free java stack bytes %d som=%p thread=%p\n", freeBytes, (UDATA)currentThread->stackOverflowMark2, currentThread);
+			if (freeBytes < 200) {
+				return true;
+			}
+		}
+
 		if (checkSP < currentThread->stackOverflowMark2) {
 			checkRequired = true;
 			if (J9_ARE_ANY_BITS_SET(currentThread->privateFlags, J9_PRIVATE_FLAGS_STACK_OVERFLOW)) {

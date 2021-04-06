@@ -293,13 +293,16 @@ buildCallInStackFrame(J9VMThread *currentThread, J9VMEntryLocalStorage *newELS, 
 	UDATA flags = 0;
 	J9SFJNICallInFrame *frame = ((J9SFJNICallInFrame*)currentThread->sp) - 1;
 	javaOffloadSwitchOn(currentThread);
+
+	UDATA volatile stackOverflowMark = (UDATA)currentThread->stackOverflowMark;
+	int freeBytes = (int)(IDATA)((UDATA)currentThread->sp - stackOverflowMark);
 	if (NULL != oldELS) {
 		/* Assuming oldELS > newELS, bytes used is (oldELS - newELS) */
-		UDATA freeBytes = currentThread->currentOSStackFree;
-		UDATA usedBytes = ((UDATA)oldELS - (UDATA)newELS);
-		freeBytes -= usedBytes;
-		currentThread->currentOSStackFree = freeBytes;
-		if ((IDATA)freeBytes < J9_OS_STACK_GUARD) {
+		IDATA freeNativeBytes = currentThread->currentOSStackFree;
+		IDATA usedBytes = ((UDATA)oldELS - (UDATA)newELS);
+		freeNativeBytes -= usedBytes;
+		currentThread->currentOSStackFree = freeNativeBytes;
+		if ((IDATA)freeNativeBytes < J9_OS_STACK_GUARD) {
 			if (J9_ARE_NO_BITS_SET(currentThread->privateFlags, J9_PRIVATE_FLAGS_CONSTRUCTING_EXCEPTION)) {
 				setCurrentExceptionNLS(currentThread, J9VMCONSTANTPOOL_JAVALANGSTACKOVERFLOWERROR, J9NLS_VM_OS_STACK_OVERFLOW);
 				currentThread->currentOSStackFree += usedBytes;
@@ -308,7 +311,12 @@ buildCallInStackFrame(J9VMThread *currentThread, J9VMEntryLocalStorage *newELS, 
 				goto done;
 			}
 		}
+
+		if (freeNativeBytes < 250) {
+			printf("callin: native stack free %d current native stckp=%p\n", (int)freeNativeBytes, &freeNativeBytes);
+		}
 	}
+
 	if (returnsObject) {
 		flags |= J9_SSF_RETURNS_OBJECT;
 	}
@@ -326,6 +334,11 @@ buildCallInStackFrame(J9VMThread *currentThread, J9VMEntryLocalStorage *newELS, 
 	currentThread->arg0EA = (UDATA*)&frame->savedA0;
 	newELS->oldEntryLocalStorage = oldELS;
 	currentThread->entryLocalStorage = newELS;
+
+
+	if (freeBytes < 200) {
+		printf("build callin free java stack bytes %d \n", freeBytes);
+	}
 #if defined(WIN32) && !defined(J9VM_ENV_DATA64)
 	if (J9_ARE_NO_BITS_SET(currentThread->javaVM->sigFlags, J9_SIG_XRS_SYNC)) {
 		newELS->gpLink = (UDATA*)getFS0();
@@ -632,6 +645,7 @@ runJavaThread(J9VMThread *currentThread)
 {
 	Trc_VM_runJavaThread_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
+	printf("!@!@@!!@ enter java thread=%p native sp=%p @!@!@!@!@\n", &currentThread, &newELS);
 	if (buildCallInStackFrame(currentThread, &newELS, false, false)) {
 		/* Lookup the run()V method on the Thread instance */
 		j9object_t threadObject = currentThread->threadObject;
