@@ -104,6 +104,8 @@ typedef struct {
 
 static J9ArrayROMClasses arrayROMClasses;
 static J9BaseTypePrimitiveROMClasses baseTypePrimitiveROMClasses;
+static J9ArrayROMClasses *arrayROMClassesPtr = &arrayROMClasses;
+static J9BaseTypePrimitiveROMClasses *baseTypePrimitiveROMClassesPtr = &baseTypePrimitiveROMClasses;
 
 #define INIT_UTF8(field, str) \
 		do { \
@@ -125,11 +127,11 @@ initializeArrayROMClass(J9ROMArrayClass *romClass, J9UTF8 *className, U_32 array
 {
 	romClass->romSize = size;
 	NNSRP_SET(romClass->className, className);
-	NNSRP_SET(romClass->superclassName, &arrayROMClasses.objectClassName);
+	NNSRP_SET(romClass->superclassName, &arrayROMClassesPtr->objectClassName);
 	romClass->modifiers = J9AccFinal | J9AccPublic | J9AccClassArray | J9AccAbstract;
 	romClass->extraModifiers = J9AccClassCloneable | J9AccClassIsUnmodifiable;
 	romClass->interfaceCount = sizeof(arrayROMClasses.interfaceClasses) / sizeof(J9SRP);
-	NNSRP_SET(romClass->interfaces, &arrayROMClasses.interfaceClasses);
+	NNSRP_SET(romClass->interfaces, &arrayROMClassesPtr->interfaceClasses);
 	romClass->arrayShape = arrayShape;
 	romClass->instanceShape = J9_OBJECT_HEADER_INDEXABLE | instanceShape;
 }
@@ -160,61 +162,78 @@ void
 initializeROMClasses(J9JavaVM *vm)
 {
 	UDATA referenceSize = J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) ? sizeof(U_32) : sizeof(UDATA);
-	memset(&arrayROMClasses, 0, sizeof(arrayROMClasses));
-	memset(&baseTypePrimitiveROMClasses, 0, sizeof(baseTypePrimitiveROMClasses));
+
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_SNAPSHOTTING_ENABLED(vm)) {
+		if (IS_SNAPSHOT_RUN(vm)) {
+			VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(vm);
+			arrayROMClassesPtr = vmsnapshot_allocate_memory32(sizeof(J9ArrayROMClasses), J9MEM_CATEGORY_CLASSES);
+			baseTypePrimitiveROMClassesPtr = vmsnapshot_allocate_memory32(sizeof(J9BaseTypePrimitiveROMClasses), J9MEM_CATEGORY_CLASSES);
+		} else if (IS_RESTORE_RUN(vm)){
+			arrayROMClassesPtr = (J9ArrayROMClasses *)vm->arrayROMClasses;
+			baseTypePrimitiveROMClassesPtr = (J9BaseTypePrimitiveROMClasses *)vm->baseTypePrimitiveROMClasses;
+		}
+	} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	{
+		memset(arrayROMClassesPtr, 0, sizeof(arrayROMClasses));
+		memset(baseTypePrimitiveROMClassesPtr, 0, sizeof(baseTypePrimitiveROMClasses));
+	}
+
 	/* Initialize UTF data for the array classes */
-	INIT_UTF8(arrayROMClasses.objectArrayClassName, OBJECT_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.booleanArrayClassName, BOOLEAN_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.charArrayClassName, CHAR_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.floatArrayClassName, FLOAT_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.doubleArrayClassName, DOUBLE_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.byteArrayClassName, BYTE_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.shortArrayClassName, SHORT_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.intArrayClassName, INT_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.longArrayClassName, LONG_ARRAY_NAME);
-	INIT_UTF8(arrayROMClasses.objectClassName, OBJECT_CLASS_NAME);
-	INIT_UTF8(arrayROMClasses.cloneableClassName, CLONEABLE_CLASS_NAME);
-	INIT_UTF8(arrayROMClasses.serializeableClassName, SERIALIZEABLE_CLASS_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).objectArrayClassName, OBJECT_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).booleanArrayClassName, BOOLEAN_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).charArrayClassName, CHAR_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).floatArrayClassName, FLOAT_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).doubleArrayClassName, DOUBLE_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).byteArrayClassName, BYTE_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).shortArrayClassName, SHORT_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).intArrayClassName, INT_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).longArrayClassName, LONG_ARRAY_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).objectClassName, OBJECT_CLASS_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).cloneableClassName, CLONEABLE_CLASS_NAME);
+	INIT_UTF8((*arrayROMClassesPtr).serializeableClassName, SERIALIZEABLE_CLASS_NAME);
 	/* Initialize the required fields in the array class ROM image header */
-	arrayROMClasses.header.romSize = sizeof(arrayROMClasses) - sizeof(arrayROMClasses.header);
-	NNSRP_SET(arrayROMClasses.header.firstClass, &arrayROMClasses.objectArrayROMClass);
+	(*arrayROMClassesPtr).header.romSize = sizeof(arrayROMClasses) - sizeof(arrayROMClasses.header);
+	NNSRP_SET((*arrayROMClassesPtr).header.firstClass, &arrayROMClassesPtr->objectArrayROMClass);
 	/* Set up the SRPs in the interface array */
-	NNSRP_SET(arrayROMClasses.interfaceClasses.cloneable, &arrayROMClasses.cloneableClassName);
-	NNSRP_SET(arrayROMClasses.interfaceClasses.serializeable, &arrayROMClasses.serializeableClassName);
+	NNSRP_SET((*arrayROMClassesPtr).interfaceClasses.cloneable, &arrayROMClassesPtr->cloneableClassName);
+	NNSRP_SET((*arrayROMClassesPtr).interfaceClasses.serializeable, &arrayROMClassesPtr->serializeableClassName);
 	/* Initialize the array classes */
-	initializeArrayROMClass(&arrayROMClasses.objectArrayROMClass, (J9UTF8*)&arrayROMClasses.objectArrayClassName, (sizeof(U_32) == referenceSize) ? J9ArraySizeLongs : J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_POINTERS, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.booleanArrayROMClass, (J9UTF8*)&arrayROMClasses.booleanArrayClassName, J9ArraySizeBytes, OBJECT_HEADER_SHAPE_BYTES, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.charArrayROMClass, (J9UTF8*)&arrayROMClasses.charArrayClassName, J9ArraySizeWords, OBJECT_HEADER_SHAPE_WORDS, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.floatArrayROMClass, (J9UTF8*)&arrayROMClasses.floatArrayClassName, J9ArraySizeLongs, OBJECT_HEADER_SHAPE_LONGS, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.doubleArrayROMClass, (J9UTF8*)&arrayROMClasses.doubleArrayClassName, J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_DOUBLES, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.byteArrayROMClass, (J9UTF8*)&arrayROMClasses.byteArrayClassName, J9ArraySizeBytes, OBJECT_HEADER_SHAPE_BYTES, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.shortArrayROMClass, (J9UTF8*)&arrayROMClasses.shortArrayClassName, J9ArraySizeWords, OBJECT_HEADER_SHAPE_WORDS, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.intArrayROMClass, (J9UTF8*)&arrayROMClasses.intArrayClassName, J9ArraySizeLongs, OBJECT_HEADER_SHAPE_LONGS, sizeof(J9ROMArrayClass));
-	initializeArrayROMClass(&arrayROMClasses.longArrayROMClass, (J9UTF8*)&arrayROMClasses.longArrayClassName, J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_DOUBLES, sizeof(J9ArrayROMClasses) - offsetof(J9ArrayROMClasses, longArrayROMClass));
-	vm->arrayROMClasses = &arrayROMClasses.header;
+	initializeArrayROMClass(&arrayROMClassesPtr->objectArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->objectArrayClassName, (sizeof(U_32) == referenceSize) ? J9ArraySizeLongs : J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_POINTERS, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->booleanArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->booleanArrayClassName, J9ArraySizeBytes, OBJECT_HEADER_SHAPE_BYTES, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->charArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->charArrayClassName, J9ArraySizeWords, OBJECT_HEADER_SHAPE_WORDS, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->floatArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->floatArrayClassName, J9ArraySizeLongs, OBJECT_HEADER_SHAPE_LONGS, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->doubleArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->doubleArrayClassName, J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_DOUBLES, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->byteArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->byteArrayClassName, J9ArraySizeBytes, OBJECT_HEADER_SHAPE_BYTES, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->shortArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->shortArrayClassName, J9ArraySizeWords, OBJECT_HEADER_SHAPE_WORDS, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->intArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->intArrayClassName, J9ArraySizeLongs, OBJECT_HEADER_SHAPE_LONGS, sizeof(J9ROMArrayClass));
+	initializeArrayROMClass(&arrayROMClassesPtr->longArrayROMClass, (J9UTF8*)&arrayROMClassesPtr->longArrayClassName, J9ArraySizeDoubles, OBJECT_HEADER_SHAPE_DOUBLES, sizeof(J9ArrayROMClasses) - offsetof(J9ArrayROMClasses, longArrayROMClass));
+	vm->arrayROMClasses = &arrayROMClassesPtr->header;
 	/* Initialize UTF data for the primitive classes */
-	INIT_UTF8(baseTypePrimitiveROMClasses.voidClassName, VOID_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.booleanClassName, BOOLEAN_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.charClassName, CHAR_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.floatClassName, FLOAT_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.doubleClassName, DOUBLE_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.byteClassName, BYTE_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.shortClassName, SHORT_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.intClassName, INT_CLASS_NAME);
-	INIT_UTF8(baseTypePrimitiveROMClasses.longClassName, LONG_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).voidClassName, VOID_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).booleanClassName, BOOLEAN_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).charClassName, CHAR_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).floatClassName, FLOAT_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).doubleClassName, DOUBLE_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).byteClassName, BYTE_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).shortClassName, SHORT_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).intClassName, INT_CLASS_NAME);
+	INIT_UTF8((*baseTypePrimitiveROMClassesPtr).longClassName, LONG_CLASS_NAME);
 	/* Initialize the required fields in the primitive class ROM image header */
-	baseTypePrimitiveROMClasses.header.romSize = sizeof(baseTypePrimitiveROMClasses) - sizeof(baseTypePrimitiveROMClasses.header);
-	NNSRP_SET(baseTypePrimitiveROMClasses.header.firstClass, &baseTypePrimitiveROMClasses.voidReflectROMClass);
+	(*baseTypePrimitiveROMClassesPtr).header.romSize = sizeof(baseTypePrimitiveROMClasses) - sizeof(baseTypePrimitiveROMClasses.header);
+	NNSRP_SET((*baseTypePrimitiveROMClassesPtr).header.firstClass, &baseTypePrimitiveROMClassesPtr->voidReflectROMClass);
+	vm->baseTypePrimitiveROMClasses = (void*)baseTypePrimitiveROMClassesPtr;
 	/* Initialize the primitive classes */
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.voidReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.voidClassName, J9VMCONSTANTPOOL_JAVALANGOBJECT, OBJECT_HEADER_SHAPE_MIXED, 0, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.booleanReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.booleanClassName, J9VMCONSTANTPOOL_JAVALANGBOOLEAN, OBJECT_HEADER_SHAPE_BYTES, 1, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.charReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.charClassName, J9VMCONSTANTPOOL_JAVALANGCHARACTER, OBJECT_HEADER_SHAPE_WORDS, 2, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.floatReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.floatClassName, J9VMCONSTANTPOOL_JAVALANGFLOAT, OBJECT_HEADER_SHAPE_LONGS, 4, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.doubleReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.doubleClassName, J9VMCONSTANTPOOL_JAVALANGDOUBLE, OBJECT_HEADER_SHAPE_DOUBLES, 8, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.byteReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.byteClassName, J9VMCONSTANTPOOL_JAVALANGBYTE, OBJECT_HEADER_SHAPE_BYTES, 1, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.shortReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.shortClassName, J9VMCONSTANTPOOL_JAVALANGSHORT, OBJECT_HEADER_SHAPE_WORDS, 2, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.intReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.intClassName, J9VMCONSTANTPOOL_JAVALANGINTEGER, OBJECT_HEADER_SHAPE_LONGS, 4, sizeof(J9ROMReflectClass));
-	initializeBaseTypeROMClass(&baseTypePrimitiveROMClasses.longReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClasses.longClassName, J9VMCONSTANTPOOL_JAVALANGLONG, OBJECT_HEADER_SHAPE_DOUBLES, 8, sizeof(J9BaseTypePrimitiveROMClasses) - offsetof(J9BaseTypePrimitiveROMClasses, longReflectROMClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->voidReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->voidClassName, J9VMCONSTANTPOOL_JAVALANGOBJECT, OBJECT_HEADER_SHAPE_MIXED, 0, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->booleanReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->booleanClassName, J9VMCONSTANTPOOL_JAVALANGBOOLEAN, OBJECT_HEADER_SHAPE_BYTES, 1, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->charReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->charClassName, J9VMCONSTANTPOOL_JAVALANGCHARACTER, OBJECT_HEADER_SHAPE_WORDS, 2, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->floatReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->floatClassName, J9VMCONSTANTPOOL_JAVALANGFLOAT, OBJECT_HEADER_SHAPE_LONGS, 4, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->doubleReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->doubleClassName, J9VMCONSTANTPOOL_JAVALANGDOUBLE, OBJECT_HEADER_SHAPE_DOUBLES, 8, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->byteReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->byteClassName, J9VMCONSTANTPOOL_JAVALANGBYTE, OBJECT_HEADER_SHAPE_BYTES, 1, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->shortReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->shortClassName, J9VMCONSTANTPOOL_JAVALANGSHORT, OBJECT_HEADER_SHAPE_WORDS, 2, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->intReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->intClassName, J9VMCONSTANTPOOL_JAVALANGINTEGER, OBJECT_HEADER_SHAPE_LONGS, 4, sizeof(J9ROMReflectClass));
+	initializeBaseTypeROMClass(&baseTypePrimitiveROMClassesPtr->longReflectROMClass, (J9UTF8*)&baseTypePrimitiveROMClassesPtr->longClassName, J9VMCONSTANTPOOL_JAVALANGLONG, OBJECT_HEADER_SHAPE_DOUBLES, 8, sizeof(J9BaseTypePrimitiveROMClasses) - offsetof(J9BaseTypePrimitiveROMClasses, longReflectROMClass));
 }
 
 UDATA
@@ -224,17 +243,17 @@ internalCreateBaseTypePrimitiveAndArrayClasses(J9VMThread *currentThread)
 	J9ClassLoader *classLoader = vm->systemClassLoader;
 	UDATA rc = 1;
 	UDATA i = 0;
-	J9ROMArrayClass *arrayROMClass = &arrayROMClasses.booleanArrayROMClass;
+	J9ROMArrayClass *arrayROMClass = &arrayROMClassesPtr->booleanArrayROMClass;
 	J9Class **arrayRAMClass = &vm->booleanArrayClass;
-	J9ROMClass *primitiveROMClass = (J9ROMClass*)&baseTypePrimitiveROMClasses.voidReflectROMClass;
+	J9ROMClass *primitiveROMClass = (J9ROMClass*)&baseTypePrimitiveROMClassesPtr->voidReflectROMClass;
 	J9Class **primitiveRAMClass = &vm->voidReflectClass;
 
 	/* create a segment for the base type ROM classes */
-	if (NULL == romImageNewSegment(vm, &baseTypePrimitiveROMClasses.header, TRUE, classLoader)) {
+	if (NULL == romImageNewSegment(vm, &baseTypePrimitiveROMClassesPtr->header, TRUE, classLoader)) {
 		goto done;
 	}
 	/* create a segment for the array ROM classes */
-	if (NULL == romImageNewSegment(vm, &arrayROMClasses.header, FALSE, classLoader)) {
+	if (NULL == romImageNewSegment(vm, &arrayROMClassesPtr->header, FALSE, classLoader)) {
 		goto done;
 	}
 	for (i = 0; i < TYPE_COUNT; ++i) {

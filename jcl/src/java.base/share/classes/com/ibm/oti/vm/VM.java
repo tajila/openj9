@@ -128,6 +128,11 @@ public final class VM {
 	public static final int GLR_CANCEL_ABSOLUTE_THRESHOLD;
 	public static final int GLR_MINIMUM_LEARNING_RATIO;
 
+	public static final int J9_EXTENDED_RUNTIME_FLAGS2;
+	
+	public static final int J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN = 0x10000;
+	public static final int J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN = 0x20000;
+	
 	private static String[] cachedVMArgs;
 	/*[PR CMVC 189091] Perf: EnumSet.allOf() is slow */
 	/*[PR CMVC 191554] Provide access to ClassLoader methods to improve performance */
@@ -207,6 +212,8 @@ public final class VM {
 		GLR_MINIMUM_RESERVED_RATIO = 0;
 		GLR_CANCEL_ABSOLUTE_THRESHOLD = 0;
 		GLR_MINIMUM_LEARNING_RATIO = 0;
+		
+		J9_EXTENDED_RUNTIME_FLAGS2 = 0;
 }
 /**
  * Prevents this class from being instantiated.
@@ -569,5 +576,13 @@ public static int markCurrentThreadAsSystem()
 }
 
 private static native int markCurrentThreadAsSystemImpl();
+
+public static boolean isSnapshotRun() {
+	return ((J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN & J9_EXTENDED_RUNTIME_FLAGS2) == J9_EXTENDED_RUNTIME2_RAMSTATE_SNAPSHOT_RUN);
+}
+
+public static boolean isRestoreRun() {
+	return ((J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN & J9_EXTENDED_RUNTIME_FLAGS2) == J9_EXTENDED_RUNTIME2_RAMSTATE_RESTORE_RUN);
+}
 
 }

@@ -533,7 +533,14 @@ J9MemorySegmentList *allocateMemorySegmentListWithSize(J9JavaVM * javaVM, U_32 n
 	memset(&segmentList->avlTreeData,0, sizeof(J9AVLTree));
 	segmentList->avlTreeData.insertionComparator = (IDATA (*)(J9AVLTree *, J9AVLTreeNode *, J9AVLTreeNode *)) segmentInsertionComparator;
 	segmentList->avlTreeData.searchComparator = (IDATA (*)(J9AVLTree *, UDATA, J9AVLTreeNode *)) segmentSearchComparator;
-	segmentList->avlTreeData.portLibrary = OMRPORT_FROM_J9PORT(PORTLIB);
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_SNAPSHOT_RUN(javaVM) && ((J9MEM_CATEGORY_CLASSES == memoryCategory) || (OMRMEM_CATEGORY_VM == memoryCategory))) {
+		segmentList->avlTreeData.portLibrary = OMRPORT_FROM_J9PORT((J9PortLibrary*)privateImagePortLibrary);
+	} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	{
+		segmentList->avlTreeData.portLibrary = OMRPORT_FROM_J9PORT(PORTLIB);
+	}
 
 	return segmentList;
 }
@@ -738,6 +745,13 @@ segmentSearchComparator (J9AVLTree *tree, UDATA value, J9MemorySegment *searchNo
 	} else {
 		return baseAddress > value ? -1 : 1;
 	}
+}
+
+void
+refreshFunctionPointers(J9MemorySegmentList *segmentList)
+{
+	segmentList->avlTreeData.insertionComparator = (IDATA (*)(J9AVLTree *, J9AVLTreeNode *, J9AVLTreeNode *)) segmentInsertionComparator;
+	segmentList->avlTreeData.searchComparator = (IDATA (*)(J9AVLTree *, UDATA, J9AVLTreeNode *)) segmentSearchComparator;
 }
 
 #if defined(DEBUG_PRINT_SEGMENT_TYPES)

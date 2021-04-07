@@ -614,6 +614,8 @@ enum INIT_STAGE {
 
 #define SYSPROP_COM_SUN_MANAGEMENT "-Dcom.sun.management."
 
+
+#define J9VM_INTERP_VERBOSE
 #ifdef J9VM_INTERP_VERBOSE
 
 #define JVMINIT_VERBOSE_INIT_TRACE(flags, txt) do { \

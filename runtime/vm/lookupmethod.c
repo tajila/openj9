@@ -637,6 +637,11 @@ javaLookupMethodImpl(J9VMThread *currentThread, J9Class *targetClass, J9ROMNameA
 	resultMethod = NULL;
 	badMethod = NULL;
 
+	const char* clzName = "com/ibm/ws/logging/internal/TraceSpecification$1";
+	if (0 == strncmp((char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(targetClass->romClass)), clzName, strlen(clzName))) {
+		printf("its this class \n");
+	}
+
 	/* Get the name and signature data and length */
 
 	if (lookupOptions & J9_LOOK_JNI) {

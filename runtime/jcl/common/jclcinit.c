@@ -540,6 +540,11 @@ intializeVMConstants(J9VMThread *currentThread)
 		goto done;
 	}
 
+	rc = initializeStaticIntField(currentThread, vmClass, J9VMCONSTANTPOOL_COMIBMOTIVMVM_J9_EXTENDED_RUNTIME_FLAGS2, (I_32)vm->extendedRuntimeFlags2);
+	if (JNI_OK != rc) {
+		goto done;
+	}
+
 	/* Initialize constant int fields */
 	for (i = 0; i < sizeof(intVMConstants) / sizeof(J9IntConstantMapping); ++i) {
 			UDATA vmCPIndex = intVMConstants[i].vmCPIndex;

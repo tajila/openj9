@@ -3200,8 +3200,12 @@ internalCreateRAMClassFromROMClass(J9VMThread *vmThread, J9ClassLoader *classLoa
 	UDATA flattenedClassCacheAllocSize = sizeof(J9FlattenedClassCache) + (sizeof(J9FlattenedClassCacheEntry) * romFieldCount);
 	U_8 flattenedClassCacheBuffer[sizeof(J9FlattenedClassCache) + (sizeof(J9FlattenedClassCacheEntry) * DEFAULLT_NUMBER_OF_ENTRIES_IN_FLATTENED_CLASS_CACHE)] = {0};
 	J9FlattenedClassCache *flattenedClassCache = (J9FlattenedClassCache *) flattenedClassCacheBuffer;
-	PORT_ACCESS_FROM_VMC(vmThread);
 #endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+	PORT_ACCESS_FROM_VMC(vmThread);
+	U_64 startTime = 0;
+	U_64 endTime = 0;
+
+	startTime = j9time_nano_time();
 
 	if (J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_ANON)) {
 		classLoader = javaVM->anonClassLoader;
@@ -3422,6 +3426,10 @@ retry:
 		result->classFlags = classFlags;
 
 	}
+
+	endTime = j9time_nano_time();
+	javaVM->crmTime += endTime - startTime;
+	javaVM->crmCount++;
 
 	return result;
 }

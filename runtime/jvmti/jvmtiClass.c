@@ -90,9 +90,20 @@ jvmtiGetLoadedClassesCount(J9JavaVM * vm)
 	/* Count classes (ignore primitive types and old versions of redefined classes) */
 	clazz = vmfuncs->allLiveClassesStartDo(&classWalkState, vm, NULL);
 	while (clazz) {
-		if (J9ROMCLASS_IS_PRIMITIVE_TYPE(clazz->romClass) == 0) {
-			if ((J9CLASS_FLAGS(clazz) & J9AccClassHotSwappedOut) == 0) {
-				classCount++;
+#if defined(J9VM_OPT_SNAPSHOTS)
+		if (IS_RESTORE_RUN(vm)) {
+			if (J9_ARE_ALL_BITS_SET(clazz->classFlags, J9ClassSnapshotClass)
+			&& J9_ARE_NO_BITS_SET(clazz->classFlags, J9ClassIsLoadedFromImage)
+			) {
+				/* skip TODO ugly fix this */
+			}
+		} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+		{
+			if (J9ROMCLASS_IS_PRIMITIVE_TYPE(clazz->romClass) == 0) {
+				if ((J9CLASS_FLAGS(clazz) & J9AccClassHotSwappedOut) == 0) {
+					classCount++;
+				}
 			}
 		}
 		clazz = vmfuncs->allLiveClassesNextDo(&classWalkState);
@@ -148,30 +159,40 @@ jvmtiGetLoadedClasses(jvmtiEnv* env,
 			/* Copy class references (ignore primitive types and old versions of redefined classes) */
 			clazz = vmfuncs->allLiveClassesStartDo(&classWalkState, vm, NULL);
 			while (clazz) {
-				/* Check if we need more memory */
-				if (i == lastClassCount) {
-					jclass * tempClassRefs;
-
-					lastClassCount = lastClassCount + 128; 
-					tempClassRefs = j9mem_reallocate_memory(classRefs, lastClassCount * sizeof(jclass), J9MEM_CATEGORY_JVMTI);
-					if (NULL == tempClassRefs) {
-						/* realloc failed - need to free the original allocation */
-						j9mem_free_memory(classRefs);
-						classRefs = NULL;
-						vmfuncs->allLiveClassesEndDo(&classWalkState);
-						omrthread_monitor_exit(vm->classTableMutex);
-						rc = JVMTI_ERROR_OUT_OF_MEMORY;
-						goto done;
+#if defined(J9VM_OPT_SNAPSHOTS)
+				if (IS_RESTORE_RUN(vm)) {
+					if (J9_ARE_ALL_BITS_SET(clazz->classFlags, J9ClassSnapshotClass)
+					&& J9_ARE_NO_BITS_SET(clazz->classFlags, J9ClassIsLoadedFromImage)
+					) {
+						/* skip TODO ugly fix this */
 					}
-					classRefs = tempClassRefs;
-				}
+				} else
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+				{
+					/* Check if we need more memory */
+					if (i == lastClassCount) {
+						jclass * tempClassRefs;
 
-				if (J9ROMCLASS_IS_PRIMITIVE_TYPE(clazz->romClass) == 0) {
-					if ((J9CLASS_FLAGS(clazz) & J9AccClassHotSwappedOut) == 0) {
-						classRefs[i++] = (jclass)vmfuncs->j9jni_createLocalRef((JNIEnv *) currentThread, J9VM_J9CLASS_TO_HEAPCLASS(clazz));
+						lastClassCount = lastClassCount + 128;
+						tempClassRefs = j9mem_reallocate_memory(classRefs, lastClassCount * sizeof(jclass), J9MEM_CATEGORY_JVMTI);
+						if (NULL == tempClassRefs) {
+							/* realloc failed - need to free the original allocation */
+							j9mem_free_memory(classRefs);
+							classRefs = NULL;
+							vmfuncs->allLiveClassesEndDo(&classWalkState);
+							omrthread_monitor_exit(vm->classTableMutex);
+							rc = JVMTI_ERROR_OUT_OF_MEMORY;
+							goto done;
+						}
+						classRefs = tempClassRefs;
+					}
+
+					if (J9ROMCLASS_IS_PRIMITIVE_TYPE(clazz->romClass) == 0) {
+						if ((J9CLASS_FLAGS(clazz) & J9AccClassHotSwappedOut) == 0) {
+							classRefs[i++] = (jclass)vmfuncs->j9jni_createLocalRef((JNIEnv *) currentThread, J9VM_J9CLASS_TO_HEAPCLASS(clazz));
+						}
 					}
 				}
-
 				clazz = vmfuncs->allLiveClassesNextDo(&classWalkState);
 			}
 			vmfuncs->allLiveClassesEndDo(&classWalkState);

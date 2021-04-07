@@ -565,11 +565,21 @@ void OMRNORETURN exitJavaVM(J9VMThread * vmThread, IDATA rc)
 		omrthread_monitor_enter(vm->classLoaderBlocksMutex);
 #endif
 
+		printf("classSupportTime=%lu defineClassTime=%lu jclDefineTime=%lu crmTime=%lu crmCount=%lu\n",
+			vm->classSupportTime,
+			vm->defineClassTime,
+			vm->jclDefineTime,
+			vm->crmTime,
+			vm->crmCount
+		);
+
 #if defined(J9VM_OPT_SNAPSHOTS)
 		if (IS_SNAPSHOT_RUN(vm)) {
 			teardownVMSnapshotImpl(vm);
 		}
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
+
 
 #if defined(COUNT_BYTECODE_PAIRS)
 		printBytecodePairs(vm);
@@ -641,6 +651,14 @@ freeJavaVM(J9JavaVM * vm)
 	if (NULL != vm->dllLoadTable) {
 		runShutdownStage(vm, INTERPRETER_SHUTDOWN, NULL, 0);
 	}
+
+	printf("classSupportTime=%lu defineClassTime=%lu jclDefineTime=%lu crmTime=%lu crmCount=%lu\n",
+		vm->classSupportTime,
+		vm->defineClassTime,
+		vm->jclDefineTime,
+		vm->crmTime,
+		vm->crmCount
+	);
 
 #if defined(J9VM_OPT_SNAPSHOTS)
 	if (IS_SNAPSHOTTING_ENABLED(vm)) {
@@ -999,6 +1017,9 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 #if defined(J9VM_OPT_SNAPSHOTS)
 	void *vmSnapshotImpl = NULL;
 
+	printf("jvminit 1 \n");
+	fflush(stdout);
+
 	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_RESTORE | J9_CREATEJAVAVM_SNAPSHOT)) {
 		fprintf(stderr, "Error: Cannot snapshot and restore in a single run\n");
 		return JNI_ERR;
@@ -1032,6 +1053,9 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 			return JNI_ENOMEM;
 		}
 	}
+
+	printf("jvminit 2 \n");
+	fflush(stdout);
 
 #if defined(J9VM_THR_ASYNC_NAME_UPDATE)
 	vm->threadNameHandlerKey = -1;
@@ -1094,7 +1118,8 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 	if (0 != setSignalOptions(vm, portLibrary)) {
 		return JNI_ERR;
 	}
-
+	printf("jvminit 3 \n");
+	fflush(stdout);
 	/* initialize the mappings between omrthread and java priorities */
 	initializeJavaPriorityMaps(vm);
 
@@ -2292,6 +2317,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			 * needs to arrive at the right no. & regions from right set needs to picked up for releasing the pages. Line Item: 50329
 			 * continued to be extended for other GC policies and platforms.
 			 */
+			printf("ALL_LIBRARIES_LOADED 1 \n");
 			if (J9_ARE_ANY_BITS_SET(vm->vmRuntimeStateListener.idleTuningFlags, J9_IDLE_TUNING_GC_ON_IDLE | J9_IDLE_TUNING_COMPACT_ON_IDLE)) {
 				BOOLEAN idleGCTuningSupported = FALSE;
 #if (defined(LINUX) && (defined(J9HAMMER) || defined(J9X86) || defined(S39064) || defined(PPC64) || defined(J9AARCH64) || defined(RISCV64))) || defined(J9ZOS39064)
@@ -2308,6 +2334,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 					}
 				}
 			}
+			printf("ALL_LIBRARIES_LOADED 2 \n");
 			break;
 
 		case DLL_LOAD_TABLE_FINALIZED :
@@ -3763,7 +3790,8 @@ static void runJ9VMDllMain(void* dllLoadInfo, void* userDataTemp) {
 
 			J9VMDllMainFunc = entry->j9vmdllmain;
 			JVMINIT_VERBOSE_INIT_VM_TRACE1(userData->vm, "\tfor library %s...\n", dllName);
-
+			printf("\tfor library %s...\n", dllName);
+			fflush(stdout);
 			/* reserved = shutdownDueToExit */
 			if (userData->vm->verboseLevel & VERBOSE_INIT) {
 				start = j9time_nano_time();
@@ -3783,7 +3811,9 @@ static void runJ9VMDllMain(void* dllLoadInfo, void* userDataTemp) {
 			if (userData->stage >=0) {
 				COMPLETE_STAGE(entry->completedBits, userData->stage);
 			}
-			JVMINIT_VERBOSE_INIT_VM_TRACE2(userData->vm, "\t\tcompleted with rc=%d in %lld nano sec.\n", rc, (end-start));
+			JVMINIT_VERBOSE_INIT_VM_TRACE2(userData->vm, "\t\tcompleted with rc=%d in %lld nano sec.\n", (int)rc, (end-start));
+			printf("\t\tcompleted with rc=%d in %ld nano sec.\n", (int) rc, (end-start));
+			fflush(stdout);
 			JVMINIT_VERBOSE_INIT_TRACE_WORKING_SET(userData->vm);
 		}
 	}
@@ -6464,7 +6494,8 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 			Trc_VM_contendedLinesizeFailed(queryResult);
 		}
 	}
-
+	printf("protectedInitializeJavaVM 1 \n");
+	fflush(stdout);
 	/* check for -Xipt flag and run the iconv_global_init accordingly.
 	 * If this function fails, bail out of VM init instead of hitting some random
 	 * weird undebuggable crash later on
@@ -6525,6 +6556,9 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 #ifdef J9VM_RAS_EYECATCHERS
 	J9RASInitialize(vm);
 #endif
+
+	printf("protectedInitializeJavaVM 2 \n");
+	fflush(stdout);
 
 	initializeROMClasses(vm);
 
@@ -6613,6 +6647,9 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 			doParseXlogForCompatibility = TRUE;
 		}
 	}
+
+	printf("protectedInitializeJavaVM 3 \n");
+	fflush(stdout);
 
 	if (JNI_OK != processXLogOptions(vm)) {
 		parseError = TRUE;
@@ -6735,35 +6772,59 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 4 \n");
+	fflush(stdout);
+
 	/* Use this stage to load libraries which need to set up hooks as early as possible */
 	if (JNI_OK != runLoadStage(vm, EARLY_LOAD)) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 5 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, PORT_LIBRARY_GUARANTEED))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 6 \n");
+	fflush(stdout);
 
 	if (JNI_OK != (stageRC = runInitializationStage(vm, ALL_DEFAULT_LIBRARIES_LOADED))) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 7 \n");
+	fflush(stdout);
+
 	if (JNI_OK != runLoadStage(vm, LOAD_BY_DEFAULT)) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 8 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, ALL_LIBRARIES_LOADED))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 9 \n");
+	fflush(stdout);
 
 	J9RelocateRASData(vm);
 	if (JNI_OK != runLoadStage(vm, FORCE_LATE_LOAD)) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 10 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, DLL_LOAD_TABLE_FINALIZED))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 11 \n");
+	fflush(stdout);
 
 	/* Run shutdown stage for any libraries being forced to unload */
 	/* Note that INTERPRETER_SHUTDOWN is not run here. The interpreter is not yet started... */
@@ -6771,38 +6832,65 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 12 \n");
+	fflush(stdout);
+
 	if (JNI_OK != runForcedUnloadStage(vm)) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 13 \n");
+	fflush(stdout);
 
 	if (JNI_OK != (stageRC = runInitializationStage(vm, VM_THREADING_INITIALIZED))) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 14 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, HEAP_STRUCTURES_INITIALIZED))) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 15 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, ALL_VM_ARGS_CONSUMED))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 16 \n");
+	fflush(stdout);
 
 	if (FALSE == checkArgsConsumed(vm, portLibrary, vm->vmArgsArray)) {
 		parseError = TRUE;
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 17 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, BYTECODE_TABLE_SET))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 18 \n");
+	fflush(stdout);
 
 	if (JNI_OK != (stageRC = runInitializationStage(vm, SYSTEM_CLASSLOADER_SET))) {
 		goto error;
 	}
 
+	printf("protectedInitializeJavaVM 19 \n");
+	fflush(stdout);
+
 	if (JNI_OK != (stageRC = runInitializationStage(vm, DEBUG_SERVER_INITIALIZED))) {
 		goto error;
 	}
+
+	printf("protectedInitializeJavaVM 20 \n");
+	fflush(stdout);
 
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
 	vmHooks = getVMHookInterface(vm);
@@ -6988,6 +7076,9 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 			j9file_printf(PORTLIB, J9PORT_TTY_OUT, " uint64_t MaxDirectMemorySize                      = %-41llu {product} {%s}\n", maxDirectMemorySize, howset);
 		}
 	}
+
+	printf("protectedInitializeJavaVM fini \n");
+	fflush(stdout);
 
 	return JNI_OK;
 

@@ -73,6 +73,8 @@ private:
 
 	bool allocateImageTableHeaders(void);
 
+	void setupClassMetaData(void);
+
 	bool readImageFromFile(void);
 	bool writeImageToFile(void);
 
@@ -91,7 +93,6 @@ private:
 	void savePrimitiveAndArrayClasses(void);
 	void saveHiddenInstanceFields(void);
 	void restoreHiddenInstanceFields(void);
-	bool isImmortalClassLoader(J9ClassLoader *classLoader);
 	J9MemorySegmentList* copyUnPersistedMemorySegmentsToNewList(J9MemorySegmentList *oldMemorySegmentList);
 
 protected:
@@ -134,6 +135,7 @@ public:
 	J9ITable* getInvalidITable(void) { return _invalidITable; }
 	J9SnapshotHeader* getSnapshotHeader(void) { return _snapshotHeader; }
 	J9Heap * getSubAllocatorHeap(void) { return _heap; }
+
 };
 
 #endif /* VMSNAPSHOTIMPLE_HPP_ */

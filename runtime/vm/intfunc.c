@@ -378,6 +378,7 @@ J9InternalVMFunctions J9InternalFunctions = {
 	initializeImageClassLoaderObject,
 	initializeImageClassObject,
 	loadWarmClass,
+	setupClassPDs,
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 #if defined(J9VM_OPT_JITSERVER)
 	isJITServerEnabled,

@@ -55,6 +55,11 @@ defineClassCommon(JNIEnv *env, jobject classLoaderObject,
 	I_32 tempLength = 0;
 	J9TranslationLocalBuffer localBuffer = {J9_CP_INDEX_NONE, LOAD_LOCATION_UNKNOWN, NULL};
 
+	U_64 startTime = 0;
+	U_64 endTime = 0;
+
+	startTime = j9time_nano_time();
+
 	if (vm->dynamicLoadBuffers == NULL) {
 		throwNewInternalError(env, "Dynamic loader is unavailable");
 		goto done;
@@ -140,34 +145,39 @@ retry:
 	omrthread_monitor_enter(vm->classTableMutex);
 	/* Hidden class is never added into the hash table */
 	if (J9_ARE_NO_BITS_SET(*options, J9_FINDCLASS_FLAG_HIDDEN)) {
-		if (vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length) != NULL) {
+		if ((clazz = vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length)) != NULL) {
 			/* Bad, we have already defined this class - fail */
 			omrthread_monitor_exit(vm->classTableMutex);
 			if (J9_ARE_NO_BITS_SET(*options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
 #if defined(J9VM_OPT_SNAPSHOTS)
 				/* TODO: We get here if someone does Classloader.findClass on a persisted class
-			 	* Once class objects are persisted we should never get here apart from error
+				 * Once class objects are persisted we should never get here apart from error
 				 * cases. */
 				if (IS_RESTORE_RUN(vm)) {
-					clazz = vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length);
+					if (J9_ARE_ALL_BITS_SET(clazz->classFlags, J9ClassSnapshotClass)
+					&& J9_ARE_NO_BITS_SET(clazz->classFlags, J9ClassIsLoadedFromImage)
+					) {
+						if (!vmFuncs->loadWarmClass(currentThread, classLoader, clazz)) {
+							clazz = NULL;
+						}
 
-					if (!vmFuncs->loadWarmClass(currentThread, classLoader, clazz)) {
+						if (NULL != protectionDomain) {
+							J9VMJAVALANGCLASS_SET_PROTECTIONDOMAIN(currentThread, clazz->classObject, J9_JNI_UNWRAP_REFERENCE(protectionDomain));
+						}
+
+						goto done;
+					} else {
 						clazz = NULL;
-					}
-
-					clazz = vmFuncs->initializeImageClassObject(currentThread, classLoader, clazz);
-					if (NULL != protectionDomain) {
-						J9VMJAVALANGCLASS_SET_PROTECTIONDOMAIN(currentThread, clazz->classObject, J9_JNI_UNWRAP_REFERENCE(protectionDomain));
+						vmFuncs->setCurrentExceptionNLSWithArgs(currentThread, J9NLS_JCL_DUPLICATE_CLASS_DEFINITION, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, utf8Length, utf8Name);
 					}
 				} else
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 				{
-					vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, (UDATA*)* (j9object_t*)className);
+					clazz = NULL;
+					vmFuncs->setCurrentExceptionNLSWithArgs(currentThread, J9NLS_JCL_DUPLICATE_CLASS_DEFINITION, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, utf8Length, utf8Name);
 				}
 			}
-			if (J9_ARE_NO_BITS_SET(*options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
-				vmFuncs->setCurrentExceptionNLSWithArgs(currentThread, J9NLS_JCL_DUPLICATE_CLASS_DEFINITION, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, utf8Length, utf8Name);
-			}
+
 			goto done;
 		}
 	}
@@ -272,6 +282,9 @@ done:
 	if (!isContiguousClassBytes) {
 		j9mem_free_memory(classBytes);
 	}
+
+	endTime = j9time_nano_time();
+	vm->jclDefineTime += endTime - startTime;
 
 	return result;
 

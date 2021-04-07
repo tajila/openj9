@@ -84,6 +84,21 @@ public Class<?> loadClass(String className) throws ClassNotFoundException {
 	/*[PR 111332] synchronization required for JVMTI */
 	/*[PR VMDESIGN 1433] Remove Java synchronization (Prevent redundant loads of the same class) */
 	Class<?> loadedClass = VM.getVMLangAccess().findClassOrNullHelper(className, this);
+	
+	if ((loadedClass != null) && ClassLoader.isJCLInitComplete()) {
+		if ((loadedClass.getPDImpl() != null)) {
+			registerClass(loadedClass, loadedClass.getPDImpl());
+		} else {
+			//com.ibm.oti.vm.VM.dumpString("no pd class load: " + loadedClass + " loader=" + this + " class.loader=" + loadedClass.getClassLoader() + " \n");
+		}
+	} else {
+		if (loadedClass == null) {
+			//com.ibm.oti.vm.VM.dumpString("null class class load: " + className + " loader=" + this + " class.loader=" + " \n");
+		} else {
+			//com.ibm.oti.vm.VM.dumpString("init incomplete class load: " + loadedClass + " loader=" + this + " class.loader=" + loadedClass.getClassLoader() + " \n");
+		}
+	}
+	
 	return loadedClass;
 }
 

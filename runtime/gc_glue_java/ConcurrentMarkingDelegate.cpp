@@ -382,6 +382,8 @@ MM_ConcurrentMarkingDelegate::concurrentClassMark(MM_EnvironmentBase *env, bool 
 	uintptr_t sizeTraced = 0;
 	*completedClassMark = false;
 
+	J9JavaVM *vm = ((J9VMThread *)env->getLanguageVMThread())->javaVM;
+
 	Trc_MM_concurrentClassMarkStart(env->getLanguageVMThread());
 
 	Assert_GC_true_with_message(env, ((J9VMThread *)env->getLanguageVMThread())->privateFlags & J9_PRIVATE_FLAGS_CONCURRENT_MARK_ACTIVE, "MM_ConcurrentStats::_executionMode = %zu\n", _collector->getConcurrentGCStats()->getExecutionMode());
@@ -447,6 +449,18 @@ MM_ConcurrentMarkingDelegate::concurrentClassMark(MM_EnvironmentBase *env, bool 
 							goto quitConcurrentClassMark;
 						}
 						modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
+					}
+				}
+
+				if (IS_RESTORE_RUN(vm)) {
+					//TODO add is persisted Loader check here
+					uintptr_t numOfEntries = classLoader->cachedPDs[0].cacheIndex;
+					for (uintptr_t i = 0; i < numOfEntries; i++) {
+						if (NULL != classLoader->cachedPDs[i + 1].cachedPD) {
+							_markingScheme->markObject(env, (j9object_t)classLoader->cachedPDs[i + 1].cachedPD);
+						} else {
+							printf("should never be NULL loader=%p index %lu\n", classLoader, i);
+						}
 					}
 				}
 

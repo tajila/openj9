@@ -27,10 +27,20 @@
 
 #include <sys/mman.h> /* TODO: Change to OMRPortLibrary MMAP functionality. Currently does not allow MAP_FIXED as it is not supported in all architectures */
 
+#include "VMHelpers.hpp"
+
+J9_DECLARE_CONSTANT_UTF8(findProtectionDomains_sig, "(Ljava/lang/ClassLoader;Ljava/lang/String;)Ljava/security/ProtectionDomain;");
+J9_DECLARE_CONSTANT_UTF8(findProtectionDomains_name, "findProtectionDomains");
+
 void image_mem_free_memory(struct OMRPortLibrary *portLibrary, void *memoryPointer);
 void *image_mem_allocate_memory(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category);
 void image_mem_free_memory32(struct OMRPortLibrary *portLibrary, void *memoryPointer);
 void *image_mem_allocate_memory32(struct OMRPortLibrary *portLibrary, uintptr_t byteAmount, const char *callSite, uint32_t category);
+
+char*
+getClassName(J9Class *clazz) {
+	return (char*) J9UTF8_DATA(J9ROMCLASS_CLASSNAME(clazz->romClass));
+}
 
 
 VMSnapshotImpl::VMSnapshotImpl(J9PortLibrary *portLibrary, const char* ramCache) :
@@ -149,21 +159,28 @@ bool
 VMSnapshotImpl::setupWarmRun(void)
 {
 	bool success = true;
+	printf("setupWarmRun 1 \n");
+	fflush(stdout);
 	if (!readImageFromFile()) {
 		success = false;
 		goto done;
 	}
 
+	printf("setupWarmRun 2 \n");
+	fflush(stdout);
 	if (!initializeMonitor()) {
 		success = false;
 		goto done;
 	}
 
+	printf("setupWarmRun 3 \n");
+	fflush(stdout);
 	if (!restoreJ9JavaVMStructures()) {
 		success = false;
 		goto done;
 	}
-
+	printf("setupWarmRun 4 \n");
+	fflush(stdout);
 done:
 	return success;
 }
@@ -345,6 +362,20 @@ VMSnapshotImpl::saveClassLoaderBlocks(void)
 	_snapshotHeader->savedJavaVMStructs.applicationClassLoader = _vm->applicationClassLoader;
 }
 
+
+void
+updateFunctionPtrs(J9HashTable *hashTable,
+	J9HashTableHashFn hashFn,
+	J9HashTableEqualFn hashEqualFn,
+	J9HashTablePrintFn printFn)
+{
+	if (NULL != hashTable) {
+		hashTable->hashFn = hashFn;
+		hashTable->printFn = printFn;
+		hashTable->hashEqualFn = hashEqualFn;
+	}
+}
+
 void
 VMSnapshotImpl::restoreClassLoaderBlocks(void)
 {
@@ -355,20 +386,16 @@ VMSnapshotImpl::restoreClassLoaderBlocks(void)
 	_vm->systemClassLoader = _snapshotHeader->savedJavaVMStructs.systemClassLoader;
 	_vm->extensionClassLoader = _snapshotHeader->savedJavaVMStructs.extensionClassLoader;
 	_vm->applicationClassLoader = _snapshotHeader->savedJavaVMStructs.applicationClassLoader;
-}
 
-bool
-VMSnapshotImpl::isImmortalClassLoader(J9ClassLoader *classLoader)
-{
-	if ((classLoader == _vm->applicationClassLoader)
-	|| (classLoader == _vm->systemClassLoader)
-	|| (classLoader == _vm->extensionClassLoader)
-	|| (NULL == classLoader)
-	) {
-		return true;
-	}
+	updateFunctionPtrs(_vm->systemClassLoader->classHashTable, classHashFn, classHashEqualFn, NULL);
+	updateFunctionPtrs(_vm->extensionClassLoader->classHashTable, classHashFn, classHashEqualFn, NULL);
+	updateFunctionPtrs(_vm->applicationClassLoader->classHashTable, classHashFn, classHashEqualFn, NULL);
 
-	return false;
+	updateFunctionPtrs(_vm->systemClassLoader->classLocationHashTable, classLocationHashFn, classLocationHashEqualFn, NULL);
+	updateFunctionPtrs(_vm->extensionClassLoader->classLocationHashTable, classLocationHashFn, classLocationHashEqualFn, NULL);
+	updateFunctionPtrs(_vm->applicationClassLoader->classLocationHashTable, classLocationHashFn, classLocationHashEqualFn, NULL);
+
+
 }
 
 void
@@ -405,7 +432,7 @@ VMSnapshotImpl::copyUnPersistedMemorySegmentsToNewList(J9MemorySegmentList *oldM
 	while (NULL != currentSegment) {
 		J9MemorySegment *nextSegment = currentSegment->nextSegment;
 
-		if (!IS_SEGMENT_PERSISTED(currentSegment) || !isImmortalClassLoader(currentSegment->classLoader)) {
+		if (!IS_SEGMENT_PERSISTED(currentSegment) || !VM_VMHelpers::isImmortalClassLoader(_vm, currentSegment->classLoader)) {
 			J9MemorySegment *newSegment = allocateMemorySegmentListEntry(newMemorySegmentList);
 
 			newSegment->type = currentSegment->type;
@@ -454,6 +481,9 @@ VMSnapshotImpl::restoreMemorySegments(void)
 {
 	_vm->memorySegments = _snapshotHeader->savedJavaVMStructs.memorySegments;
 	_vm->classMemorySegments = _snapshotHeader->savedJavaVMStructs.classMemorySegments;
+
+	refreshFunctionPointers(_vm->memorySegments);
+	refreshFunctionPointers(_vm->classMemorySegments);
 }
 
 void
@@ -491,6 +521,9 @@ VMSnapshotImpl::fixupVMStructures(void)
 	UDATA omrVMOffset = ROUND_UP_TO_POWEROF2(omrRuntimeOffset + sizeof(OMR_Runtime), 8);
 	UDATA vmAllocationSize = omrVMOffset + sizeof(OMR_VM);
 	memset(_vm, 0, vmAllocationSize);
+
+	_vm->arrayROMClasses = _snapshotHeader->savedJavaVMStructs.arrayROMClasses;
+	_vm->baseTypePrimitiveROMClasses = (J9BaseTypePrimitiveROMClasses*)_snapshotHeader->savedJavaVMStructs.baseTypePrimitiveROMClasses;
 }
 
 void
@@ -543,7 +576,7 @@ VMSnapshotImpl::removeUnpersistedClassLoaders(void)
 
 	J9ClassLoader *classloader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
 	while (NULL != classloader) {
-		if (!isImmortalClassLoader(classloader)) {
+		if (!VM_VMHelpers::isImmortalClassLoader(_vm, classloader)) {
 			removeLoaders[count] = classloader;
 			count++;
 		}
@@ -590,8 +623,6 @@ VMSnapshotImpl::fixupClasses(void)
 
 		classloader = (J9ClassLoader *) pool_nextDo(&classLoaderWalkState);
 	}
-
-
 }
 
 void
@@ -605,6 +636,7 @@ VMSnapshotImpl::fixupClass(J9Class *clazz)
 	clazz->replacedClass = NULL;
 	clazz->gcLink = NULL;
 	clazz->jitMetaDataList = NULL;
+	clazz->classFlags |= J9ClassSnapshotClass;
 
 	UDATA totalStaticSlots = totalStaticSlotsForClass(clazz->romClass);
 	memset(clazz->ramStatics, 0, totalStaticSlots * sizeof(UDATA));
@@ -673,6 +705,7 @@ VMSnapshotImpl::fixupArrayClass(J9ArrayClass *clazz)
 	clazz->methodTypes = NULL;
 	clazz->varHandleMethodTypes = NULL;
 	clazz->gcLink = NULL;
+	clazz->classFlags |= J9ClassSnapshotClass;
 
 	UDATA i;
 	if (NULL != clazz->staticSplitMethodTable) {
@@ -730,7 +763,8 @@ VMSnapshotImpl::readImageFromFile(void)
 	PORT_ACCESS_FROM_PORT(_portLibrary);
 
 	OMRPORT_ACCESS_FROM_OMRPORT(&_portLibrary->omrPortLibrary);
-
+	printf("readImageFromFile 1 \n");
+	fflush(stdout);
 	IDATA fileDescriptor = omrfile_open(_ramCache, EsOpenRead, 0444);
 	if (-1 == fileDescriptor) {
 		j9tty_printf(PORTLIB, "falied to open ramCache file=%s errno=%d\n", _ramCache, errno);
@@ -738,6 +772,8 @@ VMSnapshotImpl::readImageFromFile(void)
 		goto done;
 	}
 
+	printf("readImageFromFile 2 \n");
+	fflush(stdout);
 	_snapshotHeader = (J9SnapshotHeader *) j9mem_allocate_memory(sizeof(J9SnapshotHeader), J9MEM_CATEGORY_CLASSES);
 	if (NULL == _snapshotHeader) {
 		rc = false;
@@ -757,12 +793,16 @@ VMSnapshotImpl::readImageFromFile(void)
 
 	}
 
+	printf("readImageFromFile 3 \n");
+	fflush(stdout);
 	if (-1 == omrfile_read(fileDescriptor, (void *)_memoryRegions, sizeof(J9MemoryRegion) * NUM_OF_MEMORY_SECTIONS)) {
 		rc = false;
 		goto freeMemorySections;
 	}
 
 	for (int i = 0; i < NUM_OF_MEMORY_SECTIONS; i++) {
+		printf("readImageFromFile 4 \n");
+		fflush(stdout);
 		void *mappedSection = mmap(
 				(void *)_memoryRegions[i].alignedStartAddr,
 				_memoryRegions[i].mappableSize,
@@ -775,6 +815,8 @@ VMSnapshotImpl::readImageFromFile(void)
 		}
 	}
 
+	printf("readImageFromFile 5 \n");
+	fflush(stdout);
 	_heap = (J9Heap *)_memoryRegions[GENERAL].alignedStartAddr;
 	_heap32 = (J9Heap *)_memoryRegions[SUB4G].alignedStartAddr;
 	_vm = _snapshotHeader->vm;
@@ -787,7 +829,8 @@ done:
 
 	Trc_VM_ReadImageFromFile_Exit();
 
-
+	printf("readImageFromFile 6 \n");
+	fflush(stdout);
 	return rc;
 
 freeMemorySections:
@@ -826,6 +869,8 @@ VMSnapshotImpl::saveJ9JavaVMStructures(void)
 
 	_snapshotHeader->vm = _vm;
 	_snapshotHeader->savedJavaVMStructs.vmSnapshotImplPortLibrary = _vm->vmSnapshotImplPortLibrary;
+	_snapshotHeader->savedJavaVMStructs.arrayROMClasses = _vm->arrayROMClasses;
+	_snapshotHeader->savedJavaVMStructs.baseTypePrimitiveROMClasses = (void*)_vm->baseTypePrimitiveROMClasses;
 }
 
 /**
@@ -938,8 +983,44 @@ VMSnapshotImpl::freeJ9JavaVMStructures(void)
 }
 
 void
+VMSnapshotImpl::setupClassMetaData(void)
+{
+	pool_state classLoaderWalkState = {0};
+	J9ClassLoader *classloader = (J9ClassLoader *) pool_startDo(_vm->classLoaderBlocks, &classLoaderWalkState);
+	while (NULL != classloader) {
+		if (VM_VMHelpers::isImmortalClassLoader(_vm, classloader)) {
+			J9ClassWalkState walkState = {0};
+			J9Class *currentClass = allLiveClassesStartDo(&walkState, _vm, classloader);
+			printf("======== Classloader=%p ==============\n", classloader);
+			omrthread_monitor_enter(_vm->classLoaderModuleAndLocationMutex);
+			while (NULL != currentClass) {
+				J9ROMClass *romClass = currentClass->romClass;
+
+				if (!J9ROMCLASS_IS_ARRAY(romClass)) {
+					printf("className=%s index=%lu\n", getClassName(currentClass), currentClass->cpIndexAndLocation);
+				}
+
+				currentClass = allLiveClassesNextDo(&walkState);
+			}
+			omrthread_monitor_exit(_vm->classLoaderModuleAndLocationMutex);
+
+
+			for (UDATA i = 0; i < classloader->cachedPDs[0].cacheIndex; i++) {
+				J9UTF8 *className = (J9UTF8*) classloader->cachedPDs[i + 1].cacheIndex;
+				printf("class name %.*s i=%lu\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), i + 1);
+			}
+
+			allLiveClassesEndDo(&walkState);
+		}
+
+		classloader = (J9ClassLoader *) pool_nextDo(&classLoaderWalkState);
+	}
+}
+
+void
 VMSnapshotImpl::teardownImage(void)
 {
+	setupClassMetaData();
 	removeUnpersistedClassLoaders();
 	/* TODO this is the place where we'll want to call the GC API to snapshot the heap */
 	fixupClassLoaders();
@@ -993,6 +1074,9 @@ initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, cons
 		goto _error;
 	}
 
+	printf("initializeVMSnapshotImpl 1 \n");
+	fflush(stdout);
+
 	if (isSnapShotRun && (!vmSnapshotImpl->setupColdRun())) {
 		goto _error;
 	}
@@ -1000,11 +1084,17 @@ initializeVMSnapshotImpl(J9PortLibrary *portLibrary, BOOLEAN isSnapShotRun, cons
 	if(!isSnapShotRun && (!vmSnapshotImpl->setupWarmRun())) {
 		goto _error;
 	}
+	printf("initializeVMSnapshotImpl 2 \n");
+	fflush(stdout);
 
 	vmSnapshotImplPortLibrary = setupVMSnapshotImplPortLibrary(vmSnapshotImpl, portLibrary, isSnapShotRun);
 	if (NULL == vmSnapshotImplPortLibrary) {
 		goto _error;
 	}
+
+	printf("initializeVMSnapshotImpl 3 \n");
+	fflush(stdout);
+
 
 	return vmSnapshotImpl;
 
@@ -1098,7 +1188,66 @@ initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLoader, J9C
 	J9VMJAVALANGCLASS_SET_VMREF(vmThread, classObject, clazz);
 	J9STATIC_OBJECT_STORE(vmThread, clazz, (j9object_t*)&clazz->classObject, (j9object_t)classObject);
 
+	if (0 != clazz->cpIndexAndLocation) {
+		J9VMJAVALANGCLASS_SET_PROTECTIONDOMAIN(vmThread, clazz->classObject, classLoader->cachedPDs[clazz->cpIndexAndLocation].cachedPD);
+	}
+
 	return clazz;
+}
+
+static BOOLEAN
+setupClassPDsImpl(J9VMThread *currentThread, J9ClassLoader *loader)
+{
+	BOOLEAN rc = TRUE;
+	J9JavaVM *vm = currentThread->javaVM;
+	J9NameAndSignature nas = {0};
+	nas.name = (J9UTF8 *)&findProtectionDomains_name;
+	nas.signature = (J9UTF8 *)&findProtectionDomains_sig;
+
+	UDATA len = loader->cachedPDs[0].cacheIndex;
+
+	for (UDATA i = 0; i < len; i++) {
+		J9UTF8 *className = (J9UTF8 *) loader->cachedPDs[i + 1].cacheIndex;
+		UDATA args[2] = {0};
+		args[0] = (UDATA) loader->classLoaderObject;
+		args[1] = (UDATA) vm->memoryManagerFunctions->j9gc_createJavaLangString(currentThread, J9UTF8_DATA(className), J9UTF8_LENGTH(className), 0);
+
+		if (0 == args[1]) {
+			rc = FALSE;
+			goto done;
+		}
+
+		runStaticMethod(currentThread, (U_8 *)"java/lang/ClassLoader", &nas, 2, (UDATA *)args);
+
+		if ((0 == currentThread->returnValue) || (NULL != currentThread->currentException)) {
+			rc = FALSE;
+			goto done;
+		}
+
+		loader->cachedPDs[i + 1].cachedPD = (j9object_t) currentThread->returnValue;
+	}
+done:
+	return rc;
+}
+
+extern "C" BOOLEAN
+setupClassPDs(J9VMThread *currentThread)
+{
+	BOOLEAN rc = TRUE;
+	J9JavaVM *vm = currentThread->javaVM;
+
+	if (!setupClassPDsImpl(currentThread, vm->extensionClassLoader)) {
+		rc = FALSE;
+		goto done;
+	}
+
+	if (!setupClassPDsImpl(currentThread, vm->applicationClassLoader)) {
+		rc = FALSE;
+		goto done;
+	}
+
+done:
+	return rc;
 }
 
 extern "C" void

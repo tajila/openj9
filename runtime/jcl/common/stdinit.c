@@ -445,7 +445,11 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 	}
 
 	/* Set up extension class loader in VM */
-	if (NULL == vm->extensionClassLoader) {
+	if ((NULL == vm->extensionClassLoader)
+#if defined(J9VM_OPT_SNAPSHOTS)
+	|| (IS_RESTORE_RUN(vm))
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+	) {
 		j9object_t classLoaderObject = vm->applicationClassLoader->classLoaderObject;
 		j9object_t classLoaderParentObject = classLoaderObject;
 
@@ -480,6 +484,14 @@ internalInitializeJavaLangClassLoader(JNIEnv * env)
 			}
 		}
 	}
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_RESTORE_RUN(vm)) {
+		if (FALSE == vmFuncs->setupClassPDs(vmThread)) {
+			vmFuncs->setCurrentException(vmThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+			goto exitVM;
+		}
+	}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 exitVM:
 	vmFuncs->internalExitVMToJNI(vmThread);
 done: ;

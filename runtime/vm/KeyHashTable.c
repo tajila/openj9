@@ -51,12 +51,8 @@ typedef struct KeyHashTableClassQueryEntry {
 	UDATA length;
 } KeyHashTableClassQueryEntry;
 
-static UDATA classHashFn(void *key, void *userData);
-static UDATA classHashEqualFn(void *leftKey, void *rightKey, void *userData);
-static UDATA classHashGetName(KeyHashTableClassEntry *entry, const U_8 **name, UDATA *nameLength);
 
-static UDATA classLocationHashFn(void *key, void *userData);
-static UDATA classLocationHashEqualFn(void *leftKey, void *rightKey, void *userData);
+static UDATA classHashGetName(KeyHashTableClassEntry *entry, const U_8 **name, UDATA *nameLength);
 
 static void addLocationGeneratedClass(J9VMThread *vmThread, J9ClassLoader *classLoader, KeyHashTableClassEntry *existingPackageEntry, IDATA entryIndex, I_32 locationType);
 
@@ -93,7 +89,7 @@ classHashGetName(KeyHashTableClassEntry *entry, const U_8 **name, UDATA *nameLen
 	return type;
 }
 
-static UDATA
+UDATA
 classHashEqualFn(void *tableNode, void *queryNode, void *userData)
 {
 	J9JavaVM *javaVM = (J9JavaVM *)userData;
@@ -108,7 +104,7 @@ classHashEqualFn(void *tableNode, void *queryNode, void *userData)
 	BOOLEAN isTableNodeHiddenClass = (TYPE_CLASS == tableNodeType)
 									&& (TAG_RAM_CLASS == (tableNodeTag & MASK_RAM_CLASS))
 									&& J9ROMCLASS_IS_HIDDEN(((KeyHashTableClassEntry*)tableNode)->ramClass->romClass);
-	
+
 	if (isTableNodeHiddenClass) {
 		/* Hidden class is keyed on its rom address, not on its name. */
 		PORT_ACCESS_FROM_JAVAVM(javaVM);
@@ -197,7 +193,7 @@ classHashEqualFn(void *tableNode, void *queryNode, void *userData)
 	return J9UTF8_DATA_EQUALS(tableNodeName, tableNodeLength, queryNodeName, queryNodeLength);
 }
 
-static UDATA
+UDATA
 classHashFn(void *key, void *userData)
 {
 	J9JavaVM *javaVM = (J9JavaVM *)userData;
@@ -316,7 +312,9 @@ hashClassTableAt(J9ClassLoader *classLoader, U_8 *className, UDATA classNameLeng
 	key.entry.tag = TAG_UTF_QUERY;
 	key.charData = className;
 	key.length = classNameLength;
+
 	result = hashTableFind(table, &key);
+
 	if (NULL != result) {
 		J9Class *clazz = result->ramClass;
 		Assert_VM_false(J9_ARE_ANY_BITS_SET((UDATA)clazz, J9_REQUIRED_CLASS_ALIGNMENT - 1));
@@ -656,7 +654,7 @@ hashClassLocationTableNew(J9JavaVM *javaVM, U_32 initialSize)
 	return hashTableNew(privatePortLibrary, J9_GET_CALLSITE(), initialSize, sizeof(J9ClassLocation), sizeof(char *), flags, J9MEM_CATEGORY_CLASSES, classLocationHashFn, classLocationHashEqualFn, NULL, javaVM);
 }
 
-static UDATA
+UDATA
 classLocationHashFn(void *key, void *userData)
 {
 	J9ClassLocation *entry = (J9ClassLocation *)key;
@@ -664,7 +662,7 @@ classLocationHashFn(void *key, void *userData)
 	return (UDATA)entry->clazz;
 }
 
-static UDATA
+UDATA
 classLocationHashEqualFn(void *leftKey, void *rightKey, void *userData)
 {
 	J9ClassLocation *leftNode = (J9ClassLocation *)leftKey;

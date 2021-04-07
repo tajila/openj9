@@ -1776,6 +1776,10 @@ setExceptionForErroredRomClass( J9ROMClass *romClass, J9VMThread *vmThread );
  */
 #define J9_HASH_TABLE_STATE_FLAG_SKIP_HIDDEN 1
 
+UDATA classHashFn(void *key, void *userData);
+UDATA classHashEqualFn(void *leftKey, void *rightKey, void *userData);
+UDATA classLocationHashFn(void *key, void *userData);
+UDATA classLocationHashEqualFn(void *leftKey, void *rightKey, void *userData);
 /**
 * Searches classLoader for any loaded classes in a specific package
 *
@@ -2869,6 +2873,9 @@ resolveVirtualMethodRef(J9VMThread *vmStruct, J9ConstantPool *ramCP, UDATA cpInd
 
 
 /* ---------------- segment.c ---------------- */
+
+void
+refreshFunctionPointers(J9MemorySegmentList *segmentList);
 
 /**
 * @brief
@@ -4702,6 +4709,14 @@ J9Class* initializeImageClassObject(J9VMThread *vmThread, J9ClassLoader *classLo
  * @param classLoaderObject[in] unwrapped class loader object ref
  */
 void initializeImageClassLoaderObject(J9JavaVM *javaVM, J9ClassLoader *classLoader, j9object_t classLoaderObject);
+
+/*
+ * Initializes classLoader protection domains for classes in the snapshot image
+ *
+ *  @param[in] currentThread vmthread token
+ *  @return JNI_TRUE if succesful, JNI_FALSE otherwise
+ */
+BOOLEAN setupClassPDs(J9VMThread *currentThread);
 
 /**
  * Shut down sequence of VMSnapshotImpl

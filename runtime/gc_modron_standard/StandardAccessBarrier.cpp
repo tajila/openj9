@@ -52,14 +52,30 @@ MM_StandardAccessBarrier::newInstance(MM_EnvironmentBase *env)
 {
 	MM_StandardAccessBarrier *barrier;
 	
+	printf("MM_StandardAccessBarrier::newInstance 1\n");
+	fflush(stdout);
+
 	barrier = (MM_StandardAccessBarrier *)env->getForge()->allocate(sizeof(MM_StandardAccessBarrier), MM_AllocationCategory::FIXED, J9_GET_CALLSITE());
+
+	printf("MM_StandardAccessBarrier::newInstance 2\n");
+	fflush(stdout);
 	if (barrier) {
+		printf("MM_StandardAccessBarrier::newInstance 3\n");
+		fflush(stdout);
 		new(barrier) MM_StandardAccessBarrier(env);
+		printf("MM_StandardAccessBarrier::newInstance 4\n");
+		fflush(stdout);
 		if (!barrier->initialize(env)) {
+			printf("MM_StandardAccessBarrier::newInstance 5\n");
+			fflush(stdout);
 			barrier->kill(env);
 			barrier = NULL;
 		}
+		printf("MM_StandardAccessBarrier::newInstance 6\n");
+		fflush(stdout);
 	}
+	printf("MM_StandardAccessBarrier::newInstance 7\n");
+	fflush(stdout);
 	return barrier;
 }
 
@@ -89,12 +105,17 @@ MM_StandardAccessBarrier::initializeForNewThread(MM_EnvironmentBase* env)
 bool 
 MM_StandardAccessBarrier::initialize(MM_EnvironmentBase *env)
 {
+	printf("MM_StandardAccessBarrier::initialize 1\n");
+	fflush(stdout);
 #if defined(J9VM_GC_GENERATIONAL)
 	if (!_generationalAccessBarrierComponent.initialize(env)) {
+		printf("MM_StandardAccessBarrier::initialize 2\n");
+		fflush(stdout);
 		return false;
 	}
 #endif /* J9VM_GC_GENERATIONAL */
-	
+	printf("MM_StandardAccessBarrier::initialize 3\n");
+	fflush(stdout);
 	return MM_ObjectAccessBarrier::initialize(env);
 }
 

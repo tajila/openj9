@@ -84,11 +84,15 @@ fixObjectIfClassDying(OMR_VMThread *omrVMThread, MM_HeapRegionDescriptor *region
 bool
 MM_GlobalCollectorDelegate::initialize(MM_EnvironmentBase *env, MM_GlobalCollector *globalCollector, MM_MarkingScheme *markingScheme)
 {
+	printf("MM_GlobalCollectorDelegate::initialize 1\n");
+	fflush(stdout);
 	_markingScheme = markingScheme;
 	_globalCollector = globalCollector;
 	_javaVM = (J9JavaVM*)env->getLanguageVM();
 	_extensions = MM_GCExtensions::getExtensions(env);
 
+	printf("MM_GlobalCollectorDelegate::initialize 2\n");
+	fflush(stdout);
 	/* This delegate is used primarily by MM_ParallelGlobalGC but is declared in base MM_GlobalCollector
 	 * class which is base class for MM_IncrementalGlobalGC (balanced) and MM_RealtimeGC (realtime). The
 	 * only MM_GlobalCollector methods (postCollect and isTimeForGlobalGCKickoff) that use this
@@ -98,23 +102,32 @@ MM_GlobalCollectorDelegate::initialize(MM_EnvironmentBase *env, MM_GlobalCollect
 	Assert_MM_true((NULL != _globalCollector) == _extensions->isStandardGC());
 	Assert_MM_true((NULL != _markingScheme) == _extensions->isStandardGC());
 
+	printf("MM_GlobalCollectorDelegate::initialize 3\n");
+	fflush(stdout);
 	/* Balanced and realtime polices will instantiate their own access barrier */
 	if (_extensions->isStandardGC()) {
-
+		printf("MM_GlobalCollectorDelegate::initialize 4\n");
+		fflush(stdout);
 #if defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS)
 		if (1 == _extensions->fvtest_enableReadBarrierVerification) {
+			printf("MM_GlobalCollectorDelegate::initialize 5\n");
+			fflush(stdout);
 			_extensions->accessBarrier = MM_ReadBarrierVerifier::newInstance(env);
 		} else
 #endif /* defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS) */
 		{
+			printf("MM_GlobalCollectorDelegate::initialize 6\n");
+			fflush(stdout);
 			_extensions->accessBarrier = MM_StandardAccessBarrier::newInstance(env);
 		}
-
+		printf("MM_GlobalCollectorDelegate::initialize 7\n");
+		fflush(stdout);
 		if (NULL == _extensions->accessBarrier) {
 			return false;
 		}
 	}
-
+	printf("MM_GlobalCollectorDelegate::initialize 8\n");
+	fflush(stdout);
 	return true;
 }
 

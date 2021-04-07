@@ -1800,6 +1800,20 @@ exit:
 		return oldPC;
 	}
 
+	static VMINLINE bool
+	isImmortalClassLoader(J9JavaVM *vm, J9ClassLoader *classLoader)
+	{
+		if ((classLoader == vm->applicationClassLoader)
+		|| (classLoader == vm->systemClassLoader)
+		|| (classLoader == vm->extensionClassLoader)
+		|| (NULL == classLoader)
+		) {
+			return true;
+		}
+
+		return false;
+	}
+
 };
 
 #endif /* VMHELPERS_HPP_ */

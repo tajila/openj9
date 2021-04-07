@@ -991,6 +991,16 @@ loadWarmClass(J9VMThread* vmThread, J9ClassLoader* classLoader, J9Class *clazz)
 
 		clazz->classFlags |= J9ClassIsLoadedFromImage;
 
+		if (J9_ARE_NO_BITS_SET(clazz->classFlags, J9ClassSnapshotClass)) {
+			if (J9ROMCLASS_IS_ARRAY(clazz->romClass)) {
+				printf("is array: this is a new class name=%s\n", getClassName(((J9ArrayClass*)clazz)->leafComponentType));
+				fflush(stdout);
+			} else {
+				printf("this is a new class name=%s\n", getClassName(clazz));
+				fflush(stdout);
+			}
+		}
+
 		/* load superclasses and interfaces first */
 		if (NULL != superClazz) {
 			if (!loadWarmClass(vmThread, classLoader, superClazz)) {
@@ -1237,6 +1247,11 @@ internalFindClassInModule(J9VMThread* vmThread, J9Module *j9module, U_8* classNa
 	UDATA arity;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
+	U_64 startTime = 0;
+	U_64 endTime = 0;
+
+	startTime = j9time_nano_time();
+
 	Trc_VM_internalFindClass_Entry(vmThread, classLoader, options, classNameLength, className, 0, className);
 
 	Assert_VM_mustHaveVMAccess(vmThread);
@@ -1296,6 +1311,9 @@ internalFindClassInModule(J9VMThread* vmThread, J9Module *j9module, U_8* classNa
 	}
 
 	Trc_VM_internalFindClass_Exit(vmThread, classLoader, classNameLength, className, foundClass);
+
+	endTime = j9time_nano_time();
+	vm->classSupportTime += endTime - startTime;
 	return foundClass;
 }
 

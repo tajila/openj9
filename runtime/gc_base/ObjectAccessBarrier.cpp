@@ -45,26 +45,38 @@
 bool 
 MM_ObjectAccessBarrier::initialize(MM_EnvironmentBase *env)
 {
+	printf("MM_ObjectAccessBarrier::initialize 1\n");
+	fflush(stdout);
 	_extensions = MM_GCExtensions::getExtensions(env);
 	_heap = _extensions->heap;
 	J9JavaVM *vm = (J9JavaVM*)env->getOmrVM()->_language_vm;
 	OMR_VM *omrVM = env->getOmrVM();
-	
+	printf("MM_ObjectAccessBarrier::initialize 2\n");
+	fflush(stdout);
 #if defined(OMR_GC_COMPRESSED_POINTERS)
 	if (env->compressObjectReferences()) {
-
+		printf("MM_ObjectAccessBarrier::initialize 3\n");
+		fflush(stdout);
 #if defined(J9VM_GC_REALTIME)
 		/*
 		 * Do not allow 4-bit shift for Metronome
 		 * Cell Sizes Table for Segregated heap should be modified to have aligned to 16 values
 		 */
 		if (_extensions->isMetronomeGC()) {
+			printf("MM_ObjectAccessBarrier::initialize 4\n");
+			fflush(stdout);
 			if (DEFAULT_LOW_MEMORY_HEAP_CEILING_SHIFT < omrVM->_compressedPointersShift) {
+				printf("MM_ObjectAccessBarrier::initialize 5\n");
+				fflush(stdout);
 				/* Non-standard NLS message required */
 				_extensions->heapInitializationFailureReason = MM_GCExtensionsBase::HEAP_INITIALIZATION_FAILURE_REASON_METRONOME_DOES_NOT_SUPPORT_4BIT_SHIFT;
 				return false;
 			}
+			printf("MM_ObjectAccessBarrier::initialize 6\n");
+			fflush(stdout);
 		}
+		printf("MM_ObjectAccessBarrier::initialize 7\n");
+		fflush(stdout);
 #endif /* J9VM_GC_REALTIME */
 
 #if defined(OMR_GC_FULL_POINTERS)
@@ -75,18 +87,24 @@ MM_ObjectAccessBarrier::initialize(MM_EnvironmentBase *env)
 		Trc_MM_CompressedAccessBarrierInitialized(env->getLanguageVMThread(), 0, _compressedPointersShift);
 	}
 #endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
-
+	printf("MM_ObjectAccessBarrier::initialize 8\n");
+	fflush(stdout);
 	vm->objectAlignmentInBytes = omrVM->_objectAlignmentInBytes;
 	vm->objectAlignmentShift = omrVM->_objectAlignmentShift;
-
+	printf("MM_ObjectAccessBarrier::initialize 9\n");
+	fflush(stdout);
 	/* request an extra slot in java/lang/ref/Reference which we will use to maintain linked lists of reference objects */
 	if (0 != vm->internalVMFunctions->addHiddenInstanceField(vm, "java/lang/ref/Reference", "gcLink", "Ljava/lang/ref/Reference;", &_referenceLinkOffset)) {
 		return false;
 	}
+	printf("MM_ObjectAccessBarrier::initialize 10\n");
+	fflush(stdout);
 	/* request an extra slot in java/util/concurrent/locks/AbstractOwnableSynchronizer which we will use to maintain linked lists of ownable synchronizer objects */
 	if (0 != vm->internalVMFunctions->addHiddenInstanceField(vm, "java/util/concurrent/locks/AbstractOwnableSynchronizer", "ownableSynchronizerLink", "Ljava/util/concurrent/locks/AbstractOwnableSynchronizer;", &_ownableSynchronizerLinkOffset)) {
 		return false;
 	}
+	printf("MM_ObjectAccessBarrier::initialize 11\n");
+	fflush(stdout);
 	
 	return true;
 }

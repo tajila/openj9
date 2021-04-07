@@ -75,9 +75,24 @@
 void
 MM_RootScanner::doClassLoader(J9ClassLoader *classLoader)
 {
+	J9JavaVM *vm = static_cast<J9JavaVM*>(_omrVM->_language_vm);
+
 	doSlot(J9GC_J9CLASSLOADER_CLASSLOADEROBJECT_EA(classLoader));
 
 	scanModularityObjects(classLoader);
+
+	if (IS_RESTORE_RUN(vm)) {
+		//TODO add is persisted Loader check here
+		uintptr_t numOfEntries = classLoader->cachedPDs[0].cacheIndex;
+		for (uintptr_t i = 0; i < numOfEntries; i++) {
+			if (NULL != classLoader->cachedPDs[i + 1].cachedPD) {
+				doSlot(&classLoader->cachedPDs[i + 1].cachedPD);
+			} else {
+				printf("should never be NULL loader=%p index %lu\n", classLoader, i);
+			}
+
+		}
+	}
 }
 
 void
@@ -99,6 +114,8 @@ MM_RootScanner::scanModularityObjects(J9ClassLoader * classLoader)
 			modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 		}
 	}
+
+
 }
 
 /**

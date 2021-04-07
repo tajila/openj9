@@ -320,16 +320,28 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	J9VMDllLoadInfo *loadInfo = getGCDllLoadInfo(vm);
 
+	printf("j9gc_initialize_heap 1\n");
+	fflush(stdout);
+
 	if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_PORTABLE_SHARED_CACHE)) {
 		extensions->shouldForceLowMemoryHeapCeilingShiftIfPossible = true;
 	}
+
+	printf("j9gc_initialize_heap 2\n");
+	fflush(stdout);
 
 #if defined(J9VM_GC_BATCH_CLEAR_TLH)
 	/* Record batch clear state in VM so inline allocates can decide correct initialization procedure */
 	vm->initializeSlotsOnTLHAllocate = (extensions->batchClearTLH == 0) ? 1 : 0;
 #endif /* J9VM_GC_BATCH_CLEAR_TLH */
 
+	printf("j9gc_initialize_heap 3\n");
+	fflush(stdout);
+
 	extensions->heap = extensions->configuration->createHeap(&env, heapBytesRequested);
+
+	printf("j9gc_initialize_heap 4\n");
+	fflush(stdout);
 
 	if (NULL == extensions->heap) {
 		const char *splitFailure = NULL;
@@ -339,6 +351,8 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 			extensions->heapInitializationFailureReason = MM_GCExtensionsBase::HEAP_INITIALIZATION_FAILURE_REASON_CAN_NOT_INSTANTIATE_HEAP;
 		}
 
+		printf("j9gc_initialize_heap 5\n");
+		fflush(stdout);
 		switch(extensions->heapInitializationFailureReason) {
 
 		/* see if we set the split-heap specific error since we want to be more verbose in that case */
@@ -446,6 +460,8 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 
 		goto error_no_memory;
 	}
+	printf("j9gc_initialize_heap 6\n");
+	fflush(stdout);
 
 	extensions->dispatcher = extensions->configuration->createParallelDispatcher(&env, (omrsig_handler_fn)vm->internalVMFunctions->structuredSignalHandlerVM, vm, vm->defaultOSStackSize);
 	if (NULL == extensions->dispatcher) {
@@ -456,41 +472,67 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 	/* Initialize VM interface extensions */
 	GC_OMRVMInterface::initializeExtensions(extensions);
 
+	printf("j9gc_initialize_heap 7\n");
+	fflush(stdout);
 	/* Initialize the global collector */
+	printf("j9gc_initialize_heap 7.01\n");
+	fflush(stdout);
 	globalCollector = extensions->configuration->createGlobalCollector(&env);
+	if ((NULL == extensions) || (NULL == extensions->configuration)) {
+		printf("j9gc_initialize_heap 7.02\n");
+		fflush(stdout);
+	}
+	printf("j9gc_initialize_heap 7.1\n");
+	fflush(stdout);
 	if (NULL == globalCollector) {
+		printf("j9gc_initialize_heap 7.2\n");
+		fflush(stdout);
 		if(MM_GCExtensionsBase::HEAP_INITIALIZATION_FAILURE_REASON_METRONOME_DOES_NOT_SUPPORT_4BIT_SHIFT == extensions->heapInitializationFailureReason) {
 			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTION_OVERFLOW, displayXmxOrMaxRAMPercentage(memoryParameterTable));
 		}
+		printf("j9gc_initialize_heap 7.3\n");
+		fflush(stdout);
 		loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INSTANTIATE_GLOBAL_GARBAGE_COLLECTOR, "Failed to instantiate global garbage collector.");
 		goto error_no_memory;
 	}
+	printf("j9gc_initialize_heap 7.4\n");
+	fflush(stdout);
 	/* Mark this collector as a global collector so that we will check for excessive gc after it collects */
 	globalCollector->setGlobalCollector(true);
+	printf("j9gc_initialize_heap 7.5\n");
+	fflush(stdout);
 	extensions->setGlobalCollector(globalCollector);
 
+	printf("j9gc_initialize_heap 8\n");
+	fflush(stdout);
 	/* Create the environments pool */
 	extensions->environments = extensions->configuration->createEnvironmentPool(&env);
 	if (NULL == extensions->environments) {
 		goto error_no_memory;
 	}
 
+	printf("j9gc_initialize_heap 9\n");
+	fflush(stdout);
 	extensions->classLoaderManager = MM_ClassLoaderManager::newInstance(&env, globalCollector);
 	if (NULL == extensions->classLoaderManager) {
 		goto error_no_memory;
 	}
 
+	printf("j9gc_initialize_heap 10\n");
+	fflush(stdout);
 	extensions->stringTable = MM_StringTable::newInstance(&env, extensions->dispatcher->threadCountMaximum());
 	if (NULL == extensions->stringTable) {
 		goto error_no_memory;
 	}
-
+	printf("j9gc_initialize_heap 11\n");
+	fflush(stdout);
 	/* Initialize statistic locks */
 	if (omrthread_monitor_init_with_name(&extensions->gcStatsMutex, 0, "MM_GCExtensions::gcStats")) {
 		loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE_MUTEX, "Failed to initialize mutex for GC statistics.");
 		goto error_no_memory;
 	}
-
+	printf("j9gc_initialize_heap 12\n");
+	fflush(stdout);
 #if defined(OMR_GC_IDLE_HEAP_MANAGER)
 	if (extensions->gcOnIdle) {
 		/* Enable idle tuning only for gencon policy */
@@ -502,7 +544,8 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 		}
 	}
 #endif
-
+	printf("j9gc_initialize_heap 13\n");
+	fflush(stdout);
 	return JNI_OK;
 
 error_no_memory:
@@ -2856,6 +2899,9 @@ gcInitializeDefaults(J9JavaVM* vm)
 
 	minimumVMSize = MINIMUM_VM_SIZE;
 
+	printf("gcInitializeDefaults 1\n");
+	fflush(stdout);
+
 	memoryParameterTable = (IDATA *)j9mem_allocate_memory(tableSize, OMRMEM_CATEGORY_MM);
 	if (!memoryParameterTable) {
 		loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE_OUT_OF_MEMORY, "Failed to initialize, out of memory.");
@@ -2880,6 +2926,9 @@ gcInitializeDefaults(J9JavaVM* vm)
 	extensions->estimateFragmentation = (GLOBALGC_ESTIMATE_FRAGMENTATION | LOCALGC_ESTIMATE_FRAGMENTATION);
 	extensions->processLargeAllocateStats = true;
 	extensions->concurrentSlackFragmentationAdjustmentWeight = 0;
+
+	printf("gcInitializeDefaults 2\n");
+	fflush(stdout);
 
 	/* allocate and set the collector language interface to Java */
 	extensions->collectorLanguageInterface = MM_CollectorLanguageInterfaceImpl::newInstance(&env);
@@ -2916,6 +2965,9 @@ gcInitializeDefaults(J9JavaVM* vm)
 		}
 	}
 	vm->vmThreadSize = J9_VMTHREAD_SEGREGATED_ALLOCATION_CACHE_OFFSET + vm->segregatedAllocationCacheSize + sizeof(OMR_VMThread);
+
+	printf("gcInitializeDefaults 3\n");
+	fflush(stdout);
 
 #if defined(OMR_GC_CONCURRENT_SCAVENGER)
 	if (gc_policy_gencon == extensions->configurationOptions._gcPolicy) {
@@ -2960,19 +3012,29 @@ gcInitializeDefaults(J9JavaVM* vm)
 	/* omrVM->gcPolicy is set by configurateGCWithPolicyAndOptions */
 	((J9JavaVM*)env.getLanguageVM())->gcPolicy = vm->omrVM->gcPolicy;
 
+	printf("gcInitializeDefaults 4\n");
+	fflush(stdout);
+
 	if (NULL == extensions->configuration) {
 		loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE, "Failed to initialize.");
 		goto error;
 	}
 
+	printf("gcInitializeDefaults 4.1\n");
+	fflush(stdout);
+
 	extensions->trackMutatorThreadCategory = J9_ARE_NO_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_REDUCE_CPU_MONITOR_OVERHEAD);
 
+	printf("gcInitializeDefaults 4.1\n");
+	fflush(stdout);
 
 	if (!gcParseTGCCommandLine(vm)) {
 		loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE_PARSING_COMMAND_LINE, "Failed to initialize, parsing command line.");
 		goto error;
 	}
 
+	printf("gcInitializeDefaults 4.3\n");
+	fflush(stdout);
 #if defined(J9VM_GC_MODRON_SCAVENGER)
 	if (extensions->scavengerEnabled) {
 		flatConfiguration = false;
@@ -2980,47 +3042,63 @@ gcInitializeDefaults(J9JavaVM* vm)
 #endif /* J9VM_GC_MODRON_SCAVENGER */
 
 	while (true) {
+		printf("gcInitializeDefaults 4 loop 1\n");
+		fflush(stdout);
 		/* Verify Xmx and Xmdx before using the Xmdx value to calculate further values */
 		if (JNI_OK != gcInitializeXmxXmdxVerification(vm, memoryParameterTable, flatConfiguration, minimumVMSize, NULL, NULL)) {
 			loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE, "Failed to initialize.");
 			goto error;
 		}
+		printf("gcInitializeDefaults 4 loop 2\n");
+		fflush(stdout);
 
 		/* Calculate memory parameters based on Xmx/Xmdx */
 		if (JNI_OK != gcInitializeCalculatedValues(vm, memoryParameterTable)) {
 			loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE, "Failed to initialize.");
 			goto error;
 		}
+		printf("gcInitializeDefaults 4 loop 3\n");
+		fflush(stdout);
 
 		/* Verify all memory parameters */
 		if (JNI_OK != gcInitializeVerification(vm, memoryParameterTable, flatConfiguration)) {
 			loadInfo->fatalErrorStr = (char *)j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_GC_FAILED_TO_INITIALIZE, "Failed to initialize.");
 			goto error;
 		}
+		printf("gcInitializeDefaults 4 loop 4\n");
+		fflush(stdout);
 
 		/* Try to initialize basic heap structures with the memory parameters we currently have */
 		if (JNI_OK == j9gc_initialize_heap(vm, memoryParameterTable, extensions->memoryMax)) {
 			break;
 		}
-
+		printf("gcInitializeDefaults 4 loop 5\n");
+		fflush(stdout);
 		if(extensions->largePageFailedToSatisfy) {
 			/* We were unable to satisfy the user's request for a strict page size. */
 			goto error;
 		}
+		printf("gcInitializeDefaults 4 loop 6\n");
+		fflush(stdout);
 
 		if (!reduceXmxValueForHeapInitialization(vm, memoryParameterTable, minimumVMSize)) {
 			/* Unable to reduce the Xmx value -- fail */
 			/* Error string is set by j9gc_initialize_heap */
 			goto error;
 		}
-
+		printf("gcInitializeDefaults 4 loop 7\n");
+		fflush(stdout);
 		/* We are going to try again -- free any buffer we already have from j9gc_initialize_heap */
 		if  ((loadInfo->loadFlags & FREE_ERROR_STRING) && (NULL != loadInfo->fatalErrorStr)) {
 			j9mem_free_memory(loadInfo->fatalErrorStr);
 			loadInfo->loadFlags &= ~FREE_ERROR_STRING;
 		}
 		loadInfo->fatalErrorStr = NULL;
+		printf("gcInitializeDefaults 4 loop 8\n");
+		fflush(stdout);
 	}
+	printf("gcInitializeDefaults 5\n");
+	fflush(stdout);
 
 	warnIfPageSizeNotSatisfied(vm,extensions);
 	j9mem_free_memory(memoryParameterTable);

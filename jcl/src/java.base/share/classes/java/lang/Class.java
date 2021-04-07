@@ -2077,7 +2077,7 @@ private void allocateAllPermissionsPD() {
  *
  * @see			java.lang.Class
  */
-ProtectionDomain getPDImpl() {
+public ProtectionDomain getPDImpl() {
 	/*[PR CMVC 125822] Move RAM class fields onto the heap to fix hotswap crash */
 	return protectionDomain;
 }

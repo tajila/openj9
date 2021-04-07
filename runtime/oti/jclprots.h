@@ -359,6 +359,7 @@ Java_com_ibm_lang_management_internal_ExtendedGarbageCollectorMXBeanImpl_getLast
 
 /* BBjclNativesCommonClassLoader*/
 jboolean JNICALL Java_java_lang_ClassLoader_isVerboseImpl (JNIEnv *env, jclass clazz);
+void JNICALL Java_java_lang_ClassLoader_setupClassMetadata(JNIEnv *env, jclass unused, jclass answer, jint cacheIndex);
 jclass JNICALL Java_java_lang_ClassLoader_defineClassImpl (JNIEnv *env, jobject receiver, jstring className, jbyteArray classRep, jint offset, jint length, jobject protectionDomain);
 #if JAVA_SPEC_VERSION >= 15
 jclass JNICALL Java_java_lang_ClassLoader_defineClassImpl1(JNIEnv *env, jobject receiver, jclass hostClass, jstring className, jbyteArray classRep, jobject protectionDomain, jboolean init, jint flags, jobject classData);

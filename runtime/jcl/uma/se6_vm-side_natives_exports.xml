@@ -232,6 +232,7 @@
 	<export name="Java_java_lang_Class_isClassADeclaredClass" />
 	<export name="Java_java_lang_ClassLoader_defineClassImpl" />
 	<export name="Java_java_lang_ClassLoader_isVerboseImpl" />
+	<export name="Java_java_lang_ClassLoader_setupClassMetadata" />
 	<export name="Java_java_lang_ClassLoader_foundJavaAssertOption" />
 	<export name="Java_java_lang_Compiler_commandImpl" />
 	<export name="Java_java_lang_Compiler_compileClassesImpl" />

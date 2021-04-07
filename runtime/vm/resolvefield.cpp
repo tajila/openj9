@@ -587,22 +587,39 @@ addHiddenInstanceField(J9JavaVM *vm, const char *className, const char *fieldNam
 		calculateFakeJ9ROMFieldShapeSize(fieldNameLength, fieldSignatureLength);
 	UDATA matchedFields;
 
+	printf("addHiddenInstanceField 1\n");
+
 	/* Verify that a valid field signature was specified. */
 	if (verifyFieldSignatureUtf8((U_8*)fieldSignature, fieldSignatureLength, 0) < 0) {
 		return 1;
 	}
 
+	printf("addHiddenInstanceField 2\n");
+	fflush(stdout);
+
 	/* Verify that the class hasn't yet been loaded. */
-	if ((NULL != vm->systemClassLoader) && (NULL != hashClassTableAt(vm->systemClassLoader, (U_8*)className, classNameLength))) {
+	if ((NULL != vm->systemClassLoader)) {
+		printf("addHiddenInstanceField 3\n");
+		fflush(stdout);
+		if ((NULL != hashClassTableAt(vm->systemClassLoader, (U_8*)className, classNameLength))) {
 #if defined(J9VM_OPT_SNAPSHOTS)
-		/* If its a restore run, the hidden field is already added just return the offset */
-		if (IS_RESTORE_RUN(vm)) {
-			*offsetReturn = findHiddenInstanceFieldOffset(vm, className, fieldName, fieldSignature);
-			return 0;
-		}
+			printf("addHiddenInstanceField 3.5\n");
+			fflush(stdout);
+			/* If its a restore run, the hidden field is already added just return the offset */
+			if (IS_RESTORE_RUN(vm)) {
+				printf("addHiddenInstanceField 4\n");
+				fflush(stdout);
+				*offsetReturn = findHiddenInstanceFieldOffset(vm, className, fieldName, fieldSignature);
+				printf("addHiddenInstanceField 5\n");
+				fflush(stdout);
+				return 0;
+			}
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 		return 2;
+		}
 	}
+	printf("addHiddenInstanceField 6\n");
+	fflush(stdout);
 
  	omrthread_monitor_enter(vm->hiddenInstanceFieldsMutex);
 
@@ -649,6 +666,7 @@ addHiddenInstanceField(J9JavaVM *vm, const char *className, const char *fieldNam
 
  	omrthread_monitor_exit(vm->hiddenInstanceFieldsMutex);
 
+ 	printf("addHiddenInstanceField 6\n");
 	return 0;
 }
 

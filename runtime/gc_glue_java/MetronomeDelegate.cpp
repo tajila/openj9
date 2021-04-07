@@ -1004,6 +1004,14 @@ MM_MetronomeDelegate::doClassTracing(MM_EnvironmentRealtime *env)
 							modulePtr = (J9Module**)hashTableNextDo(&walkState);
 						}
 					}
+
+					if (IS_RESTORE_RUN(_javaVM)) {
+						//TODO add is persisted Loader check here
+						uintptr_t numOfEntries = classLoader->cachedPDs[0].cacheIndex;
+						for (uintptr_t i = 0; i < numOfEntries; i++) {
+							didWork |= _markingScheme->markObject(env, classLoader->cachedPDs[i + 1].cachedPD);
+						}
+					}
 				}
 			}
 		}

@@ -76,7 +76,11 @@ internalDefineClass(
 	J9LoadROMClassData loadData = {0};
 	BOOLEAN isAnonFlagSet = J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_ANON);
 	BOOLEAN isHiddenFlagSet = J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_HIDDEN);
+	U_64 startTime = 0;
+	U_64 endTime = 0;
+	PORT_ACCESS_FROM_JAVAVM(vm);
 
+	startTime = j9time_nano_time();
 	/* This trace point is obsolete. It is retained only because j9vm test depends on it.
 	 * Once j9vm tests are fixed, it would be marked as Obsolete in j9bcu.tdf
 	 */
@@ -115,10 +119,36 @@ internalDefineClass(
 		loadData.hostPackageLength = packageNameLength(hostROMClass);
 	}
 
+#if defined(J9VM_OPT_SNAPSHOTS)
+	if (IS_RESTORE_RUN(vm)) {
+		result = J9_VM_FUNCTION(vmThread, hashClassTableAt)(
+			loadData.classLoader,
+			loadData.className,
+			loadData.classNameLength);
+
+		if (NULL != result) {
+			if (J9_ARE_ALL_BITS_SET(result->classFlags, J9ClassSnapshotClass)
+			&& J9_ARE_NO_BITS_SET(result->classFlags, J9ClassIsLoadedFromImage)
+			) {
+				if (vm->internalVMFunctions->loadWarmClass(vmThread, loadData.classLoader, result)) {
+					if (NULL != protectionDomain) {
+						J9VMJAVALANGCLASS_SET_PROTECTIONDOMAIN(vmThread, result->classObject, protectionDomain);
+					}
+					goto done;
+				}
+			}
+
+			printf("class exists already! \n");
+		}
+	}
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
+
 	if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NO_CHECK_FOR_EXISTING_CLASS)) {
 		/* For non-bootstrap classes, this check is done in jcldefine.c:defineClassCommon(). */
 		if (checkForExistingClass(vmThread, &loadData) != NULL) {
 			Trc_BCU_internalDefineClass_Exit(vmThread, className, NULL);
+			endTime = j9time_nano_time();
+			vm->defineClassTime += endTime - startTime;
 			return NULL;
 		}
 	}
@@ -220,7 +250,8 @@ internalDefineClass(
 
 done:
 	Trc_BCU_internalDefineClass_Exit(vmThread, className, result);
-
+	endTime = j9time_nano_time();
+	vm->defineClassTime += endTime - startTime;
 	return result;
 }
 

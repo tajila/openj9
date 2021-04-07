@@ -23,8 +23,10 @@
 package java.lang;
 
 import java.io.*;
+import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
+import java.security.SecureClassLoader;
 
 /*[IF !Sidecar19-SE]
 import com.ibm.oti.vm.AbstractClassLoader;
@@ -32,6 +34,7 @@ import com.ibm.oti.vm.AbstractClassLoader;
 import com.ibm.oti.vm.VM;
 
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -42,10 +45,13 @@ import java.util.Queue;
 import java.util.Vector;
 import java.util.Collections;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.*;
 import java.security.cert.Certificate;
+
+import sun.misc.URLClassPath;
 import sun.security.util.SecurityConstants;
 
 /*[IF Sidecar19-SE]
@@ -92,6 +98,26 @@ public abstract class ClassLoader {
 	/*[ENDIF]*/
 	private boolean isDelegatingCL = false;
 
+	private AtomicInteger metadataIndex = new AtomicInteger(0);
+	private Hashtable<ProtectionDomain, ClassMetaData> classMetaData = new Hashtable<>();
+	
+	static class ClassMetaData {
+		private int cacheIndex;
+		private Class<?> clazz;
+		
+		public ClassMetaData(int cacheIndex, Class<?> clazz) {
+			this.cacheIndex = cacheIndex;
+			this.clazz = clazz;
+		}
+		
+		int getCacheIndex() {
+			return cacheIndex;
+		}
+		
+		Class getIndexClass() {
+			return clazz;
+		}
+	}
 	/*
 	 * This is the application ClassLoader
 	 */
@@ -152,7 +178,7 @@ public abstract class ClassLoader {
 	private NativeLibraries nativelibs = null;
 /*[ENDIF] JAVA_SPEC_VERSION >= 15 */
 	private static native void initAnonClassLoader(InternalAnonymousClassLoader anonClassLoader);
-	
+	private static boolean jclInitComplete = false;
 	/*[PR JAZZ 73143]: ClassLoader incorrectly discards class loading locks*/
 	static final class ClassNameLockRef extends WeakReference<Object> implements Runnable {
 		private static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
@@ -171,6 +197,21 @@ public abstract class ClassLoader {
 				}
 			}
 		}
+	}
+	
+	protected static boolean isJCLInitComplete() {
+		return jclInitComplete;
+	}
+	
+	private boolean isImmortalClassLoader() {
+		if ((this == applicationClassLoader)
+			|| (this == bootstrapClassLoader)
+			|| (this == VM.getVMLangAccess().getExtClassLoader())
+		) {
+			return true;
+		}
+		
+		return false;
 	}
 	
 	static final void initializeClassLoaders() {
@@ -315,6 +356,8 @@ public abstract class ClassLoader {
 		/*[PR 125932] Reflect cache may be initialized by multiple Threads */
 		/*[PR JAZZ 107786] constructorParameterTypesField should be initialized regardless of reflectCacheEnabled or not */
 		Class.initCacheIds(reflectCacheEnabled, reflectCacheDebug);
+		
+		jclInitComplete = true;
 	}	
 
 /**
@@ -541,6 +584,8 @@ protected final Class<?> defineClass (
 	return defineClassInternal(className, classRep, offset, length, protectionDomain, false /* allowNullProtectionDomain */);
 }
 
+private static native void setupClassMetadata(Class<?> clazz, int index);
+
 final Class<?> defineClassInternal(
 		final String className, 
 		final byte[] classRep, 
@@ -584,6 +629,8 @@ final Class<?> defineClassInternal(
 	/*[PR CMVC 110183] checkPackageAccess() (accessClassInPackage permission) denied when granted access */
 	/*[PR CVMC 124584] checkPackageAccess(), not defineClassImpl(), should use ProtectionDomain */
 	Class<?> answer = defineClassImpl(className, classRep, offset, length, pd);
+	
+	registerClass(answer, pd);
 
 	if (certs != null) {
 		setSigners(answer, certs);
@@ -610,6 +657,57 @@ final Class<?> defineClassInternal(
 		com.ibm.oti.vm.VM.dumpString("class load: " + answer.getName() + " from: " + location + "\n"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 	}
 	return answer;
+}
+
+private static ProtectionDomain findProtectionDomains(ClassLoader thisLoader, String className) {
+	ProtectionDomain pd = null;
+	if (thisLoader instanceof URLClassLoader) {
+		try {
+			Field ucpHandle = URLClassLoader.class.getDeclaredField("ucp");
+			ucpHandle.setAccessible(true);
+			URLClassPath ucp = (URLClassPath) ucpHandle.get(thisLoader);
+			String path = className.concat(".class");
+			sun.misc.Resource res = ucp.getResource(path, false, thisLoader, false /* TODO may need this for debbuging purposes */); 
+			CodeSigner[] signers = res.getCodeSigners();
+			CodeSource cs = new CodeSource(res.getCodeSourceURL(), signers);
+			Method getPD = SecureClassLoader.class.getDeclaredMethod("getProtectionDomain", new Class[] { CodeSource.class });
+			getPD.setAccessible(true);
+			pd = (ProtectionDomain) getPD.invoke(thisLoader, cs);
+		} catch (Throwable t) {
+			/* TODO shouldn't fail */
+			t.printStackTrace();
+			throw new RuntimeException(t);
+		}
+	}
+	
+	return pd;
+}
+
+
+protected final void 
+registerClass(Class<?> clazz, ProtectionDomain pd) {
+	if (isImmortalClassLoader() && com.ibm.oti.vm.VM.isSnapshotRun()) {
+		if ((clazz.getClassLoader() == this) 
+			|| ((clazz.getClassLoader() == null) && (this == ClassLoader.bootstrapClassLoader))
+		) {
+			ClassMetaData metaData = null;
+			//com.ibm.oti.vm.VM.dumpString("class load: " + clazz.getName() + " loader=" + this + " ");
+			if (classMetaData.containsKey(pd)) {
+				metaData = classMetaData.get(pd);
+				//com.ibm.oti.vm.VM.dumpString(" existing key index: " + metaData.getCacheIndex() + "\n");
+			} else {
+				
+				metaData = new ClassMetaData(metadataIndex.incrementAndGet(), clazz);
+				//com.ibm.oti.vm.VM.dumpString("new key index: " + metaData.getCacheIndex() + "\n");
+				classMetaData.put(pd, metaData);
+			}
+			setupClassMetadata(clazz, metaData.getCacheIndex());
+		} else {
+			//com.ibm.oti.vm.VM.dumpString("not correct loader class load: " + clazz.getName() + " loader=" + this + " class.loader=" + clazz.getClassLoader() + " \n");
+		}
+	} else {
+		//com.ibm.oti.vm.VM.dumpString("not imortal loader class load: " + clazz.getName() + " loader=" + this + " class.loader=" + clazz.getClassLoader() + " \n");
+	}
 }
 
 /*[IF JAVA_SPEC_VERSION >= 15]*/
@@ -1368,6 +1466,10 @@ Class<?> loadClassHelper(final String className, boolean resolveClass, boolean d
 			}
 		}
 /*[ENDIF]*/
+		
+		if (loadedClass.getProtectionDomain() != null) {
+			registerClass(loadedClass, loadedClass.getProtectionDomain());
+		}
 		
 		// resolve if required
 		if (resolveClass) resolveClass(loadedClass);

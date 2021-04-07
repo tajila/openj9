@@ -337,6 +337,17 @@ MM_MarkingDelegate::completeMarking(MM_EnvironmentBase *env)
 										modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 									}
 								}
+
+								if (IS_RESTORE_RUN(javaVM)) {
+									uintptr_t numOfEntries = classLoader->cachedPDs[0].cacheIndex;
+									for (uintptr_t i = 0; i < numOfEntries; i++) {
+										if (NULL != classLoader->cachedPDs[i + 1].cachedPD) {
+											_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )classLoader->cachedPDs[i + 1].cachedPD);
+										} else {
+											printf("should never be NULL loader=%p index %lu\n", classLoader, i);
+										}
+									}
+								}
 							}
 						}
 					}

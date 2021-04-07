@@ -85,6 +85,7 @@
 #define J9ClassRequiresPrePadding 0x20000
 #define J9ClassIsValueBased 0x40000
 #define J9ClassIsLoadedFromImage 0x80000
+#define J9ClassSnapshotClass 0x100000
 
 
 /* @ddr_namespace: map_to_type=J9FieldFlags */
@@ -3211,6 +3212,9 @@ typedef struct J9Class {
 #endif /* JAVA_SPEC_VERSION >= 11 */
 	struct J9FlattenedClassCache* flattenedClassCache;
 	struct J9ClassHotFieldsInfo* hotFieldsInfo;
+#if defined(J9VM_OPT_SNAPSHOTS)
+	UDATA cpIndexAndLocation;
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 } J9Class;
 
 /* Interface classes can never be instantiated, so the following fields in J9Class will not be used:
@@ -3300,6 +3304,9 @@ typedef struct J9ArrayClass {
 	/* Added temporarily for consistency */
 	UDATA flattenedElementSize;
 	struct J9ClassHotFieldsInfo* hotFieldsInfo;
+#if defined(J9VM_OPT_SNAPSHOTS)
+	UDATA cpIndexAndLocation;
+#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 } J9ArrayClass;
 
 
@@ -3325,6 +3332,12 @@ typedef struct J9HookedNative {
 } J9HookedNative;
 
 /* @ddr_namespace: map_to_type=J9ClassLoader */
+#define MAX_CACHED_PDS 5
+
+typedef struct J9CachedPD {
+	UDATA cacheIndex;
+	j9object_t cachedPD;
+} J9CachedPD;
 
 typedef struct J9ClassLoader {
 	struct J9Pool* sharedLibraries;
@@ -3359,7 +3372,8 @@ typedef struct J9ClassLoader {
 	struct J9HashTable* classLocationHashTable;
 	struct J9HashTable* classRelationshipsHashTable;
 	struct J9Pool* hotFieldPool;
-	omrthread_monitor_t hotFieldPoolMutex; 
+	omrthread_monitor_t hotFieldPoolMutex;
+	J9CachedPD cachedPDs[MAX_CACHED_PDS]; //TODO do somethign proper here
 } J9ClassLoader;
 
 #define J9CLASSLOADER_SHARED_CLASSES_ENABLED  8
@@ -4778,6 +4792,7 @@ typedef struct J9InternalVMFunctions {
 	void ( *initializeImageClassLoaderObject)(struct J9JavaVM *javaVM, struct J9ClassLoader *classLoader, j9object_t classLoaderObject);
 	struct J9Class* ( *initializeImageClassObject)(struct J9VMThread *vmThread, struct J9ClassLoader *classLoader, struct J9Class *clazz);
 	BOOLEAN ( *loadWarmClass)(struct J9VMThread* vmThread, struct J9ClassLoader* classLoader, struct J9Class *clazz);
+	BOOLEAN ( *setupClassPDs)(struct J9VMThread *currentThread);
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 #if defined(J9VM_OPT_JITSERVER)
 	BOOLEAN ( *isJITServerEnabled )(struct J9JavaVM *vm);
@@ -5250,6 +5265,7 @@ typedef struct J9JavaVM {
 	void  ( *freeAotRuntimeInfo)(struct J9JavaVM *javaVM, void * aotRuntimeInfo) ;
 	UDATA aotDllHandle;
 	struct J9ROMImageHeader* arrayROMClasses;
+	struct J9BaseTypePrimitiveROMClasses* baseTypePrimitiveROMClasses;
 	struct J9BytecodeVerificationData* bytecodeVerificationData;
 	char* jclDLLName;
 	UDATA defaultOSStackSize;
@@ -5513,6 +5529,11 @@ typedef struct J9JavaVM {
 	UDATA vmindexOffset;
 	UDATA vmtargetOffset;
 #endif /* defined(J9VM_OPT_OPENJDK_METHODHANDLE) */
+	U_64 classSupportTime;
+	U_64 defineClassTime;
+	U_64 jclDefineTime;
+	U_64 crmTime;
+	U_64 crmCount;
 } J9JavaVM;
 
 #define J9VM_PHASE_NOT_STARTUP  2

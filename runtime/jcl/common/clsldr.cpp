@@ -38,6 +38,37 @@
 
 extern "C" {
 
+void JNICALL
+Java_java_lang_ClassLoader_setupClassMetadata(JNIEnv *env, jclass unused, jclass answer, jint cacheIndex)
+{
+	J9VMThread *currentThread = (J9VMThread *)env;
+	J9InternalVMFunctions *vmFuncs = currentThread->javaVM->internalVMFunctions;
+
+	vmFuncs->internalEnterVMFromJNI(currentThread);
+
+	J9Class *clazz = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, J9_JNI_UNWRAP_REFERENCE(answer));
+	J9ClassLoader *loader = clazz->classLoader;
+
+	clazz->cpIndexAndLocation = cacheIndex;
+
+	if ((UDATA)cacheIndex > loader->cachedPDs[0].cacheIndex) {
+		VMSNAPSHOTIMPLPORT_ACCESS_FROM_JAVAVM(currentThread->javaVM);
+		J9UTF8 *className = J9ROMCLASS_CLASSNAME(clazz->romClass);
+		U_16 len = J9UTF8_LENGTH(className);
+		J9UTF8 *storeLocation = (J9UTF8 *) vmsnapshot_allocate_memory(len + 2, J9MEM_CATEGORY_CLASSES);
+		if (NULL == storeLocation) {
+			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGOUTOFMEMORYERROR, NULL);
+		} else {
+			memcpy(storeLocation, &len, sizeof(U_16));
+			memcpy((U_8*)storeLocation + 2, J9UTF8_DATA(className), len);
+			loader->cachedPDs[cacheIndex].cacheIndex = (UDATA) storeLocation;
+			loader->cachedPDs[0].cacheIndex++;
+		}
+	}
+	vmFuncs->internalExitVMToJNI(currentThread);
+
+}
+
 jboolean JNICALL Java_java_lang_ClassLoader_isVerboseImpl(JNIEnv *env, jclass clazz)
 {
 	J9JavaVM *javaVM = ((J9VMThread *) env)->javaVM;
