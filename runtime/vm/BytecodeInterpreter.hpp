@@ -1557,7 +1557,9 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
-		if ((UDATA)_sp >= stackOverflowMark) {
+		UDATA stackUse = VM_VMHelpers::calculateStackUse(romMethod);
+		UDATA *checkSP = _sp - stackUse;
+		if ((UDATA)_sp >= (stackOverflowMark)) {
 			if (methodIsSynchronized) {
 				UDATA monitorRC = enterObjectMonitor(REGISTER_ARGS, syncObject);
 				/* Monitor enter can only fail in the nonblocking case, which does not
