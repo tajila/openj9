@@ -56,3 +56,5 @@ TraceEntry=Trc_VMUtil_getOriginalROMMethodUnchecked_Entry Overhead=1 Level=3 Noe
 TraceExit=Trc_VMUtil_getOriginalROMMethodUnchecked_Exit Overhead=1 Level=3 Noenv Template="getOriginalROMMethodUnchecked (result=%p)"
 
 TraceException=Trc_VMUtil_getOriginalROMMethodUnchecked_getMethodIndexFailed Overhead=1 Level=1 Noenv Template="getOriginalROMMethodUnchecked: Unable to get methodIndex for method=%p"
+
+TraceEvent=Trc_Util_thrhelp_initializeCurrentOSStackFree Overhead=1 Level=1 Template="Setup osStack free for osthread=%p requested stacksize=%zu realStacksize=%zu (zero is not found) stackfree=%zu starting sp=%p"

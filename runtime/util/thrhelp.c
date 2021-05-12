@@ -23,7 +23,7 @@
 #include "j9.h"
 #include "omrthread.h"
 #include "util_api.h"
-#include "ut_j9util.h"
+#include "ut_j9vmutil.h"
 
 J9VMThread *
 getVMThreadFromOMRThread(J9JavaVM *vm, omrthread_t omrthread)
@@ -57,5 +57,6 @@ initializeCurrentOSStackFree(J9VMThread *currentThread, omrthread_t osThread, UD
 			currentThread->currentOSStackFree = osStackSize - (osStackSize / J9VMTHREAD_RESERVED_C_STACK_FRACTION);
 		}
 	}
+	printf("vmthread=%p Setup osStack free for osthread=%p requested stacksize=%lu realStacksize=%zu (zero is not found) stackfree=%zu starting sp=%p\n", currentThread, osThread, osStackSize, actualStackSize, currentThread->currentOSStackFree, &actualStackSize);
 	Trc_Util_thrhelp_initializeCurrentOSStackFree(currentThread, osThread, osStackSize, actualStackSize, currentThread->currentOSStackFree, &actualStackSize);
 }
