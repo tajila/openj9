@@ -1113,7 +1113,8 @@ jvmtiTraceSet(jvmtiEnv* jvmti_env, ...)
 	
 	const char* option_ptr;
 	va_list args;
-
+	printf("env=%p here1\n", jvmti_env);
+	fflush(stdout);
 	va_start(args, jvmti_env);
 	option_ptr = va_arg(args, const char*);
 	va_end(args);

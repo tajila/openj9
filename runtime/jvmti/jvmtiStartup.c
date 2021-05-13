@@ -572,7 +572,7 @@ loadAgentLibraryOnAttach(struct J9JavaVM * vm, const char * library, const char 
 	UDATA loadFunctionNameLength = 0;
 	BOOLEAN found = FALSE;
 	const char *errorMessage = NULL;
-
+	Trc_JVMTI_loadAgentLibraryOnAttach_event0();
 	Trc_JVMTI_loadAgentLibraryOnAttach_Entry(library);
 
 	Assert_JVMTI_true(NULL != library); /* Library name must be non-null. */

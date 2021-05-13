@@ -77,7 +77,8 @@ private:
 #if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
 	U_32 _numOfInjectedInterfaces;
 #endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
-	
+	bool _isJDBC;
+	bool _isMethod;
 protected:
 
 public:
@@ -342,7 +343,11 @@ public:
 #if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
 		, _numOfInjectedInterfaces(0)
 #endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
+		, _isJDBC(false)
+		, _isMethod(false)
 	{
+		printf("ClassFileWriter here0.1\n");
+		fflush(stdout);
 		/* anonClasses have the following name format: '[originalName]/[ROMSegmentAddress]' */
 		if (J9_ARE_ANY_BITS_SET(_romClass->extraModifiers, J9AccClassAnonClass | J9AccClassHidden)) {
 			PORT_ACCESS_FROM_JAVAVM(_javaVM);
@@ -351,37 +356,72 @@ public:
 			U_16 anonNameLength = J9UTF8_LENGTH(_anonClassName);
 			U_16 originalNameLength = anonNameLength - ROM_ADDRESS_LENGTH - 1;
 			/* nameLength field + nameBytes field + NULL terminator */
+			printf("ClassFileWriter here0.2\n");
+			fflush(stdout);
 			_originalClassName = (J9UTF8*) j9mem_allocate_memory(sizeof(U_16) + originalNameLength + 1, J9MEM_CATEGORY_CLASSES);
 			if (NULL == _originalClassName) {
+				printf("ClassFileWriter here0.3\n");
+				fflush(stdout);
 				_buildResult = OutOfMemory;
 			} else {
+				printf("ClassFileWriter here0.4\n");
+				fflush(stdout);
 				J9UTF8_SET_LENGTH(_originalClassName, originalNameLength);
 				memcpy(((U_8*) J9UTF8_DATA(_originalClassName)), J9UTF8_DATA(_anonClassName), originalNameLength);
 				*(((U_8*) J9UTF8_DATA(_originalClassName)) + originalNameLength) = '\0';
+				printf("ClassFileWriter here0.5\n");
+				fflush(stdout);
 			}
+			printf("ClassFileWriter here0.6\n");
+			fflush(stdout);
+		}
+		printf("ClassFileWriter here1 :%s:\n", J9UTF8_DATA(J9ROMCLASS_CLASSNAME(_romClass)));
+		fflush(stdout);
+		if (0 == strncmp((char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(_romClass)), "org/postgresql/jdbc/PgPreparedStatement", J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(_romClass)))) {
+			printf("ClassFileWriter found jdbc class\n", J9UTF8_DATA(J9ROMCLASS_CLASSNAME(_romClass)));
+			fflush(stdout);
+			_isJDBC = true;
 		}
 		if (isOK()) {
+			printf("ClassFileWriter here2\n");
+			fflush(stdout);
 			analyzeROMClass();
 		}
+		printf("ClassFileWriter here3\n");
+		fflush(stdout);
 		if (isOK()) {
+			printf("ClassFileWriter here4\n");
+			fflush(stdout);
 			allocateBuffer();
 		}
+		printf("ClassFileWriter here5\n");
+		fflush(stdout);
 		if (isOK()) {
+			printf("ClassFileWriter here6\n");
+			fflush(stdout);
 			writeClassFile();
+			printf("ClassFileWriter here7\n");
+			fflush(stdout);
 			_classFileSize = UDATA(_classFileCursor - _classFileBuffer);
 			/* We should never overshoot _classFileBuffer size */
 			Trc_BCU_Assert_True(_classFileSize <= _romClass->classFileSize);
 		}
+		printf("ClassFileWriter here8\n");
+		fflush(stdout);
 	}
 
 	~ClassFileWriter()
 	{
+		printf("~ClassFileWriter here1\n");
+		fflush(stdout);
 		if (NULL != _cpHashTable) {
 			hashTableFree(_cpHashTable);
 			_cpHashTable = NULL;
 		}
 
 		if (!isOK()) {
+			printf("~ClassFileWriter here2\n");
+			fflush(stdout);
 			PORT_ACCESS_FROM_PORT(_portLibrary);
 
 			/* If an error occurred during class file recreation, free the classFileBuffer */
@@ -389,6 +429,8 @@ public:
 			_classFileBuffer = NULL;
 		}
 		if (_isAnon) {
+			printf("~ClassFileWriter here3\n");
+			fflush(stdout);
 			PORT_ACCESS_FROM_JAVAVM(_javaVM);
 			j9mem_free_memory(_originalClassName);
 		}

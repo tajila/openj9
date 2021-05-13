@@ -553,21 +553,43 @@ ClassFileWriter::analyzeRecordAttribute()
 void
 ClassFileWriter::writeClassFile()
 {
+	printf("writeClassFile here1\n");
+	fflush(stdout);
 	writeU32(CFR_MAGIC);
+	printf("writeClassFile here2\n");
+	fflush(stdout);
 	writeU16(_romClass->minorVersion);
 	writeU16(_romClass->majorVersion);
+	printf("writeClassFile here3\n");
+	fflush(stdout);
 	writeConstantPool();
+	printf("writeClassFile here4\n");
+	fflush(stdout);
 	writeU16(_romClass->modifiers & CFR_CLASS_ACCESS_MASK);
+	printf("writeClassFile here5\n");
+	fflush(stdout);
 	writeU16(indexForClass(J9ROMCLASS_CLASSNAME(_romClass)));
 	/* Super class name is NULL only for java/lang/Object */
 	if (NULL != J9ROMCLASS_SUPERCLASSNAME(_romClass)) {
+		printf("writeClassFile here6\n");
+		fflush(stdout);
 		writeU16(indexForClass(J9ROMCLASS_SUPERCLASSNAME(_romClass)));
 	} else {
+		printf("writeClassFile here7\n");
+		fflush(stdout);
 		writeU16(0);
 	}
+	printf("writeClassFile here8\n");
+	fflush(stdout);
 	writeInterfaces();
+	printf("writeClassFile here9\n");
+	fflush(stdout);
 	writeFields();
+	printf("writeClassFile here10\n");
+	fflush(stdout);
 	writeMethods();
+	printf("writeClassFile here11\n");
+	fflush(stdout);
 	writeAttributes();
 }
 
@@ -837,9 +859,21 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 	U_32 * typeAnnotationsData = getMethodTypeAnnotationsDataFromROMMethod(method);
 	U_32 * annotationsData = getMethodAnnotationsDataFromROMMethod(method);
 	J9MethodParametersData * methodParametersData = getMethodParametersFromROMMethod(method);
-	
+	if (_isJDBC) {
+		printf("writeMethod here1\n");
+		fflush(stdout);
+	}
 	U_16 attributesCount = 0;
+	if (_isJDBC) {
+		printf("writeMEthod name %s\n", (char*) J9UTF8_DATA(name));
+		fflush(stdout);
+		if (0 == strncmp((char*)J9UTF8_DATA(name), "addBatch", J9UTF8_LENGTH(name))) {
+			printf("writeMethod found method\n");
+			fflush(stdout);
+			_isMethod = true;
+		}
 
+	}
 	/* native or abstract methods don't have Code attribute */
 	if (0 == ((J9AccAbstract | J9AccNative) & method->modifiers)) {
 		attributesCount += 1;
@@ -847,11 +881,19 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 	if (NULL != genericSignature) {
 		attributesCount += 1;
 	}
+	if (_isJDBC) {
+		printf("writeMethod here2\n");
+		fflush(stdout);
+	}
 	if (J9ROMMETHOD_HAS_EXCEPTION_INFO(method)) {
 		J9ExceptionInfo * exceptionInfo = J9_EXCEPTION_DATA_FROM_ROM_METHOD(method);
 		if (0 != exceptionInfo->throwCount) {
 			attributesCount += 1;
 		}
+	}
+	if (_isJDBC) {
+		printf("writeMethod here3\n");
+		fflush(stdout);
 	}
 	if (NULL != annotationsData) {
 		attributesCount += 1;
@@ -868,17 +910,31 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 	if (NULL != methodParametersData) {
 		attributesCount += 1;
 	}
-
+	if (_isJDBC) {
+		printf("writeMethod here4\n");
+		fflush(stdout);
+	}
 	writeU16(U_16(method->modifiers & CFR_METHOD_ACCESS_MASK));
 	writeU16(indexForUTF8(name));
 	writeU16(indexForUTF8(signature));
 	writeU16(attributesCount);
-
+	if (_isJDBC) {
+		printf("writeMethod here5\n");
+		fflush(stdout);
+	}
 	if (0 == ((J9AccAbstract | J9AccNative) & method->modifiers)) {
 		writeCodeAttribute(method);
 	}
+	if (_isJDBC) {
+		printf("writeMethod here6\n");
+		fflush(stdout);
+	}
 	if (NULL != genericSignature) {
 		writeSignatureAttribute(genericSignature);
+	}
+	if (_isJDBC) {
+		printf("writeMethod here7\n");
+		fflush(stdout);
 	}
 	if (J9ROMMETHOD_HAS_EXCEPTION_INFO(method)) {
 		J9ExceptionInfo * exceptionInfo = J9_EXCEPTION_DATA_FROM_ROM_METHOD(method);
@@ -886,14 +942,29 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 			U_8 * address = (U_8 *) (exceptionInfo + 1);
 			address += sizeof(J9ExceptionHandler) * exceptionInfo->catchCount;
 			J9SRP * throwNames = (J9SRP *) address;
-
+			if (_isJDBC) {
+				printf("writeMethod here8\n");
+				fflush(stdout);
+			}
 			writeAttributeHeader((J9UTF8 *) &EXCEPTIONS, sizeof(U_16) + (sizeof(U_16) * exceptionInfo->throwCount));
 			writeU16(exceptionInfo->throwCount);
 			for (U_16 i = 0; i < exceptionInfo->throwCount; i++) {
+				if (_isJDBC) {
+					printf("writeMethod here9\n");
+					fflush(stdout);
+				}
 				J9UTF8 * throwName = NNSRP_GET(throwNames[i], J9UTF8 *);
 				writeU16(indexForClass(throwName));
 			}
+			if (_isJDBC) {
+				printf("writeMethod here10\n");
+				fflush(stdout);
+			}
 		}
+	}
+	if (_isJDBC) {
+		printf("writeMethod here11\n");
+		fflush(stdout);
 	}
 	if (NULL != annotationsData) {
 		writeAnnotationsAttribute(annotationsData);
@@ -907,14 +978,25 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 	if (NULL != typeAnnotationsData) {
 		writeTypeAnnotationsAttribute(typeAnnotationsData);
 	}
-
+	if (_isJDBC) {
+		printf("writeMethod here12\n");
+		fflush(stdout);
+	}
 	if (NULL != methodParametersData) {
 		U_8 parameterCount = methodParametersData->parameterCount;
 		J9MethodParameter * parameters = &methodParametersData->parameters;
 		writeAttributeHeader((J9UTF8 *) &METHODPARAMETERS, sizeof(U_8) + ((sizeof(U_16)+sizeof(U_16)) * parameterCount));
 		
+		if (_isJDBC) {
+			printf("writeMethod here13\n");
+			fflush(stdout);
+		}
 		writeU8(parameterCount);
 		for (U_8 i = 0; i < parameterCount; i++) {
+			if (_isJDBC) {
+				printf("writeMethod here14\n");
+				fflush(stdout);
+			}
 			U_16 utfIndex = 0;
 			J9UTF8 * parameterName = SRP_GET(parameters[i].name, J9UTF8 *);
 			if (NULL != parameterName) {
@@ -924,14 +1006,26 @@ ClassFileWriter::writeMethod(J9ROMMethod * method)
 			writeU16(parameters[i].flags);
 		}
 	}	
+	if (_isJDBC) {
+		printf("writeMethod here15\n");
+		fflush(stdout);
+	}
 }
 
 void
 ClassFileWriter::writeMethods()
 {
+	printf("writeMethods here1\n");
+	fflush(stdout);
 	writeU16(U_16(_romClass->romMethodCount));
 	J9ROMMethod * method = J9ROMCLASS_ROMMETHODS(_romClass);
+	printf("writeMethods here2\n");
+	fflush(stdout);
 	for (U_32 i = 0; i < _romClass->romMethodCount; i++) {
+		if (_isJDBC) {
+			printf("writeMethods here3\n");
+			fflush(stdout);
+		}
 		writeMethod(method);
 		method = nextROMMethod(method);
 	}
@@ -1253,26 +1347,50 @@ ClassFileWriter::writeCodeAttribute(J9ROMMethod * method)
 	U_32 codeLength(J9_BYTECODE_SIZE_FROM_ROM_METHOD(method));
 	U_8 * code(J9_BYTECODE_START_FROM_ROM_METHOD(method));
 	U_16 attributesCount = 0;
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here1\n");
+		fflush(stdout);
+	}
 	writeU16(indexForUTF8((J9UTF8 *) &CODE));
 	U_8 * attributeLenAddr = _classFileCursor;
 	writeU32(0);
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here2\n");
+		fflush(stdout);
+	}
 	U_8 * start = _classFileCursor;
 	writeU16(method->maxStack);
 	writeU16(method->tempCount + method->argCount);
 	writeU32(codeLength);
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here3\n");
+		fflush(stdout);
+	}
 	U_8 * bytecode = _classFileCursor;
 	writeData(codeLength, code);
+	if (_isMethod) {
+		printf("writeCodeAttribute here4\n");
+		fflush(stdout);
+	}
 	rewriteBytecode(method, codeLength, bytecode);
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here5\n");
+		fflush(stdout);
+	}
+	if (_isMethod) {
+		printf("writeCodeAttribute here6\n");
+		fflush(stdout);
+	}
 	if (J9ROMMETHOD_HAS_EXCEPTION_INFO(method)) {
 		J9ExceptionInfo * exceptionInfo = J9_EXCEPTION_DATA_FROM_ROM_METHOD(method);
 		J9ExceptionHandler * handlers = (J9ExceptionHandler *) (exceptionInfo + 1);
 
 		writeU16(exceptionInfo->catchCount);
 		for (U_16 i = 0; i < exceptionInfo->catchCount; i++) {
+			if (_isMethod) {
+				printf("writeCodeAttribute here7\n");
+				fflush(stdout);
+			}
 			writeU16(U_16(handlers[i].startPC));
 			writeU16(U_16(handlers[i].endPC));
 			writeU16(U_16(handlers[i].handlerPC));
@@ -1281,26 +1399,58 @@ ClassFileWriter::writeCodeAttribute(J9ROMMethod * method)
 	} else {
 		writeU16(0);
 	}
+	if (_isMethod) {
+		printf("writeCodeAttribute here8\n");
+		fflush(stdout);
+	}
 
 	U_8 * attributesCountAddr = _classFileCursor;
 	writeU16(0);
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here9\n");
+		fflush(stdout);
+	}
 	if (J9ROMMETHOD_HAS_STACK_MAP(method)) {
 		writeStackMapTableAttribute(method);
 		attributesCount += 1;
 	}
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here10\n");
+		fflush(stdout);
+	}
 	if (J9ROMMETHOD_HAS_CODE_TYPE_ANNOTATIONS(getExtendedModifiersDataFromROMMethod(method))) {
+		if (_isMethod) {
+			printf("writeCodeAttribute here10.1\n");
+			fflush(stdout);
+		}
 		U_32 * typeAnnotationsData = getCodeTypeAnnotationsDataFromROMMethod(method);
+		if (_isMethod) {
+			printf("writeCodeAttribute here10.2\n");
+			fflush(stdout);
+		}
 		writeTypeAnnotationsAttribute(typeAnnotationsData);
+		if (_isMethod) {
+			printf("writeCodeAttribute here10.3\n");
+			fflush(stdout);
+		}
 		attributesCount += 1;
 	}
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here11\n");
+		fflush(stdout);
+	}
 	J9MethodDebugInfo* debugInfo = getMethodDebugInfoFromROMMethod(method);
 	if (NULL != debugInfo) {
 		U_16 lineNumberCount(getLineNumberCount(debugInfo));
-
+		if (_isMethod) {
+			printf("writeCodeAttribute here12\n");
+			fflush(stdout);
+		}
 		if (0 != lineNumberCount) {
+			if (_isMethod) {
+				printf("writeCodeAttribute here13\n");
+				fflush(stdout);
+			}
 			writeAttributeHeader((J9UTF8 *) &LINE_NUMBER_TABLE, sizeof(U_16) + (lineNumberCount * sizeof(U_16) * 2));
 			writeU16(lineNumberCount);
 
@@ -1320,10 +1470,17 @@ ClassFileWriter::writeCodeAttribute(J9ROMMethod * method)
 				}
 			}
 			attributesCount += 1;
+			if (_isMethod) {
+				printf("writeCodeAttribute here14\n");
+				fflush(stdout);
+			}
 		}
 
 		U_16 varInfoCount(debugInfo->varInfoCount);
-
+		if (_isMethod) {
+			printf("writeCodeAttribute here15\n");
+			fflush(stdout);
+		}
 		if (0 != varInfoCount) {
 			writeAttributeHeader((J9UTF8 *) &LOCAL_VARIABLE_TABLE, sizeof(U_16) + (sizeof(U_16) * 5 * varInfoCount));
 			writeU16(varInfoCount);
@@ -1367,11 +1524,21 @@ ClassFileWriter::writeCodeAttribute(J9ROMMethod * method)
 			}
 		}
 	}
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here16\n");
+		fflush(stdout);
+	}
 	writeU16At(attributesCount, attributesCountAddr);
-
+	if (_isMethod) {
+		printf("writeCodeAttribute here17\n");
+		fflush(stdout);
+	}
 	U_8 * end = _classFileCursor;
 	writeU32At(U_32(end - start), attributeLenAddr);
+	if (_isMethod) {
+		printf("writeCodeAttribute here18\n");
+		fflush(stdout);
+	}
 }
 
 void
@@ -1381,6 +1548,10 @@ ClassFileWriter::rewriteBytecode(J9ROMMethod * method, U_32 length, U_8 * code)
 	 * This is derived from jvmtiGetBytecodes() in jvmtiMethod.c. It avoids CP index renumbering.
 	 * It should likely be replaced with a call to jvmtiGetBytecodes() once that function is fixed for CP unsplitting.
 	 */
+	if (_isMethod) {
+		printf("rewriteBytecode here1\n");
+		fflush(stdout);
+	}
 	U_32 index = 0;
 	while (index < length) {
 		U_8 bc = code[index];
@@ -1391,6 +1562,10 @@ ClassFileWriter::rewriteBytecode(J9ROMMethod * method, U_32 length, U_8 * code)
 			return;
 		}
 
+		if (_isMethod) {
+			printf("rewriteBytecode here2 index=%d bc=%d\n", (int)index, (int)bc);
+			fflush(stdout);
+		}
 		switch (bc) {
 		case JBldc: /* do nothing */
 			break;
@@ -1915,12 +2090,28 @@ ClassFileWriter::writeParameterAnnotationsAttribute(U_32 *parameterAnnotationsDa
 void
 ClassFileWriter::writeTypeAnnotationsAttribute(U_32 *typeAnnotationsData)
 {
+	if (_isMethod) {
+		printf("writeTypeAnnotationsAttribute here1\n");
+		fflush(stdout);
+	}
 	writeAttributeHeader((J9UTF8 *) &RUNTIME_VISIBLE_TYPE_ANNOTATIONS, *typeAnnotationsData);
+	if (_isMethod) {
+		printf("writeTypeAnnotationsAttribute here2\n");
+		fflush(stdout);
+	}
 	if (J9ROMCLASS_ANNOTATION_REFERS_DOUBLE_SLOT_ENTRY(_romClass)) {
 		U_8 *data = (U_8 *)(typeAnnotationsData + 1);
 		U_16 numAnnotations;
+		if (_isMethod) {
+			printf("writeTypeAnnotationsAttribute here3\n");
+			fflush(stdout);
+		}
 		NEXT_U16(numAnnotations, data);
 		writeU16(numAnnotations);
+		if (_isMethod) {
+			printf("writeTypeAnnotationsAttribute here4\n");
+			fflush(stdout);
+		}
 		if (CFR_TARGET_TYPE_ErrorInAttribute == *data) {
 			writeData(*typeAnnotationsData, typeAnnotationsData + 1); /* dump out the raw bytes */
 		} else {
@@ -1931,6 +2122,12 @@ ClassFileWriter::writeTypeAnnotationsAttribute(U_32 *typeAnnotationsData)
 				U_8 targetType;
 				NEXT_U8(targetType, data);
 				writeU8(targetType);
+
+				if (_isMethod) {
+					printf("writeTypeAnnotationsAttribute here5 i=%d, type=%d\n", (int)i, (int) targetType);
+					fflush(stdout);
+				}
+
 				switch (targetType) {
 				case CFR_TARGET_TYPE_TypeParameterGenericClass:
 				case CFR_TARGET_TYPE_TypeParameterGenericMethod:
@@ -1969,9 +2166,21 @@ ClassFileWriter::writeTypeAnnotationsAttribute(U_32 *typeAnnotationsData)
 				case CFR_TARGET_TYPE_TypeInLocalVar:
 				case CFR_TARGET_TYPE_TypeInResourceVar: {
 					U_16 tableLength = 0;
+					if (_isMethod) {
+						printf("writeTypeAnnotationsAttribute here5.1\n");
+						fflush(stdout);
+					}
 					NEXT_U16(tableLength, data);
+					if (_isMethod) {
+						printf("writeTypeAnnotationsAttribute here5.1 length=%d\n", (int)tableLength);
+						fflush(stdout);
+					}
 					writeU16(tableLength);
 					for (U_32 ti=0; tableLength; ++ti) {
+						if (_isMethod) {
+							printf("writeTypeAnnotationsAttribute here5.2\n");
+							fflush(stdout);
+						}
 						NEXT_U16(u16Data, data);
 						writeU16(u16Data); /* startPC */
 						NEXT_U16(u16Data, data);
@@ -2020,8 +2229,24 @@ ClassFileWriter::writeTypeAnnotationsAttribute(U_32 *typeAnnotationsData)
 				writeAnnotation(&data);
 			}
 		}
+		if (_isMethod) {
+			printf("writeTypeAnnotationsAttribute here6\n");
+			fflush(stdout);
+		}
 	} else {
+		if (_isMethod) {
+			printf("writeTypeAnnotationsAttribute here7\n");
+			fflush(stdout);
+		}
 		writeData(*typeAnnotationsData, typeAnnotationsData + 1);
+		if (_isMethod) {
+			printf("writeTypeAnnotationsAttribute here8\n");
+			fflush(stdout);
+		}
+	}
+	if (_isMethod) {
+		printf("writeTypeAnnotationsAttribute here9\n");
+		fflush(stdout);
 	}
 }
 

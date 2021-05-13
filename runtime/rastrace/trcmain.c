@@ -640,24 +640,36 @@ threadStop(UtThreadData **thr)
 	/*
 	 * Free up any threadlocal storage
 	 */
+	printf("trc main here1\n");
+	fflush(stdout);
 	tls = (J9rasTLS *)omrthread_tls_get(OS_THREAD_FROM_UT_THREAD(thr), j9rasTLSKey);
 	if (tls != NULL) {
+		printf("trc main here2\n");
+		fflush(stdout);
 		omrthread_tls_set(OS_THREAD_FROM_UT_THREAD(thr), j9rasTLSKey, NULL);
 		if (tls->appTrace != NULL) {
+			printf("trc main here3\n");
+			fflush(stdout);
 			j9mem_free_memory(tls->appTrace);
 		}
+		printf("trc main here4\n");
+		fflush(stdout);
 		j9mem_free_memory(tls);
 	}
 
 	/*
 	 *  Free the UtThreadData
 	 */
+	printf("trc main here5\n");
 	if (tempThr->name != NULL && tempThr->name != UT_NO_THREAD_NAME) {
+
 		char *tempName = (char *)tempThr->name;
+		printf("trc main here6\n");
 		j9mem_free_memory( tempName);
 	}
+	printf("trc main here7\n");
 	j9mem_free_memory( tempThr);
-
+	printf("trc main here8\n");
 	do {
 		oldCount = UT_GLOBAL(threadCount);
 		newCount = oldCount - 1;

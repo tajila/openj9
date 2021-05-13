@@ -1105,6 +1105,7 @@ redefineClassesCommon(jvmtiEnv* env,
 #endif
 	J9JVMTIHCRJitEventData *jitEventDataPtr = NULL;
 	UDATA safePoint = J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_OSR_SAFE_POINT);
+	Trc_JVMTI_redefineClassesCommon_event0();
 
 #ifdef J9VM_INTERP_NATIVE_SUPPORT	
 	/* Ensure that jitEventData is initialized in case we hit failure handling before
@@ -1117,7 +1118,7 @@ redefineClassesCommon(jvmtiEnv* env,
 	extensionsEnabled = areExtensionsEnabled(vm);
 	
 	/* Verify that all of the classes are allowed to be replaced */
-
+	Trc_JVMTI_redefineClassesCommon_event1();
 	rc = verifyClassesCanBeReplaced(currentThread, class_count, class_definitions);
 	if (rc != JVMTI_ERROR_NONE) {
 		return rc;
@@ -1132,7 +1133,7 @@ redefineClassesCommon(jvmtiEnv* env,
 	memset(specifiedClasses, 0, class_count * sizeof(J9JVMTIClassPair));
 	
 	/* Create ROM classes for each of the replaced classes */
-
+	Trc_JVMTI_redefineClassesCommon_event2();
 	rc = reloadROMClasses(currentThread, class_count, class_definitions, specifiedClasses, options);
 	if (rc != JVMTI_ERROR_NONE) {
 		goto failed;
@@ -1166,9 +1167,10 @@ redefineClassesCommon(jvmtiEnv* env,
 	}
 
 	/* Determine all ROM classes which need a new RAM class, and pair them with their current RAM class */
-
+	Trc_JVMTI_redefineClassesCommon_event3();
 	rc = determineClassesToRecreate(currentThread, class_count, specifiedClasses, &classPairs,
 			&methodPairs, jitEventDataPtr, !extensionsEnabled);
+	Trc_JVMTI_redefineClassesCommon_event4();
 	if (rc == JVMTI_ERROR_NONE) {
 		/* Recreate the RAM classes for all classes */
 
@@ -1189,7 +1191,7 @@ redefineClassesCommon(jvmtiEnv* env,
 
 			/* Update method references in DirectHandles */
 			fixDirectHandles(currentThread, classPairs, methodPairs);
-
+			Trc_JVMTI_redefineClassesCommon_event5();
 			/* Fix JNI */
 			fixJNIRefs(currentThread, classPairs, TRUE, extensionsUsed);
 
@@ -1207,7 +1209,7 @@ redefineClassesCommon(jvmtiEnv* env,
 
 			/* Notify the JIT about redefined classes */
 			jitClassRedefineEvent(currentThread, &jitEventData, FALSE);
-
+			Trc_JVMTI_redefineClassesCommon_event6();
 		} else {
 
 			/* Clear/suspend all breakpoints in the classes being replaced */
@@ -1218,7 +1220,7 @@ redefineClassesCommon(jvmtiEnv* env,
 
 			/* Update heap references */
 			fixHeapRefs(vm, classPairs);
-
+			Trc_JVMTI_redefineClassesCommon_event7();
 			/* Update method references in DirectHandles */
 			fixDirectHandles(currentThread, classPairs, methodPairs);
 
@@ -1236,7 +1238,7 @@ redefineClassesCommon(jvmtiEnv* env,
 
 			/* Fix subclass hierarchy */
 			fixSubclassHierarchy(currentThread, classPairs);
-
+			Trc_JVMTI_redefineClassesCommon_event8();
 			/* Unresolve all classes */
 			unresolveAllClasses(currentThread, classPairs, methodPairs, extensionsUsed);
 
@@ -1280,7 +1282,7 @@ redefineClassesCommon(jvmtiEnv* env,
 	if (rc == JVMTI_ERROR_NONE) {
 		TRIGGER_J9HOOK_VM_CLASSES_REDEFINED(vm->hookInterface, currentThread);
 	}
-
+	Trc_JVMTI_redefineClassesCommon_event9();
 failedWithVMAccess:
 
 	hashTableFree(classPairs);
@@ -1290,7 +1292,7 @@ failedWithVMAccess:
 	} else {
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 	}
-
+	Trc_JVMTI_redefineClassesCommon_event10();
 failed:
 
 	if (specifiedClasses) {
@@ -1311,13 +1313,13 @@ failed:
 	hashTableFree(methodPairs);
 
 	hashTableFree(methodEquivalences);
-
+	Trc_JVMTI_redefineClassesCommon_event11();
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 	if (jitEventData.initialized) {
 		jitEventFree(vm, &jitEventData);
 	}
 #endif
-
+	Trc_JVMTI_redefineClassesCommon_event12();
 	return rc;
 }
 
@@ -1483,15 +1485,21 @@ jvmtiRetransformClasses(jvmtiEnv* env,
 	J9VMThread * currentThread;
 	J9JVMTIData * jvmtiData = J9JVMTI_DATA_FROM_VM(vm);
 
+	Trc_JVMTI_retransform_event0();
 	Trc_JVMTI_jvmtiRetransformClasses_Entry(env);
+	Trc_JVMTI_retransform_event0();
+
+	fflush(stdout);
 
 	omrthread_monitor_enter(jvmtiData->redefineMutex);
 
+	printf("jvmtiRetransformClasses here1 \n");
+	fflush(stdout);
 	rc = getCurrentVMThread(vm, &currentThread);
 	if (rc == JVMTI_ERROR_NONE) {
 		jvmtiClassDefinition * class_definitions;
 		PORT_ACCESS_FROM_JAVAVM(vm);
-
+		Trc_JVMTI_retransform_event1();
 		vm->internalVMFunctions->internalEnterVMFromJNI(currentThread);
 
 		ENSURE_PHASE_LIVE(env);
@@ -1501,85 +1509,123 @@ jvmtiRetransformClasses(jvmtiEnv* env,
 		ENSURE_NON_NULL(classes);
 
 		/* Create a jvmtiClassDefinition for each retransformed class from the stored bytes and call the common redefine helper */
-
+		printf("jvmtiRetransformClasses here2 \n");
+		fflush(stdout);
+		Trc_JVMTI_retransform_event2();
 		class_definitions = j9mem_allocate_memory(class_count * sizeof(jvmtiClassDefinition), J9MEM_CATEGORY_JVMTI);
+		printf("jvmtiRetransformClasses here2.1 \n");
+		fflush(stdout);
 		if (class_definitions == NULL) {
+			printf("jvmtiRetransformClasses here2.2 \n");
+			fflush(stdout);
 			rc = JVMTI_ERROR_OUT_OF_MEMORY;
 		} else {
 			J9MemorySegmentList * classSegments = vm->classMemorySegments;
 			jint i;
-
+			printf("jvmtiRetransformClasses here2.3 \n");
+			fflush(stdout);
 			memset(class_definitions, 0, class_count * sizeof(jvmtiClassDefinition));
-
+			Trc_JVMTI_retransform_event3();
 			omrthread_monitor_enter(classSegments->segmentMutex);
 			for (i = 0; i < class_count; ++i) {
 				jclass klass;
 				J9Class * clazz;
 				U_8 * classFileBytes = NULL;
 				U_32 classFileBytesCount = 0;
-
+				printf("jvmtiRetransformClasses here2.4 \n");
+				fflush(stdout);
 				klass = classes[i];
 				if (klass == NULL) {
 					rc = JVMTI_ERROR_INVALID_CLASS;
 					break;
 				}
-
+				printf("jvmtiRetransformClasses here2.5 \n");
+				fflush(stdout);
 				clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, klass);
 				if (!classIsModifiable(vm, clazz)) {
 					rc = JVMTI_ERROR_UNMODIFIABLE_CLASS;
 					break;
 				}
+				printf("jvmtiRetransformClasses here2.6 \n");
+				fflush(stdout);
 				if (WSRP_GET(clazz->romClass->intermediateClassData, U_8*) == NULL) {
 					rc = JVMTI_ERROR_UNMODIFIABLE_CLASS;
 					break;
 				}
-
+				printf("jvmtiRetransformClasses here2.7 \n");
+				fflush(stdout);
+				Trc_JVMTI_retransform_event4();
 				if (!J9ROMCLASS_IS_INTERMEDIATE_DATA_A_CLASSFILE(clazz->romClass)) {
 					J9ROMClass * intermediateROMClass = (J9ROMClass *) J9ROMCLASS_INTERMEDIATECLASSDATA(clazz->romClass);
 					IDATA result = 0;
-
+					Trc_JVMTI_retransform_event5();
+					printf("jvmtiRetransformClasses here2.8 \n");
+					fflush(stdout);
 					/* -XX:-StoreIntermediateClassfile (enabled by default) : recreate class file bytes from intermediateROMClass pointed by current ROMClass */
 					result = vm->dynamicLoadBuffers->transformROMClassFunction(vm, PORTLIB, intermediateROMClass, &classFileBytes, &classFileBytesCount);
+					printf("jvmtiRetransformClasses here2.9 \n");
+					fflush(stdout);
 					if (BCT_ERR_NO_ERROR != result) {
 						Trc_JVMTI_jvmtiRetransformClasses_ErrorInRecreatingClassfile(env, intermediateROMClass, result);
+						printf("jvmtiRetransformClasses here2.10 \n");
+						fflush(stdout);
 						rc = JVMTI_ERROR_INTERNAL;
 						if (BCT_ERR_OUT_OF_MEMORY == result) {
 							rc = JVMTI_ERROR_OUT_OF_MEMORY;
 						}
 						break;
 					}
+					Trc_JVMTI_retransform_event6();
 				} else {
+					printf("jvmtiRetransformClasses here2.11 \n");
+					fflush(stdout);
+					Trc_JVMTI_retransform_event7();
 					classFileBytesCount = (jint) clazz->romClass->intermediateClassDataLength;
 					classFileBytes = WSRP_GET(clazz->romClass->intermediateClassData, U_8*);
 				}
+				printf("jvmtiRetransformClasses here2.12 \n");
+				fflush(stdout);
 				class_definitions[i].klass = klass;
 				class_definitions[i].class_byte_count = (jint) classFileBytesCount;
 				class_definitions[i].class_bytes = classFileBytes;
 			}
+			printf("jvmtiRetransformClasses here3 \n");
+			fflush(stdout);
 			omrthread_monitor_exit(classSegments->segmentMutex);
-
+			Trc_JVMTI_retransform_event8();
 			if (rc == JVMTI_ERROR_NONE) {
+				Trc_JVMTI_retransform_event9();
 				rc = redefineClassesCommon(env, class_count, class_definitions, currentThread, J9_FINDCLASS_FLAG_RETRANSFORMING);
 			}
-
+			printf("jvmtiRetransformClasses here4 \n");
+			fflush(stdout);
 			/* free classFileBytes returned by j9bcutil_transformROMClass */
 			for (i = 0; i < class_count; ++i) {
 				if (NULL != class_definitions[i].class_bytes) {
 					J9Class * clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, classes[i]);
-
+					Trc_JVMTI_retransform_event10();
 					if (!J9ROMCLASS_IS_INTERMEDIATE_DATA_A_CLASSFILE(clazz->romClass)) {
 						j9mem_free_memory((void *)class_definitions[i].class_bytes);
 					}
+					Trc_JVMTI_retransform_event11();
 				}
 			}
+			printf("jvmtiRetransformClasses here5 \n");
+			fflush(stdout);
+			Trc_JVMTI_retransform_event12();
 			j9mem_free_memory(class_definitions);
+			Trc_JVMTI_retransform_event13();
 		}
 done:
+printf("jvmtiRetransformClasses here6 \n");
+fflush(stdout);
 		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	omrthread_monitor_exit(jvmtiData->redefineMutex);
-
+	printf("jvmtiRetransformClasses here7 \n");
+	fflush(stdout);
+	Trc_JVMTI_retransform_event14();
 	TRACE_JVMTI_RETURN(jvmtiRetransformClasses);
 }
 

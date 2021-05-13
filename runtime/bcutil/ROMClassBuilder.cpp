@@ -197,12 +197,19 @@ j9bcutil_buildRomClass(J9LoadROMClassData *loadData, U_8 * intermediateData, UDA
 extern "C" IDATA
 j9bcutil_transformROMClass(J9JavaVM *javaVM, J9PortLibrary *portLibrary, J9ROMClass *romClass, U_8 **classData, U_32 *size)
 {
+	printf("j9bcutil_transformROMClass here1\n");
+	fflush(stdout);
 	ClassFileWriter classFileWriter(javaVM, portLibrary, romClass);
+	printf("j9bcutil_transformROMClass here2\n");
+	fflush(stdout);
 	if (classFileWriter.isOK()) {
+		printf("j9bcutil_transformROMClass here3\n");
+		fflush(stdout);
 		*size = (U_32) classFileWriter.classFileSize();
 		*classData = classFileWriter.classFileData();
 	}
-
+	printf("j9bcutil_transformROMClass here4\n");
+	fflush(stdout);
 	return IDATA(classFileWriter.getResult());
 }
 
