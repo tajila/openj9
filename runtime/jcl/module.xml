@@ -135,6 +135,9 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 		<makefilestubs>
 			<makefilestub data="UMA_ENABLE_ALL_WARNINGS=1"/>
 			<makefilestub data="UMA_TREAT_WARNINGS_AS_ERRORS=1"/>
+			<makefilestub data="CFLAGS+= -I/usr/include/criu"/>
+			<makefilestub data="CXXFLAGS+= -I/usr/include/criu"/>
+			<makefilestub data="CPPFLAGS+= -I/usr/include/criu"/>
 		</makefilestubs>
 
 		<vpaths>
@@ -211,6 +214,7 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 			<library name="j9thr"/>
 			<library name="socket" type="macro"/>
 			<library name="sunvmi"/>
+			<library name="criu" type="system"/>
 		</libraries>
 	</artifact>
 

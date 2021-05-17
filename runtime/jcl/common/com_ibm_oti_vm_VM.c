@@ -19,7 +19,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
-
+#include <criu.h>
 #include <string.h>
 #include "jni.h"
 #include "jcl.h"
@@ -27,6 +27,10 @@
 #include "jclprots.h"
 #include "jcl_internal.h"
 #include "util_api.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /* private static native byte[][] getVMArgsImpl(); */
 
@@ -154,5 +158,138 @@ Java_com_ibm_oti_vm_VM_markCurrentThreadAsSystemImpl(JNIEnv *env)
 
 	rc = (jint) omrthread_set_category(vmThread->osThread, J9THREAD_CATEGORY_SYSTEM_THREAD, J9THREAD_TYPE_SET_CREATE);
 
+	return rc;
+}
+
+jint JNICALL
+Java_com_ibm_oti_vm_VM_restoreJVMImpl(JNIEnv *env, jclass jlClass, jstring directoryObject, jboolean shellJob)
+{
+	J9VMThread *currentThread = (J9VMThread*)env;
+	J9JavaVM *vm = currentThread->javaVM;
+	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	char directoryBuf[512] = {0};
+	char *directoryUTF = NULL;
+	j9object_t directory = NULL;
+	IDATA dirFD = 0;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+
+	jint rc = criu_init_opts();
+
+	if (0 != rc) {
+		goto done;
+	}
+
+	vmFuncs->internalEnterVMFromJNI(currentThread);
+
+	directory = J9_JNI_UNWRAP_REFERENCE(directoryObject);
+
+	directoryUTF = vmFuncs->copyStringToUTF8WithMemAlloc(currentThread, directory, J9_STR_NULL_TERMINATE_RESULT | J9_STR_XLAT, "", 0, directoryBuf, 512, NULL);
+	if (NULL == directoryUTF) {
+		vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
+		goto release;
+	}
+
+	//	j9file_open(struct OMRPortLibrary *portLibrary, const char *path, int32_t flags, int32_t mode)
+	dirFD = open(directoryUTF, O_DIRECTORY);
+
+	if (dirFD < 0) {
+		vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		goto free;
+	}
+
+	criu_set_images_dir_fd(dirFD);
+	criu_set_shell_job(shellJob);//?
+	criu_set_log_level(4);
+
+	criu_set_log_file((char *) "restore.log");
+
+	rc = criu_restore_child();
+free:
+	if (directoryUTF != directoryBuf) {
+		j9mem_free_memory(directoryUTF);
+	}
+
+release:
+	vmFuncs->internalExitVMToJNI(currentThread);
+
+done:
+	return rc;
+}
+
+jint JNICALL
+Java_com_ibm_oti_vm_VM_checkpointJVMImpl(JNIEnv *env, jclass jlClass, jstring directoryObject, jboolean leaveRunning, jboolean shellJob)
+{
+	J9VMThread *currentThread = (J9VMThread*)env;
+	J9JavaVM *vm = currentThread->javaVM;
+	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	char directoryBuf[512] = {0};
+	char *directoryUTF = NULL;
+	j9object_t directory = NULL;
+	IDATA dirFD = 0;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+
+	jint rc = criu_init_opts();
+
+	if (0 != rc) {
+		goto done;
+	}
+
+	vmFuncs->internalEnterVMFromJNI(currentThread);
+
+	directory = J9_JNI_UNWRAP_REFERENCE(directoryObject);
+
+	directoryUTF = vmFuncs->copyStringToUTF8WithMemAlloc(currentThread, directory, J9_STR_NULL_TERMINATE_RESULT | J9_STR_XLAT, "", 0, directoryBuf, 512, NULL);
+	if (NULL == directoryUTF) {
+		vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
+		goto release;
+	}
+
+	//j9file_open(struct OMRPortLibrary *portLibrary, const char *path, int32_t flags, int32_t mode)
+	dirFD = open(directoryUTF, O_DIRECTORY);
+
+	if (dirFD < 0) {
+		vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		goto free;
+	}
+
+	criu_set_images_dir_fd(dirFD);
+	criu_set_shell_job(shellJob);//?
+	criu_set_log_level(4);
+
+	criu_set_log_file((char *) "checkpoint.log");
+
+	criu_set_leave_running(leaveRunning);
+	criu_set_ext_unix_sk(TRUE);
+
+	vmFuncs->acquireExclusiveVMAccess(currentThread);
+
+	if (FALSE == vmFuncs->storeRandomSeedOffsets(currentThread)) {
+		if (NULL == currentThread->currentException) {
+			vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		}
+		goto free;
+	}
+
+	rc = criu_dump();
+
+	if (FALSE == vmFuncs->resetRandomSeedOffsets(currentThread)) {
+		if (NULL == currentThread->currentException) {
+			vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
+		}
+		goto free;
+	}
+
+	vmFuncs->releaseExclusiveVMAccess(currentThread);
+free:
+	if (directoryUTF != directoryBuf) {
+		j9mem_free_memory(directoryUTF);
+	}
+
+release:
+	vmFuncs->internalExitVMToJNI(currentThread);
+
+done:
 	return rc;
 }

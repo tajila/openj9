@@ -513,6 +513,14 @@ addToSystemClassLoaderSearch(J9JavaVM * vm, const char* pathSegment, UDATA class
 
 jclass
 getJimModules(J9VMThread *currentThread);
+
+/* ---------------- criuHelpers.c ---------------- */
+BOOLEAN
+resetRandomSeedOffsets(J9VMThread *currentThread);
+
+BOOLEAN
+storeRandomSeedOffsets(J9VMThread *currentThread);
+
 /* ---------------- description.c ---------------- */
 
 /**

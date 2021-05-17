@@ -95,7 +95,7 @@ endif
   UMA_END_DASH_L = -Xlinker --end-group
 </#if>
 
-UMA_EXE_POSTFIX_FLAGS += -lm -lrt -lpthread -lc -ldl -lutil -Wl,-z,origin,-rpath,\$$ORIGIN,--disable-new-dtags,-rpath-link,$(UMA_PATH_TO_ROOT)
+UMA_EXE_POSTFIX_FLAGS += -lm -lrt -lpthread -lc -ldl -lcriu -lutil -Wl,-z,origin,-rpath,\$$ORIGIN,--disable-new-dtags,-rpath-link,$(UMA_PATH_TO_ROOT)
 
 <#if uma.spec.processor.amd64 || uma.spec.processor.riscv64>
   UMA_MASM2GAS_FLAGS += --64
@@ -428,7 +428,7 @@ endif
   </#if>
 
   <#if uma.spec.processor.x86>
-    UMA_DLL_LINK_POSTFLAGS += -lc -lm -ldl
+    UMA_DLL_LINK_POSTFLAGS += -lc -lm -ldl -lcriu
   <#else>
     ifdef UMA_IS_C_PLUS_PLUS
       UMA_DLL_LINK_POSTFLAGS += -lc

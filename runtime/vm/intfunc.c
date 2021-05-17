@@ -396,5 +396,7 @@ J9InternalVMFunctions J9InternalFunctions = {
 	loadFlattenableArrayElement,
 	jniIsInternalClassRef,
 	objectIsBeingWaitedOn,
-	areValueBasedMonitorChecksEnabled
+	areValueBasedMonitorChecksEnabled,
+	storeRandomSeedOffsets,
+	resetRandomSeedOffsets
 };

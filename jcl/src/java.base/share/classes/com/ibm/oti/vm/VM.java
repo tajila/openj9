@@ -31,7 +31,8 @@ import jdk.internal.reflect.CallerSensitive;
 /*[ELSE]*/
 import sun.reflect.CallerSensitive;
 /*[ENDIF]*/
- 
+import java.nio.file.Paths;
+
 /**
  * Represents the running virtual machine. All VM specific API
  * are implemented on this class.
@@ -570,4 +571,21 @@ public static int markCurrentThreadAsSystem()
 
 private static native int markCurrentThreadAsSystemImpl();
 
+public static int createCheckpoint(boolean keepRunning, boolean shellJob) {
+	int res = checkpointJVMImpl(Paths.get("cpData").toAbsolutePath().toString(), keepRunning, shellJob);
+	
+	return res;
 }
+
+public static int restoreJVM(boolean shellJob) {
+	int res = restoreJVMImpl(Paths.get("cpData").toAbsolutePath().toString(), shellJob);
+	
+	return res;
+}
+
+private static native int checkpointJVMImpl(String checkpointdir, boolean keepRunning, boolean shellJob);
+
+private static native int restoreJVMImpl(String checkpointdir, boolean shellJob);
+}
+
+

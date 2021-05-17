@@ -1203,6 +1203,12 @@ Java_com_ibm_lang_management_internal_JvmCpuMonitor_getThreadCategoryImpl(JNIEnv
 jint JNICALL
 Java_com_ibm_oti_vm_VM_markCurrentThreadAsSystemImpl(JNIEnv *env);
 
+jint JNICALL
+Java_com_ibm_oti_vm_VM_checkpointJVMImpl(JNIEnv *env, jclass clazz, jstring dir, jboolean leaveRunning, jboolean shellJob);
+
+jint JNICALL
+Java_com_ibm_oti_vm_VM_restoreJVMImpl(JNIEnv *env, jclass clazz, jstring dir, jboolean shellJob);
+
 #if JAVA_SPEC_VERSION >= 16
 jboolean JNICALL
 Java_java_lang_ref_Reference_refersTo(JNIEnv *env, jobject reference, jobject target);

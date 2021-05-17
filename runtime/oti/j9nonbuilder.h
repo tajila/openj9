@@ -3195,6 +3195,15 @@ typedef struct J9Class {
 	struct J9ClassHotFieldsInfo* hotFieldsInfo;
 } J9Class;
 
+typedef struct CRIUFixupData {
+	struct J9VMThread *currentThread;
+	J9Class *randomSeedClass;
+	J9Class *atomicLongClass;
+	UDATA randomSeedOffset;
+	UDATA atomicLongValueOffset;
+	J9Pool *randomSeedInstances;
+} CRIUFixupData;
+
 /* Interface classes can never be instantiated, so the following fields in J9Class will not be used:
  *
  *	totalInstanceSize -> map to iTable method count
@@ -4779,6 +4788,8 @@ typedef struct J9InternalVMFunctions {
 	UDATA ( *jniIsInternalClassRef)(struct J9JavaVM *vm, jobject ref);
 	BOOLEAN (*objectIsBeingWaitedOn)(struct J9VMThread *currentThread, struct J9VMThread *targetThread, j9object_t obj);
 	BOOLEAN (*areValueBasedMonitorChecksEnabled)(struct J9JavaVM *vm);
+	BOOLEAN (*storeRandomSeedOffsets)(struct J9VMThread *currentThread);
+	BOOLEAN (*resetRandomSeedOffsets)(struct J9VMThread *currentThread);
 } J9InternalVMFunctions;
 
 /* Jazz 99339: define a new structure to replace JavaVM so as to pass J9NativeLibrary to JVMTIEnv  */
@@ -5494,6 +5505,7 @@ typedef struct J9JavaVM {
 	U_32 javaVM31;
 	U_32 javaVM31PadTo8; /* Possible to optimize with future guarded U_32 member in ENV_DATA64. */
 #endif /* defined(J9VM_ZOS_3164_INTEROPERABILITY) */
+	CRIUFixupData *criuFixupData;
 } J9JavaVM;
 
 #define J9VM_PHASE_NOT_STARTUP  2
