@@ -2211,41 +2211,43 @@ getJNIMethodID(J9VMThread *currentThread, J9Method *method)
 	J9JavaVM * vm = currentThread->javaVM;
 	J9JNIMethodID * id;
 	J9Class * declaringClass = J9_CLASS_FROM_METHOD(method);
-	UDATA methodIndex = getMethodIndex(method);
+	UDATA methodIndex = getMethodIndexUnchecked(method);
 	void ** jniIDs;
 
 	/* If the table exists already, check it without mutex */
 
-	jniIDs = declaringClass->jniIDs;
-	if (jniIDs != NULL) {
-		id = (J9JNIMethodID*)(jniIDs[methodIndex]);
-		if (id != NULL) {
-			return id;
-		}
-	}
-
-#ifdef J9VM_THR_PREEMPTIVE
-	omrthread_monitor_enter(vm->jniFrameMutex);
-#endif
-
-	jniIDs = ensureJNIIDTable(currentThread, declaringClass);
-	if (jniIDs == NULL) {
-		id = NULL;
-	} else {
-		id = (J9JNIMethodID*)(jniIDs[methodIndex]);
-		if (id == NULL) {
-			id = (J9JNIMethodID*)pool_newElement(declaringClass->classLoader->jniIDs);
+	if (UDATA_MAX != methodIndex) {
+		jniIDs = declaringClass->jniIDs;
+		if (jniIDs != NULL) {
+			id = (J9JNIMethodID*)(jniIDs[methodIndex]);
 			if (id != NULL) {
-				initializeMethodID(currentThread, id, method);
-				issueWriteBarrier();
-				jniIDs[methodIndex] = id;
+				return id;
 			}
 		}
-	}
 
 #ifdef J9VM_THR_PREEMPTIVE
-	omrthread_monitor_exit(vm->jniFrameMutex);
+		omrthread_monitor_enter(vm->jniFrameMutex);
 #endif
+
+		jniIDs = ensureJNIIDTable(currentThread, declaringClass);
+		if (jniIDs == NULL) {
+			id = NULL;
+		} else {
+			id = (J9JNIMethodID*)(jniIDs[methodIndex]);
+			if (id == NULL) {
+				id = (J9JNIMethodID*)pool_newElement(declaringClass->classLoader->jniIDs);
+				if (id != NULL) {
+					initializeMethodID(currentThread, id, method);
+					issueWriteBarrier();
+					jniIDs[methodIndex] = id;
+				}
+			}
+		}
+
+#ifdef J9VM_THR_PREEMPTIVE
+		omrthread_monitor_exit(vm->jniFrameMutex);
+#endif
+	}
 
 	return id;
 }

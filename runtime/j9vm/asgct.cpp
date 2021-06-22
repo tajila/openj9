@@ -69,16 +69,20 @@ asyncFrameIterator(J9VMThread * currentThread, J9StackWalkState * walkState)
 	ASGCT_CallFrame *frame = (ASGCT_CallFrame*)walkState->userData1;
 	J9Method *method = walkState->method;
 	J9JNIMethodID *methodID = currentThread->javaVM->internalVMFunctions->getJNIMethodID(currentThread, method);
-	Assert_SC_notNull(methodID);
-	frame->method_id = (jmethodID)methodID;
-	J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
-	if (J9_ARE_ANY_BITS_SET(romMethod->modifiers, J9AccNative)) {
-		frame->lineno = AGCT_LINE_NUMBER_NATIVE_METHOD;
+	if (NULL != methodID) {
+		frame->method_id = (jmethodID)methodID;
+		J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
+		if (J9_ARE_ANY_BITS_SET(romMethod->modifiers, J9AccNative)) {
+			frame->lineno = AGCT_LINE_NUMBER_NATIVE_METHOD;
+		} else {
+			frame->lineno = (jint)walkState->bytecodePCOffset;
+		}
+		walkState->userData1 = (void*)(frame + 1);
+
+		return J9_STACKWALK_KEEP_ITERATING;
 	} else {
-		frame->lineno = (jint)walkState->bytecodePCOffset;
+		return J9_STACKWALK_STOP_ITERATING;
 	}
-	walkState->userData1 = (void*)(frame + 1);
-	return J9_STACKWALK_KEEP_ITERATING;
 }
 
 static UDATA
@@ -100,7 +104,7 @@ protectedASGCT(J9PortLibrary *portLib, void *arg)
 {
 	ASGCT_parms *parms = (ASGCT_parms*)arg;
 	J9VMThread *currentThread = BFUjavaVM->internalVMFunctions->currentVMThread(BFUjavaVM);
-	if (NULL != currentThread) {
+	if (NULL != currentThread && J9_ARE_ALL_BITS_SET(currentThread->publicFlags, J9_PUBLIC_FLAGS_VM_ACCESS)) {
 		parms->currentThread = currentThread;
 		parms->num_frames = ticks_not_walkable_Java;
 		J9JITConfig *jitConfig = BFUjavaVM->jitConfig;
@@ -152,7 +156,7 @@ void AsyncGetCallTrace(ASGCT_CallTrace *trace, jint depth, void *ucontext)
 		j9sig_protect(
 				protectedASGCT, (void*)&parms, 
 				emptySignalHandler, NULL,
-				J9PORT_SIG_FLAG_SIGALLSYNC | J9PORT_SIG_FLAG_MAY_RETURN, 
+				J9PORT_SIG_FLAG_SIGALLSYNC | J9PORT_SIG_FLAG_MAY_RETURN | OMRPORT_SIG_FLAG_SIGFPE_DIV_BY_ZERO | OMRPORT_SIG_FLAG_SIGFPE_INT_DIV_BY_ZERO | OMRPORT_SIG_FLAG_SIGFPE_INT_OVERFLOW,
 				&result);
 		num_frames = parms.num_frames;
 		currentThread = parms.currentThread;
