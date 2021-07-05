@@ -52,7 +52,7 @@ $(JIT_PRODUCT_SONAME): $(JIT_PRODUCT_OBJECTS) | jit_createdirs
 ifeq ($(BUILD_CONFIG),prod)
 ifneq ($(OBJCOPY),)
 	$(OBJCOPY) --only-keep-debug $@ $(JIT_PRODUCT_DEBUGINFO)
-	$(OBJCOPY) --strip-debug $@
+	$(OBJCOPY) $@
 	$(OBJCOPY) --add-gnu-debuglink=$(JIT_PRODUCT_DEBUGINFO) $@
 else ifneq ($(DSYMUTIL),)
 	$(DSYMUTIL) -o $(JIT_PRODUCT_DEBUGINFO) $@

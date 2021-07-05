@@ -180,6 +180,8 @@ fieldContainsRuntimeAnnotation(J9VMThread *currentThread, J9Class *clazz, UDATA 
 	name = J9ROMNAMEANDSIGNATURE_NAME(nameAndSig);
 	signature = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
 
+	Trc_Util_annhelp_SearchForFieldAnnotation(J9UTF8_DATA(annotationName), cpIndex, clazz, romFieldShape, (UDATA) annotationFound);
+
 	if (NULL != declaredClass) {
 		romFieldShape = currentThread->javaVM->internalVMFunctions->findFieldExt(currentThread,
 									declaredClass,
