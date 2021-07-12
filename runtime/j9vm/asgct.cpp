@@ -68,8 +68,20 @@ asyncFrameIterator(J9VMThread * currentThread, J9StackWalkState * walkState)
 {
 	ASGCT_CallFrame *frame = (ASGCT_CallFrame*)walkState->userData1;
 	J9Method *method = walkState->method;
-	J9JNIMethodID *methodID = currentThread->javaVM->internalVMFunctions->getJNIMethodID(currentThread, method);
-	Assert_SC_notNull(methodID);
+	J9JavaVM * vm = currentThread->javaVM;
+	J9Class * declaringClass = J9_CLASS_FROM_METHOD(method);
+	UDATA methodIndex = getMethodIndexUnchecked(method);
+	if (UDATA_MAX == methodIndex) {
+		*(UDATA*)UDATA_MAX = UDATA_MAX;		
+	}
+	void ** jniIDs = declaringClass->jniIDs;
+	if (NULL == jniIDs) {
+		*(UDATA*)UDATA_MAX = UDATA_MAX;		
+	}
+	J9JNIMethodID * methodID = (J9JNIMethodID*)(jniIDs[methodIndex]);
+	if (NULL == methodID) {
+		*(UDATA*)UDATA_MAX = UDATA_MAX;
+	}
 	frame->method_id = (jmethodID)methodID;
 	J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
 	if (J9_ARE_ANY_BITS_SET(romMethod->modifiers, J9AccNative)) {
@@ -93,6 +105,10 @@ typedef struct {
 	void *ucontext;
 	J9VMThread *currentThread;
 	jint num_frames;
+	U_8 *pc;
+	UDATA *sp;
+	UDATA *arg0EA;
+	J9Method *literals;
 } ASGCT_parms;
 
 static UDATA
@@ -101,9 +117,16 @@ protectedASGCT(J9PortLibrary *portLib, void *arg)
 	ASGCT_parms *parms = (ASGCT_parms*)arg;
 	J9VMThread *currentThread = BFUjavaVM->internalVMFunctions->currentVMThread(BFUjavaVM);
 	if (NULL != currentThread) {
+		PORT_ACCESS_FROM_VMC(currentThread);
+		bool jit = false;
 		parms->currentThread = currentThread;
+		parms->pc = currentThread->pc;
+		parms->sp = currentThread->sp;
+		parms->arg0EA = currentThread->arg0EA;
+		parms->literals = currentThread->literals;
 		parms->num_frames = ticks_not_walkable_Java;
 		J9JITConfig *jitConfig = BFUjavaVM->jitConfig;
+		J9StackWalkState walkState = {0};
 		if (NULL != jitConfig) {
 			void *ucontext = parms->ucontext;
 			if (NULL != ucontext) {
@@ -112,11 +135,22 @@ protectedASGCT(J9PortLibrary *portLib, void *arg)
 				J9JITExceptionTable *metaData = jitConfig->jitGetExceptionTableFromPC(currentThread, rip);
 				if (NULL != metaData) {
 					greg_t rsp = regs[REG_RSP];
-					jitPushResolveFrame(currentThread, (UDATA*)rsp, (U_8*)rip);
+					J9SFJITResolveFrame resolveFrame;
+					resolveFrame.savedJITException = NULL;
+					resolveFrame.specialFrameFlags = J9_SSF_JIT_RESOLVE;
+					resolveFrame.parmCount = 0;
+					resolveFrame.returnAddress = (U_8*)rip;
+					resolveFrame.taggedRegularReturnSP = (UDATA *) (((U_8 *)rsp) + J9SF_A0_INVISIBLE_TAG);
+
+					currentThread->pc = (U_8 *) J9SF_FRAME_TYPE_JIT_RESOLVE;
+					currentThread->arg0EA = (UDATA *)&(resolveFrame.taggedRegularReturnSP);
+					currentThread->literals = NULL;
+					currentThread->sp = (UDATA *)&resolveFrame;
+//					j9tty_printf(PORTLIB, "\n\n!!! JIT case\n");
+					jit = true;
 				}
 			}
 		}
-		J9StackWalkState walkState;
 		walkState.walkThread = currentThread;
 		walkState.skipCount = 0;
 		walkState.maxFrames = parms->depth;
@@ -125,6 +159,8 @@ protectedASGCT(J9PortLibrary *portLib, void *arg)
 		 * clear it).
 		 */
 		currentThread->jitArtifactSearchCache = (void*)((UDATA)currentThread->jitArtifactSearchCache | J9_STACKWALK_NO_JIT_CACHE);
+		/* Disable trace and assertions */
+		currentThread->privateFlags2 |= J9_PRIVATE_FLAGS2_DISABLE_TRACE;
 		walkState.flags = J9_STACKWALK_INCLUDE_NATIVES | J9_STACKWALK_VISIBLE_ONLY
 			| J9_STACKWALK_RECORD_BYTECODE_PC_OFFSET | J9_STACKWALK_COUNT_SPECIFIED
 			| J9_STACKWALK_ITERATE_FRAMES | J9_STACKWALK_NO_ERROR_REPORT;
@@ -133,6 +169,9 @@ protectedASGCT(J9PortLibrary *portLib, void *arg)
 		UDATA result = BFUjavaVM->walkStackFrames(currentThread, &walkState);
 		if (J9_STACKWALK_RC_NONE == result) {
 			parms->num_frames = (jint)walkState.framesWalked;
+			if (jit) {
+//				j9tty_printf(PORTLIB, "!!! frames = %d\n", parms->num_frames);
+			}
 		}
 	}
 	return 0;
@@ -147,7 +186,7 @@ void AsyncGetCallTrace(ASGCT_CallTrace *trace, jint depth, void *ucontext)
 #if defined(ASGCT_SUPPORTED)
 	if (NULL != BFUjavaVM) {
 		PORT_ACCESS_FROM_JAVAVM(BFUjavaVM);
-		ASGCT_parms parms = { trace, depth, ucontext, currentThread, num_frames };
+		ASGCT_parms parms = { trace, depth, ucontext, currentThread, num_frames, NULL, NULL, NULL, NULL };
 		UDATA result = 0;
 		j9sig_protect(
 				protectedASGCT, (void*)&parms, 
@@ -157,7 +196,13 @@ void AsyncGetCallTrace(ASGCT_CallTrace *trace, jint depth, void *ucontext)
 		num_frames = parms.num_frames;
 		currentThread = parms.currentThread;
 		if (NULL != currentThread) {
-			currentThread->jitArtifactSearchCache = (void*)((UDATA)currentThread->jitArtifactSearchCache & ~(UDATA)J9_STACKWALK_NO_JIT_CACHE);
+			/* Restore normal behaviour on the thread */
+			currentThread->jitArtifactSearchCache = (void*)((UDATA)currentThread->jitArtifactSearchCache & ~J9_STACKWALK_NO_JIT_CACHE);
+			currentThread->privateFlags2 &= ~J9_PRIVATE_FLAGS2_DISABLE_TRACE;
+			currentThread->pc = parms.pc;
+			currentThread->sp = parms.sp;
+			currentThread->arg0EA = parms.arg0EA;
+			currentThread->literals = parms.literals;
 		}
 	}
 #endif /* ASGCT_SUPPORTED */
