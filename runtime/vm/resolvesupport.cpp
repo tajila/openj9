@@ -461,6 +461,11 @@ tryAgain:
 	}
 
 done:
+	if (resolvedClass == NULL) {
+		if (VM_VMHelpers::exceptionPending(vmStruct)) {
+			printf("resolveClassRef exception w/ class = %.*s\n", classNameLength, classNameData);
+		}
+	}
 	Trc_VM_resolveClassRef_Exit(vmStruct, resolvedClass);
 	return resolvedClass; 
 bail:
@@ -1346,6 +1351,7 @@ incompat:
 	Trc_VM_resolveSpecialMethodRef_lookupMethod(vmStruct, method);
 	
 	if (method == NULL) {
+		printf("resolveSpecialMethodRefInto method == NULL\n");
 		goto done;
 	} else {
 		/* JVMS 4.9.2: If resolvedClass is an interface, ensure that it is a DIRECT superinterface
@@ -1363,6 +1369,7 @@ incompat:
 	/* Select the correct method for invocation - ignore visibility in the super send case */
 	method = getMethodForSpecialSend(vmStruct, currentClass, resolvedClass, method, lookupOptions | J9_LOOK_NO_VISIBILITY_CHECK | J9_LOOK_IGNORE_INCOMPATIBLE_METHODS);
 	if (NULL == method) {
+		printf("resolveSpecialMethodRefInto getMethodForSpecialSend == NULL\n");
 		goto done;
 	}
 

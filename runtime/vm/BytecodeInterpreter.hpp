@@ -1967,6 +1967,7 @@ done:
 			rc = GOTO_ASYNC_CHECK;
 		} else if (VM_VMHelpers::exceptionPending(_currentThread)) {
 			rc = GOTO_THROW_CURRENT_EXCEPTION;
+			printf("initialSpecialMethod Exception\n");
 		} else {
 			rc = invokespecialLogic(REGISTER_ARGS, false, split);
 		}
@@ -7036,6 +7037,32 @@ done:
 			 */
 			if (!fromBytecode || ((J9Method *)_vm->initialMethods.initialSpecialMethod != _sendMethod)) {
 				rc = THROW_NPE;
+				J9ROMMethodRef *romMethodRef = (J9ROMMethodRef *)&ramConstantPool->romConstantPool[cpIndex];
+				J9ROMNameAndSignature *nameAndSig = J9ROMFIELDREF_NAMEANDSIGNATURE(romMethodRef);
+				J9UTF8 *nameUTF = J9ROMNAMEANDSIGNATURE_NAME(nameAndSig);
+				U_8 *name = J9UTF8_DATA(nameUTF);
+				UDATA nameLength = J9UTF8_LENGTH(nameUTF);
+				J9UTF8 *sigUTF = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
+				U_8 *sig = J9UTF8_DATA(sigUTF);
+				UDATA sigLength = J9UTF8_LENGTH(sigUTF);
+
+				J9ROMClassRef *romClassRef = (J9ROMClassRef *)&ramConstantPool->romConstantPool[romMethodRef->classRefCPIndex];
+				J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
+				U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
+				U_8 *className = J9UTF8_DATA(classNameWrapper);
+				printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
+					(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
+				
+				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
+				printf("\tMethod Arg Count: %d\n\tSP pointer: %p\n\tStack data:\n", (int)argCount, _sp);
+				for (int i = 0; i <= argCount; i++) {
+					printf("\t\tsp[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
+				}
+
+				if (name[0] == '<') {
+					updateVMStruct(REGISTER_ARGS);
+					abort();
+				}
 			}
 		} else {
 			if (fromBytecode) {
@@ -7098,6 +7125,21 @@ done:
 		profileCallingMethod(REGISTER_ARGS);
 		J9RAMStaticMethodRef *ramMethodRef = ((J9RAMStaticMethodRef*)J9_CP_FROM_METHOD(_literals)) + index;
 		_sendMethod = ramMethodRef->method;
+		if (_sendMethod != (J9Method*)_vm->initialMethods.initialStaticMethod) {
+			// check if MethodHandleImpl.makeIntrinsic, print args on sp
+			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
+			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
+			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
+				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
+				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
+				printf("invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n", (int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
+					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
+				for (int i = 0; i < argCount; i++) {
+					printf("\t[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
+				}
+			}
+		}
 		return GOTO_RUN_METHOD;
 	}
 
