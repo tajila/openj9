@@ -1986,7 +1986,7 @@ newString(JNIEnv *env, const jchar* uchars, jsize len)
 	if (len < 0) {
 		setCurrentExceptionUTF(vmThread, J9VMCONSTANTPOOL_JAVALANGNEGATIVEARRAYSIZEEXCEPTION, NULL);
 	} else {
-		j9object_t stringObject = vmThread->javaVM->memoryManagerFunctions->j9gc_createJavaLangString(vmThread, (U_8 *) uchars, ((UDATA)len) * 2, J9_STR_UNICODE);
+		j9object_t stringObject = vmThread->javaVM->memoryManagerFunctions->j9gc_createJavaLangString(vmThread, (U_8 *) uchars, ((UDATA)len) * 2, (UDATA)0);
 
 		if (stringObject != NULL) {
 			result = (jstring)VM_VMHelpers::createLocalRef(env, stringObject);
