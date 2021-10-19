@@ -370,7 +370,7 @@ J9MemorySegment * allocateFixedMemorySegmentInList(J9JavaVM *javaVM, J9MemorySeg
  */
 J9MemorySegment * allocateVirtualMemorySegmentInList(J9JavaVM *javaVM, J9MemorySegmentList *segmentList, UDATA size, UDATA type, J9PortVmemParams *vmemParams)
 {
-	return allocateVirtualMemorySegmentInListInternal(javaVM, segmentList, size, type, vmemParams, OMRMEM_CATEGORY_UNKNOWN);
+	return allocateVirtualMemorySegmentInListInternal(javaVM, segmentList, size, type, vmemParams, OMRMEM_CATEGORY_VM);
 }
 
 static J9MemorySegment * allocateVirtualMemorySegmentInListInternal(J9JavaVM *javaVM, J9MemorySegmentList *segmentList, UDATA size, UDATA type, J9PortVmemParams *vmemParams, U_32 memoryCategory)

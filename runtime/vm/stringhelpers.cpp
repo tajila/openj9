@@ -290,7 +290,7 @@ copyStringToUTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA stri
 	PORT_ACCESS_FROM_VMC(vmThread);
 
 	if (length > bufferLength) {
-		result = (U_8*)j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
+		result = (U_8*)j9mem_allocate_memory(length, J9MEM_CATEGORY_CUSTOM);
 	} else {
 		result = (U_8*)buffer;
 	}
@@ -307,6 +307,10 @@ copyStringToUTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA stri
 		if (NULL != utf8Length) {
 			*utf8Length = computedUtf8Length + prependStrLength;
 		}
+	}
+
+	if (length > bufferLength) {
+		printf("alloc %lu bytes addr=%p string=%s\n", length, (void*)result, (char*)result);
 	}
 
 	return (char*)result;
@@ -329,7 +333,7 @@ copyStringToJ9UTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA st
 	PORT_ACCESS_FROM_VMC(vmThread);
 
 	if (length > bufferLength) {
-		result = (U_8*)j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
+		result = (U_8*)j9mem_allocate_memory(length, J9MEM_CATEGORY_CUSTOM);
 	} else {
 		result = (U_8*)buffer;
 	}
