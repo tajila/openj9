@@ -1943,6 +1943,21 @@ done:
 			rc = GOTO_ASYNC_CHECK;
 		} else if (VM_VMHelpers::exceptionPending(_currentThread)) {
 			rc = GOTO_THROW_CURRENT_EXCEPTION;
+		} else {
+			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
+			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
+			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
+				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
+				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
+				printf("invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n", (int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
+					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
+				for (int i = 0; i < argCount; i++) {
+					printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+				}
+				fflush(stdout);
+				_currentThread->makeIntrinsicMethod = _sendMethod;
+			}
 		}
 		return rc;
 	}
@@ -6419,6 +6434,11 @@ done:
 		if (_sp[slots] & J9_STACK_FLAGS_J2_IFRAME) {
 			rc = j2iReturn(REGISTER_ARGS);
 		} else {
+			if (_literals == _currentThread->makeIntrinsicMethod) {
+				_currentThread->makeIntrinsicMethod = NULL;
+				printf("makeIntrinsic method return\n");
+				fflush(stdout);
+			}
 			J9SFStackFrame *frame = (J9SFStackFrame*)(_sp + slots);
 			UDATA returnValue0 = 0;
 			UDATA returnValue1 = 0;
@@ -6438,6 +6458,7 @@ done:
 					_sp[1] = returnValue1;
 				}
 			}
+			
 		}
 #if defined(DO_HOOKS)
 done:
@@ -7054,10 +7075,11 @@ done:
 					(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
 				
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
-				printf("\tMethod Arg Count: %d\n\tSP pointer: %p\n\tStack data:\n", (int)argCount, _sp);
+				printf("\tMethod Arg Count: %d\n\tSP pointer: %p, Arg0EA: %p\n\tStack data:\n", (int)argCount, _sp, _arg0EA);
 				for (int i = 0; i <= argCount; i++) {
 					printf("\t\tsp[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
 				}
+				fflush(stdout);
 
 				if (name[0] == '<') {
 					updateVMStruct(REGISTER_ARGS);
@@ -7136,8 +7158,10 @@ done:
 				printf("invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n", (int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
 					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
 				for (int i = 0; i < argCount; i++) {
-					printf("\t[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
+					printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
 				}
+				fflush(stdout);
+				_currentThread->makeIntrinsicMethod = _sendMethod;
 			}
 		}
 		return GOTO_RUN_METHOD;
@@ -10019,6 +10043,15 @@ dlt:
 	PERFORM_ACTION(performDLT(REGISTER_ARGS));
 
 runMethod: {
+	if (NULL != _currentThread->makeIntrinsicMethod) {
+		UDATA *sp2 = _sp;
+		printf("calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
+		while (sp2 <= _arg0EA) {
+			printf("\tsp[%p] : %p \t%p\n", sp2, *((j9object_t*)sp2), *((j9object_t*)sp2+1));
+			sp2 += 2;
+		}
+		fflush(stdout);
+	}
 #if defined(USE_COMPUTED_GOTO)
 	EXECUTE_SEND_TARGET(J9_BCLOOP_DECODE_SEND_TARGET(_sendMethod->methodRunAddress));
 #else
