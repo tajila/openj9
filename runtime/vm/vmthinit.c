@@ -98,6 +98,9 @@ UDATA initializeVMThreading(J9JavaVM *vm)
 void freeVMThread(J9JavaVM *vm, J9VMThread *vmThread)
 {
 	PORT_ACCESS_FROM_PORT(vm->portLibrary);
+	if (vmThread->debugbuffer != NULL) {
+		j9mem_free_memory(vmThread->debugbuffer);
+	}
 #if defined(J9VM_PORT_RUNTIME_INSTRUMENTATION)
 	if (NULL != vmThread->riParameters) {
 		/* Free J9RIParameters. */

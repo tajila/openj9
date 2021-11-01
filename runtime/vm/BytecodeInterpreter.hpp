@@ -1947,16 +1947,22 @@ done:
 			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
 			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
 			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
 				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
-				printf("invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n", (int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
-					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
-				for (int i = 0; i < argCount; i++) {
-					printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
-				}
-				fflush(stdout);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
+				if (_currentThread->debugbuffer == NULL) {
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 32768, OMRMEM_CATEGORY_VM);
+				}
+				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
+					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
+					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
+					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
+
+				for (int i = 0; i < argCount; i++) {
+					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+				}
 			}
 		}
 		return rc;
@@ -6436,8 +6442,7 @@ done:
 		} else {
 			if (_literals == _currentThread->makeIntrinsicMethod) {
 				_currentThread->makeIntrinsicMethod = NULL;
-				printf("makeIntrinsic method return\n");
-				fflush(stdout);
+				_currentThread->debugLength = 0;
 			}
 			J9SFStackFrame *frame = (J9SFStackFrame*)(_sp + slots);
 			UDATA returnValue0 = 0;
@@ -7071,6 +7076,7 @@ done:
 				J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
 				U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
 				U_8 *className = J9UTF8_DATA(classNameWrapper);
+				printf("\n%s\n", _currentThread->debugbuffer);
 				printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
 					(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
 				
@@ -7152,16 +7158,22 @@ done:
 			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
 			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
 			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
-				printf("invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n", (int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
-					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
-				for (int i = 0; i < argCount; i++) {
-					printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
-				}
-				fflush(stdout);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
+				if (_currentThread->debugbuffer == NULL) {
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 32768, OMRMEM_CATEGORY_VM);
+				}
+				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
+					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
+					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
+					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
+
+				for (int i = 0; i < argCount; i++) {
+					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+				};
 			}
 		}
 		return GOTO_RUN_METHOD;
@@ -10045,12 +10057,12 @@ dlt:
 runMethod: {
 	if (NULL != _currentThread->makeIntrinsicMethod) {
 		UDATA *sp2 = _sp;
-		printf("calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
+		_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, 
+			"calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
 		while (sp2 <= _arg0EA) {
-			printf("\tsp[%p] : %p \t%p\n", sp2, *((j9object_t*)sp2), *((j9object_t*)sp2+1));
+			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\tsp[%p] : %p \t%p\n", sp2, *((j9object_t*)sp2), *((j9object_t*)sp2+1));
 			sp2 += 2;
 		}
-		fflush(stdout);
 	}
 #if defined(USE_COMPUTED_GOTO)
 	EXECUTE_SEND_TARGET(J9_BCLOOP_DECODE_SEND_TARGET(_sendMethod->methodRunAddress));
