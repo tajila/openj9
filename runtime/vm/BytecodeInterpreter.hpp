@@ -1954,14 +1954,15 @@ done:
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
 					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 32768, OMRMEM_CATEGORY_VM);
+					printf("Allocate 32768 chars\n");
 				}
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
+				_currentThread->debugLength += printf(
 					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
 					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
 					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
 
 				for (int i = 0; i < argCount; i++) {
-					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+					_currentThread->debugLength += printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
 				}
 			}
 		}
@@ -6442,6 +6443,7 @@ done:
 		} else {
 			if (_literals == _currentThread->makeIntrinsicMethod) {
 				_currentThread->makeIntrinsicMethod = NULL;
+				printf("Total length = %d\n", (int)_currentThread->debugLength);
 				_currentThread->debugLength = 0;
 			}
 			J9SFStackFrame *frame = (J9SFStackFrame*)(_sp + slots);
@@ -7076,7 +7078,7 @@ done:
 				J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
 				U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
 				U_8 *className = J9UTF8_DATA(classNameWrapper);
-				printf("\n%s\n", _currentThread->debugbuffer);
+				//printf("\n%s\n", _currentThread->debugbuffer);
 				printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
 					(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
 				
@@ -7165,14 +7167,15 @@ done:
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
 					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 32768, OMRMEM_CATEGORY_VM);
+					printf("Allocate 32768 chars\n");
 				}
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
+				_currentThread->debugLength += printf(
 					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
 					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
 					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
 
 				for (int i = 0; i < argCount; i++) {
-					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+					_currentThread->debugLength += printf("\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
 				};
 			}
 		}
@@ -10057,10 +10060,10 @@ dlt:
 runMethod: {
 	if (NULL != _currentThread->makeIntrinsicMethod) {
 		UDATA *sp2 = _sp;
-		_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, 
+		_currentThread->debugLength += printf(
 			"calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
 		while (sp2 <= _arg0EA) {
-			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\tsp[%p] : %p \t%p\n", sp2, *((j9object_t*)sp2), *((j9object_t*)sp2+1));
+			_currentThread->debugLength += printf("\tsp[%p] : %p \t%p\n", sp2, *((j9object_t*)sp2), *((j9object_t*)sp2+1));
 			sp2 += 2;
 		}
 	}
