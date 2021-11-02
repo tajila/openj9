@@ -5048,7 +5048,8 @@ typedef struct J9VMThread {
 	UDATA ffiArgCount;
 #endif /* JAVA_SPEC_VERSION >= 16 */
 	void *makeIntrinsicMethod;
-	char* debugbuffer;
+	UDATA *receiverSlot;
+	char *debugbuffer;
 	U_32 debugLength;
 } J9VMThread;
 
