@@ -1562,19 +1562,19 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		if (NULL != _currentThread->makeIntrinsicMethod) {
-			if (_sendMethod == _currentThread->makeIntrinsicMethod) {
+			if (_sendMethod == _currentThread->makeIntrinsicMethod && receiverSlot != NULL) {
 				_currentThread->receiverSlot = _sp - 1;
 			}
 			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-				"calling method %p, Target = %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sendMethod->methodRunAddress, _sp, _arg0EA);
-			for (int i = 0; i < romMethod->argCount; i++) {
+				"calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
+/*			for (int i = 0; i < romMethod->argCount; i++) {
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
 					"\t[%p] : %p \t%p\n", _arg0EA - i, *((j9object_t*)(_arg0EA - i)), *((j9object_t*)(_arg0EA - i - 1)));
 				i++;
 			}
-			if (_currentThread->receiverSlot != NULL) {
+*/			if (_currentThread->receiverSlot != NULL) {
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-					"makeIntrinsic stack (%p):\t[0]: %p\t[1]: %p\t[2]: %p\n", _currentThread->receiverSlot,
+					"\tmakeIntrinsic stack (%p):\t[0]: %p\t[1]: %p\t[2]: %p\n", _currentThread->receiverSlot,
 					*((j9object_t*)_currentThread->receiverSlot),
 					*((j9object_t*)_currentThread->receiverSlot-1),
 					*((j9object_t*)_currentThread->receiverSlot-2));
@@ -1972,7 +1972,7 @@ done:
 				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 524288, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 1048576, OMRMEM_CATEGORY_VM);
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
 					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
@@ -6461,6 +6461,7 @@ done:
 		} else {
 			if (_literals == _currentThread->makeIntrinsicMethod) {
 				_currentThread->makeIntrinsicMethod = NULL;
+				_currentThread->receiverSlot = NULL;
 				//printf("Total length = %d\n", (int)_currentThread->debugLength);
 				_currentThread->debugLength = 0;
 			}
@@ -7088,28 +7089,28 @@ done:
 				J9UTF8 *nameUTF = J9ROMNAMEANDSIGNATURE_NAME(nameAndSig);
 				U_8 *name = J9UTF8_DATA(nameUTF);
 				UDATA nameLength = J9UTF8_LENGTH(nameUTF);
-				J9UTF8 *sigUTF = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
-				U_8 *sig = J9UTF8_DATA(sigUTF);
-				UDATA sigLength = J9UTF8_LENGTH(sigUTF);
-
-				J9ROMClassRef *romClassRef = (J9ROMClassRef *)&ramConstantPool->romConstantPool[romMethodRef->classRefCPIndex];
-				J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
-				U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
-				U_8 *className = J9UTF8_DATA(classNameWrapper);
-				if (_currentThread->debugbuffer != NULL) {
-					printf("\n%s\n", _currentThread->debugbuffer);
-				}
-				printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
-					(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
-				
-				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
-				printf("\tMethod Arg Count: %d\n\tSP pointer: %p, Arg0EA: %p\n\tStack data:\n", (int)argCount, _sp, _arg0EA);
-				for (int i = 0; i <= argCount; i++) {
-					printf("\t\tsp[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
-				}
-				fflush(stdout);
 
 				if (name[0] == '<') {
+					J9UTF8 *sigUTF = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
+					U_8 *sig = J9UTF8_DATA(sigUTF);
+					UDATA sigLength = J9UTF8_LENGTH(sigUTF);
+
+					J9ROMClassRef *romClassRef = (J9ROMClassRef *)&ramConstantPool->romConstantPool[romMethodRef->classRefCPIndex];
+					J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
+					U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
+					U_8 *className = J9UTF8_DATA(classNameWrapper);
+					if (_currentThread->debugbuffer != NULL) {
+						printf("\n%s\n", _currentThread->debugbuffer);
+					}
+					printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
+						(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
+					
+					U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
+					printf("\tMethod Arg Count: %d\n\tSP pointer: %p, Arg0EA: %p\n\tStack data:\n", (int)argCount, _sp, _arg0EA);
+					for (int i = 0; i <= argCount; i++) {
+						printf("\t\tsp[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
+					}
+					fflush(stdout);
 					updateVMStruct(REGISTER_ARGS);
 					abort();
 				}
@@ -7186,7 +7187,7 @@ done:
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 524288, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 1048576, OMRMEM_CATEGORY_VM);
 					//printf("Allocate 131072 chars\n");
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
