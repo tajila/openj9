@@ -1562,7 +1562,7 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		if (NULL != _currentThread->makeIntrinsicMethod) {
-			if (_sendMethod == _currentThread->makeIntrinsicMethod && receiverSlot != NULL) {
+			if (_sendMethod == _currentThread->makeIntrinsicMethod && _currentThread->receiverSlot != NULL) {
 				_currentThread->receiverSlot = _sp - 1;
 			}
 			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
