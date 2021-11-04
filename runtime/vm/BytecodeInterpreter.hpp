@@ -1978,7 +1978,9 @@ done:
 		} else {
 			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
 			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
-			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")
+			&& J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), LITERAL_STRLEN("(Ljava/lang/invoke/MethodType"), "(Ljava/lang/invoke/MethodType")
+			) {
 				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
@@ -7193,7 +7195,9 @@ done:
 			// check if MethodHandleImpl.makeIntrinsic, print args on sp
 			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
 			J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
-			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")) {
+			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")
+			&& J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), LITERAL_STRLEN("(Ljava/lang/invoke/MethodType"), "(Ljava/lang/invoke/MethodType")
+			) {
 				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
