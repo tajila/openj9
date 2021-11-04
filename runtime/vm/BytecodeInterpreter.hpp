@@ -1972,7 +1972,7 @@ done:
 				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 1048576, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 2097152, OMRMEM_CATEGORY_VM);
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
 					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
@@ -7187,7 +7187,7 @@ done:
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 1048576, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 2097152, OMRMEM_CATEGORY_VM);
 					//printf("Allocate 131072 chars\n");
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
