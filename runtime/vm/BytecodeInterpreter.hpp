@@ -1562,11 +1562,24 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		if (NULL != _currentThread->makeIntrinsicMethod) {
-			if (_sendMethod == _currentThread->makeIntrinsicMethod && _currentThread->receiverSlot != NULL) {
+			if (_sendMethod == _currentThread->makeIntrinsicMethod && _currentThread->receiverSlot == NULL) {
 				_currentThread->receiverSlot = _sp - 1;
 			}
+			if (_currentThread->debugLength > 1000) {
+				if (*(_currentThread->receiverSlot) == *(_currentThread->receiverSlot-1)) {
+					if (_currentThread->debugLength > 100000) {
+						_currentThread->debugLength = 1000;
+						_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\n\n Restart buffer *****\n\n");
+					}
+				} else {
+					printf("\n%s\nStack Corruption Detected before calling method %p, SP = %p, Arg0EA = %p", _currentThread->debugbuffer, _sendMethod, _sp, _arg0EA);
+					fflush(stdout);
+					updateVMStruct(REGISTER_ARGS);
+					abort();
+				}
+			}
 			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-				"calling method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
+				"method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
 /*			for (int i = 0; i < romMethod->argCount; i++) {
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
 					"\t[%p] : %p \t%p\n", _arg0EA - i, *((j9object_t*)(_arg0EA - i)), *((j9object_t*)(_arg0EA - i - 1)));
@@ -1972,7 +1985,7 @@ done:
 				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 2097152, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 105000, OMRMEM_CATEGORY_VM);
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
 					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
@@ -7187,7 +7200,7 @@ done:
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
 				_currentThread->makeIntrinsicMethod = _sendMethod;
 				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 2097152, OMRMEM_CATEGORY_VM);
+					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 105000, OMRMEM_CATEGORY_VM);
 					//printf("Allocate 131072 chars\n");
 				}
 				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
