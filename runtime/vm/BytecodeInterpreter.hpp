@@ -1526,6 +1526,7 @@ obj:
 		bool methodIsStatic = (VM_YES == isStatic) || ((VM_MAYBE == isStatic) && (modifiers & J9AccStatic));
 		bool methodIsObjectConstructor = (VM_YES == isObjectConstructor) || ((VM_MAYBE == isObjectConstructor) && J9ROMMETHOD_IS_OBJECT_CONSTRUCTOR(romMethod));
 		bool tempsNeedZeroing = (VM_YES == zeroing) || ((VM_MAYBE == zeroing) && (_vm->extendedRuntimeFlags & J9_EXTENDED_RUNTIME_DEBUG_MODE));
+		bool justSetReceiver = false;
 		if (methodIsSynchronized) {
 			if (methodIsStatic) {
 				syncObject = J9VM_J9CLASS_TO_HEAPCLASS(J9_CLASS_FROM_METHOD(_sendMethod));
@@ -1562,37 +1563,48 @@ obj:
 		_literals = _sendMethod;
 		_pc = _sendMethod->bytecodes;
 		if (NULL != _currentThread->makeIntrinsicMethod) {
-			if (_sendMethod == _currentThread->makeIntrinsicMethod && _currentThread->receiverSlot == NULL) {
+			if ((_sendMethod == _currentThread->makeIntrinsicMethod)) {
 				_currentThread->receiverSlot = _sp - 1;
+				justSetReceiver = true;
+			} else if ((NULL != _currentThread->makeIntrinsicMethod) && (_currentThread->receiverSlot == NULL)) {
+				Trc_VM_debug12(_currentThread);
+				updateVMStruct(REGISTER_ARGS);
+				//abort();
 			}
-			if (_currentThread->debugLength > 1000) {
-				if (*(_currentThread->receiverSlot) == *(_currentThread->receiverSlot-1)) {
-					if (_currentThread->debugLength > 100000) {
-						_currentThread->debugLength = 1000;
-						_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\n\n Restart buffer *****\n\n");
+
+			if ( (_currentThread->receiverSlot != NULL) && (*((j9object_t *)_currentThread->receiverSlot) == NULL) ) {
+				if (!justSetReceiver) {
+						Trc_VM_debug8(_currentThread, _currentThread->receiverSlot, _literals, _sp);
+						updateVMStruct(REGISTER_ARGS);
+
+						//abort();
+					} else {
+						Trc_VM_debug13(_currentThread);
 					}
-				} else {
-					printf("\n%s\nStack Corruption Detected before calling method %p, SP = %p, Arg0EA = %p", _currentThread->debugbuffer, _sendMethod, _sp, _arg0EA);
-					fflush(stdout);
-					updateVMStruct(REGISTER_ARGS);
-					abort();
 				}
-			}
-			_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-				"method %p, SP = %p, Arg0EA = %p\n", _sendMethod, _sp, _arg0EA);
-/*			for (int i = 0; i < romMethod->argCount; i++) {
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-					"\t[%p] : %p \t%p\n", _arg0EA - i, *((j9object_t*)(_arg0EA - i)), *((j9object_t*)(_arg0EA - i - 1)));
-				i++;
-			}
-*/			if (_currentThread->receiverSlot != NULL) {
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-					"\tmakeIntrinsic stack (%p):\t[0]: %p\t[1]: %p\t[2]: %p\n", _currentThread->receiverSlot,
+
+			Trc_VM_debug9(_currentThread, _sendMethod, _sp, _arg0EA);
+//			for (int i = 0; i < romMethod->argCount; i++) {
+//				Trc_VM_debug10(_currentThread, _arg0EA - i, *((j9object_t*)(_arg0EA - i)), *((j9object_t*)(_arg0EA - i - 1)));
+//				i++;
+//			}
+			if ((_currentThread->receiverSlot != NULL)) {
+				Trc_VM_debug11(_currentThread, _currentThread->receiverSlot,
 					*((j9object_t*)_currentThread->receiverSlot),
 					*((j9object_t*)_currentThread->receiverSlot-1),
 					*((j9object_t*)_currentThread->receiverSlot-2));
 			}
+
+
+				Trc_VM_debug14(_currentThread, _arg0EA,
+					*((j9object_t*)_arg0EA),
+					*((j9object_t*)_arg0EA-1),
+					*((j9object_t*)_arg0EA-2));
+
+				updateVMStruct(REGISTER_ARGS);
+
 		}
+
 		UDATA volatile stackOverflowMark = (UDATA)_currentThread->stackOverflowMark;
 		if ((UDATA)_sp >= stackOverflowMark) {
 			if (methodIsSynchronized) {
@@ -1949,6 +1961,19 @@ done:
 			result = VM_AtomicSupport::lockCompareExchange((UDATA*)&_sendMethod->extra, preCount, postCount);
 			/* If count updates, run method interpreted, else loop around and try again */
 		} while (result != preCount);
+
+		if (runMethodCompiled) {
+			J9ROMMethod * romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_sendMethod);
+						J9UTF8 * nameUTF = J9ROMMETHOD_NAME(romMethod);
+
+						J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
+						if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")
+						&& (J9UTF8_LENGTH(sigUTF) == 136)) {
+							//_currentThread->makeIntrinsicMethod = _sendMethod;
+							Trc_VM_debug16(_currentThread, _sendMethod);
+						}
+		}
+
 		return runMethodCompiled;
 	}
 
@@ -1981,20 +2006,15 @@ done:
 			J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
 			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")
 			&& (J9UTF8_LENGTH(sigUTF) == 136)) {
-				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				U_16 argCount = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod);
 				_currentThread->makeIntrinsicMethod = _sendMethod;
-				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 105000, OMRMEM_CATEGORY_VM);
-				}
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
+				Trc_VM_debug1(_currentThread,
 					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
 					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
 
 				for (int i = 0; i < argCount; i++) {
-					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+					Trc_VM_debug2(_currentThread, i, _sp+i, ((j9object_t*)_sp)[i]);
 				}
 			}
 		}
@@ -6472,6 +6492,12 @@ done:
 #endif
 		if (_sp[slots] & J9_STACK_FLAGS_J2_IFRAME) {
 			rc = j2iReturn(REGISTER_ARGS);
+			if (_literals == _currentThread->makeIntrinsicMethod) {
+				_currentThread->makeIntrinsicMethod = NULL;
+				_currentThread->receiverSlot = NULL;
+				//printf("Total length = %d\n", (int)_currentThread->debugLength);
+				_currentThread->debugLength = 0;
+			}
 		} else {
 			if (_literals == _currentThread->makeIntrinsicMethod) {
 				_currentThread->makeIntrinsicMethod = NULL;
@@ -7113,16 +7139,14 @@ done:
 					J9UTF8 *classNameWrapper = J9ROMCLASSREF_NAME(romClassRef);
 					U_16 classNameLength = J9UTF8_LENGTH(classNameWrapper);
 					U_8 *className = J9UTF8_DATA(classNameWrapper);
-					if (_currentThread->debugbuffer != NULL) {
-						printf("\n%s\n", _currentThread->debugbuffer);
-					}
-					printf("\nNPE on invokespecial receiver, calling %.*s.%.*s %.*s\n", (int)classNameLength, (char*)className,
+
+					Trc_VM_debug3(_currentThread, (int)classNameLength, (char*)className,
 						(int)nameLength, (char*)name, (int)sigLength, (char*)sig);
 					
 					U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
-					printf("\tMethod Arg Count: %d\n\tSP pointer: %p, Arg0EA: %p\n\tStack data:\n", (int)argCount, _sp, _arg0EA);
+					Trc_VM_debug4(_currentThread, (int)argCount, _sp, _arg0EA);
 					for (int i = 0; i <= argCount; i++) {
-						printf("\t\tsp[%d]: %p\n", i, ((j9object_t*)_sp)[i]);
+						Trc_VM_debug5(_currentThread, i, ((j9object_t*)_sp)[i]);
 					}
 					fflush(stdout);
 					updateVMStruct(REGISTER_ARGS);
@@ -7198,21 +7222,16 @@ done:
 			J9UTF8 *sigUTF = J9ROMMETHOD_SIGNATURE(romMethod);
 			if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), "makeIntrinsic")
 			&& (J9UTF8_LENGTH(sigUTF) == 136)) {
-				PORT_ACCESS_FROM_JAVAVM(_vm);
 				J9UTF8 *classUTF = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(_sendMethod)->romClass);
 				U_16 argCount = ramMethodRef->methodIndexAndArgCount & 0xFF;
 				_currentThread->makeIntrinsicMethod = _sendMethod;
-				if (_currentThread->debugbuffer == NULL) {
-					_currentThread->debugbuffer = (char *)j9mem_allocate_memory(sizeof(char) * 105000, OMRMEM_CATEGORY_VM);
-					//printf("Allocate 131072 chars\n");
-				}
-				_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength,
-					"invokestatic on %.*s.makeIntrinsic %.*s\nArgCount = %d, SP Top = %p, Args:\n",
+
+				Trc_VM_debug6(_currentThread,
 					(int)J9UTF8_LENGTH(classUTF), (char*)J9UTF8_DATA(classUTF),
 					(int)J9UTF8_LENGTH(sigUTF), (char*)J9UTF8_DATA(sigUTF), (int)argCount, _sp);
 
 				for (int i = 0; i < argCount; i++) {
-					_currentThread->debugLength += sprintf(_currentThread->debugbuffer + _currentThread->debugLength, "\t[%d] %p : %p\n", i, _sp+i, ((j9object_t*)_sp)[i]);
+					Trc_VM_debug7(_currentThread, i, _sp+i, ((j9object_t*)_sp)[i]);
 				}
 			}
 		}

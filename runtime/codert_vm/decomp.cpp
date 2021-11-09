@@ -1004,7 +1004,7 @@ fixStackForNewDecompilation(J9VMThread * currentThread, J9StackWalkState * walkS
 	*link = info;
 
 	/* Slam the return address to point to the appropriate decompile */
-
+	Trc_VM_debug15(currentThread, info->method, info->pc, info->bp);
 	if (0 != walkState->resolveFrameFlags) {
 		UDATA resolveFrameType = walkState->resolveFrameFlags & J9_STACK_FLAGS_JIT_FRAME_SUB_TYPE_MASK;
 		switch(resolveFrameType) {
