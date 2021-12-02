@@ -97,6 +97,8 @@ Fast_java_lang_J9VMInternals_primitiveClone(J9VMThread *currentThread, j9object_
 		VM_VMHelpers::checkIfFinalizeObject(currentThread, copy);
 	}
 done:
+//	printf("fast clone object org:=%p copy:=%p thread=%p\n", original, copy, currentThread);
+//	fflush(stdout);
 	return copy;
 }
 

@@ -37,6 +37,7 @@
 #include "pcstack.h"
 #include "VMHelpers.hpp"
 #include "OMR/Bytes.hpp"
+#include <stdio.h>
 
 extern "C" {
 
@@ -677,6 +678,7 @@ buildBytecodeFrame(J9VMThread *currentThread, J9OSRFrame *osrFrame)
 	J9Method *literals = currentThread->literals;
 	UDATA *newA0 = sp - 1;
 	J9SFStackFrame *stackFrame = NULL;
+	PORT_ACCESS_FROM_VMC(currentThread);
 
 	/* Push the locals */
 	sp -= numberOfLocals;
@@ -697,6 +699,8 @@ buildBytecodeFrame(J9VMThread *currentThread, J9OSRFrame *osrFrame)
 	currentThread->pc = bytecodePC;
 	currentThread->literals = method;
 	currentThread->sp = sp;
+
+	j9tty_printf(PORTLIB, "osr a0=%p pc=%p literals=%p sp=%p thread=%p methodname =%s\n", newA0, bytecodePC, method, sp, currentThread, (char*)J9UTF8_DATA(J9ROMMETHOD_NAME(J9_ROM_METHOD_FROM_RAM_METHOD(method))));
 }
 
 
@@ -704,7 +708,7 @@ buildBytecodeFrame(J9VMThread *currentThread, J9OSRFrame *osrFrame)
  * Recursive helper for decompiling inlined frames.
  *
  * @param[in] *currentThread current thread
- * @param[in] *decompileState the decompilation state copied from the stack walk
+ * @param[in] *decompileState thel decompilation state copied from the stack walk
  * @param[in] *decompRecord the decompilation record
  * @param[in] inlineDepth the depth of inlining, 0 for the outer frame
  * @param[in] *osrFrame the OSR frame from which to copy the information
@@ -778,6 +782,7 @@ performDecompile(J9VMThread *currentThread, J9JITDecompileState *decompileState,
 	UDATA outgoingArgs[255];
 	UDATA outgoingArgCount = decompileState->argCount;
 	UDATA inlineDepth = numberOfFrames - 1;
+	PORT_ACCESS_FROM_VMC(currentThread);
 
 	Trc_Decomp_performDecompile_Entry(currentThread);
 
@@ -811,6 +816,17 @@ performDecompile(J9VMThread *currentThread, J9JITDecompileState *decompileState,
 	memcpy(currentThread->sp, outgoingArgs, outgoingArgCount * sizeof(UDATA));
 
 	Trc_Decomp_performDecompile_Exit(currentThread, currentThread->sp);
+
+	j9tty_printf(PORTLIB,"pd method=%p thread=%p sp=%p pc=%p sp[0]=%p _sp[-1]=%p a0[0]=%p a0[-1]=%p\n", currentThread->literals, currentThread, currentThread->sp, currentThread->pc, *currentThread->sp, *(currentThread->sp -1), *currentThread->arg0EA, *(currentThread->arg0EA -1));
+
+	J9UTF8 *romMethodName = J9ROMMETHOD_NAME(J9_ROM_METHOD_FROM_RAM_METHOD(currentThread->literals));
+	if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(romMethodName), J9UTF8_LENGTH(romMethodName), "clone")) {
+		J9UTF8 *className = J9ROMCLASS_CLASSNAME(currentThread->literals->constantPool->ramClass->romClass);
+		if (J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(className), J9UTF8_LENGTH(className), "java/lang/invoke/MemberName")) {
+			__asm__("int3");
+		}
+	}
+
 }
 
 

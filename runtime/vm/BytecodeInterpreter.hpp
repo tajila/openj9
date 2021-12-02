@@ -3241,6 +3241,8 @@ done:
 			_objectAccessBarrier.cloneObject(_currentThread, original, copy, objectClass);
 			VM_VMHelpers::checkIfFinalizeObject(_currentThread, copy);
 		}
+//		printf("clone object org:=%p copy:=%p thread=%p\n", original, copy, _currentThread);
+//		fflush(stdout);
 		restoreInternalNativeStackFrame(REGISTER_ARGS);
 		returnObjectFromINL(REGISTER_ARGS, copy, 1);
 done:
