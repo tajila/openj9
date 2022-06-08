@@ -2732,6 +2732,8 @@ private String toResourceName(String resName) {
 	return qualifiedClassName.substring(0, classIndex + 1).replace('.', '/') + resName;
 }
 
+private String toStringName;
+
 /**
  * Answers a string containing a concise, human-readable
  * description of the receiver.
@@ -2740,6 +2742,15 @@ private String toResourceName(String resName) {
  */
 @Override
 public String toString() {
+	if (null == toStringName) {
+		toStringName = toStringImpl();
+	}
+	
+	return toStringName;
+}
+
+
+public String toStringImpl() {
 	// Note change from 1.1.7 to 1.2: For primitive types,
 	// return just the type name.
 	if (isPrimitive()) return getName();
