@@ -111,6 +111,7 @@ set(main_sources
 	FastJNI_java_lang_Thread.cpp
 	FastJNI_java_lang_Throwable.cpp
 	FastJNI_sun_misc_Unsafe.cpp
+	FastJNI_sun_nio_ch_FileDispatcherImpl.cpp
 	findmethod.c
 	FlushProcessWriteBuffers.cpp
 	gphandle.c

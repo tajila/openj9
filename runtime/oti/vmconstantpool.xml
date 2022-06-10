@@ -127,6 +127,8 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 	<classref name="java/lang/Module" flags="opt_module" versions="9-"/>
 	<classref name="java/lang/invoke/VarHandleInvokeHandle" versions="9-" flags="opt_methodHandle"/>
 	<classref name="java/lang/invoke/FieldVarHandle" versions="9-" flags="opt_methodHandle"/>
+	<classref name="java/io/IOException"/>
+	<classref name="java/io/FileDescriptor"/>
 
 	<!-- Common class references shared between OpenJ9 and OpenJDK MethodHandles. -->
 	<classref name="java/lang/invoke/MethodType" flags="opt_methodHandleCommon"/>
@@ -157,6 +159,8 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 	This is a limitation of the tool as it would otherwise need to encode the class multiple times - once
 	for each combination of field flags.
 -->
+
+	<fieldref class="java/io/FileDescriptor" name="fd" signature="I"/>
 	<fieldref class="java/lang/ClassLoader" name="parent" signature="Ljava/lang/ClassLoader;"/>
 	<fieldref class="java/lang/ClassLoader" name="vmRef" signature="J" cast="struct J9ClassLoader *"/>
 	<fieldref class="java/lang/ClassLoader" name="isParallelCapable" signature="Z"/>
