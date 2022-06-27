@@ -243,6 +243,11 @@ poolElementAllocFailed:
 		}
 	}
 #endif
+#if JAVA_SPEC_VERSION >= 19
+	if (oldStack->isVirtual) {
+		newStack->isVirtual = TRUE;
+	}
+#endif /* JAVA_SPEC_VERSION >= 19 */
 
 	if (walkState.userData2) {
 		Trc_VM_growJavaStack_KeepingOldStack(vmThread, walkState.userData2);

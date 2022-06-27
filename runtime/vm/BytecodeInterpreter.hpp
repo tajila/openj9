@@ -5079,6 +5079,59 @@ ffi_OOM:
 	}
 #endif /* JAVA_SPEC_VERSION >= 16 */
 
+#if JAVA_SPEC_VERSION >= 19
+	/* jdk.internal.vm.Continuation: private native boolean enter(); */
+	VMINLINE VM_BytecodeAction
+	enterContinuation(REGISTER_ARGS_LIST)
+	{
+		VM_BytecodeAction rc = EXECUTE_BYTECODE;
+		J9InternalVMFunctions *vmFuncs = _vm->internalVMFunctions;
+		jboolean res = JNI_FALSE;
+
+		j9object_t continuationObject = *(j9object_t*)_sp;
+
+		buildInternalNativeStackFrame(REGISTER_ARGS);
+		updateVMStruct(REGISTER_ARGS);
+
+		res = vmFuncs->enterContinuation(_currentThread, continuationObject);
+
+		VMStructHasBeenUpdated(REGISTER_ARGS);
+		if (VM_VMHelpers::exceptionPending(_currentThread)) {
+			rc = GOTO_THROW_CURRENT_EXCEPTION;
+			goto done;
+		}
+
+		restoreInternalNativeStackFrame(REGISTER_ARGS);
+		returnSingleFromINL(REGISTER_ARGS, res, 1);
+done:
+		return rc;
+	}
+
+	/* jdk.internal.vm.Continuation: private static native boolean yieldImpl(ContinuationScope scope); */
+	VMINLINE VM_BytecodeAction
+	yieldContinuation(REGISTER_ARGS_LIST)
+	{
+		VM_BytecodeAction rc = EXECUTE_BYTECODE;
+		J9InternalVMFunctions *vmFuncs = _vm->internalVMFunctions;
+		j9object_t continuationScope = *(j9object_t*)_sp;
+
+		updateVMStruct(REGISTER_ARGS);
+
+		/* this will just swap stack, should probably rename as such */
+		vmFuncs->yieldContinuation(_currentThread, continuationScope);
+
+		VMStructHasBeenUpdated(REGISTER_ARGS);
+		restoreInternalNativeStackFrame(REGISTER_ARGS);
+
+		/* its going to return as if it were returning from continuation.enter()
+		 * so we need to push the boolean return val
+		 */
+		returnSingleFromINL(REGISTER_ARGS, JNI_TRUE, 1);
+		return rc;
+
+	}
+#endif /* JAVA_SPEC_VERSION >= 19 */
+
 	/* Redirect to out of line INL methods */
 	VMINLINE VM_BytecodeAction
 	outOfLineINL(REGISTER_ARGS_LIST)
@@ -9875,6 +9928,10 @@ public:
 #if JAVA_SPEC_VERSION >= 16
 		JUMP_TABLE_ENTRY(J9_BCLOOP_SEND_TARGET_INL_PROGRAMMABLEINVOKER_INVOKENATIVE),
 #endif /* JAVA_SPEC_VERSION >= 16 */
+#if JAVA_SPEC_VERSION >= 19
+		JUMP_TABLE_ENTRY(J9_BCLOOP_SEND_TARGET_ENTER_CONTINUATION),
+		JUMP_TABLE_ENTRY(J9_BCLOOP_SEND_TARGET_YIELD_CONTINUATION),
+#endif /* JAVA_SPEC_VERSION >= 19 */
 	};
 #endif /* !defined(USE_COMPUTED_GOTO) */
 
@@ -10489,6 +10546,12 @@ runMethod: {
 	JUMP_TARGET(J9_BCLOOP_SEND_TARGET_INL_PROGRAMMABLEINVOKER_INVOKENATIVE):
 		PERFORM_ACTION(inlProgrammableInvokerInvokeNative(REGISTER_ARGS));
 #endif /* JAVA_SPEC_VERSION >= 16 */
+#if JAVA_SPEC_VERSION >= 19
+	JUMP_TARGET(J9_BCLOOP_SEND_TARGET_ENTER_CONTINUATION):
+		PERFORM_ACTION(enterContinuation(REGISTER_ARGS));
+	JUMP_TARGET(J9_BCLOOP_SEND_TARGET_YIELD_CONTINUATION):
+		PERFORM_ACTION(yieldContinuation(REGISTER_ARGS));
+#endif /* JAVA_SPEC_VERSION >= 19 */
 #if !defined(USE_COMPUTED_GOTO)
 	default:
 		Assert_VM_unreachable();

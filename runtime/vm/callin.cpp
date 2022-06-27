@@ -366,7 +366,7 @@ done:
 	return success;
 }
 
-static void
+void
 restoreCallInFrame(J9VMThread *currentThread)
 {
 	Assert_VM_mustHaveVMAccess(currentThread);

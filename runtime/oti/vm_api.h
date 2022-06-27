@@ -4264,6 +4264,39 @@ threadParseArguments(J9JavaVM *vm, char *optArg);
 UDATA
 getJavaThreadPriority(struct J9JavaVM *vm, J9VMThread* thread );
 
+#if JAVA_SPEC_VERSION >= 19
+/**
+ * @brief  Create the native J9VMContinuation structure for Continuation
+ *
+ * @param currentThread
+ * @param continuationObject
+ * @return BOOLEAN
+ */
+BOOLEAN
+createContinuation(J9VMThread *currentThread, j9object_t continuationObject);
+
+/**
+ * @brief  enters the Continuation runnable.
+ *         If the Continuation has not started, create the native structure and start the runnable task,
+ *         If the Continuation has already started, resume the execution.
+ *
+ * @param currentThread the thread to mount Continuation.
+ * @param continuationObject
+ * @return BOOLEAN
+ */
+BOOLEAN
+enterContinuation(struct J9VMThread *currentThread, j9object_t continuationObject);
+
+/**
+ * @brief  suspends the Continuation runnable.
+ *
+ * @param currentThread
+ * @param scope
+ * @return BOOLEAN
+ */
+BOOLEAN
+yieldContinuation(struct J9VMThread *currentThread, j9object_t scope);
+#endif /* JAVA_SPEC_VERSION >= 19 */
 
 /* ---------------- hookableAsync.c ---------------- */
 
@@ -4712,6 +4745,16 @@ detachVMFromOMR(J9JavaVM *vm);
  */
 UDATA
 pushReflectArguments(J9VMThread *currentThread, j9object_t parameterTypes, j9object_t arguments);
+
+#if JAVA_SPEC_VERSION >= 19
+/**
+ * Pop off the Callin frame from stack and update thread states.
+ *
+ * @param currentThread
+ */
+void
+restoreCallInFrame(J9VMThread *currentThread);
+#endif /* JAVA_SPEC_VERSION >= 19 */
 
 /* Thread library API accessible via GetEnv() */
 #define J9THREAD_VERSION_1_1 0x7C010001

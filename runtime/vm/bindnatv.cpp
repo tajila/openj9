@@ -296,6 +296,10 @@ static inlMapping mappings[] = {
 #if JAVA_SPEC_VERSION >= 16
 	{ "Java_jdk_internal_foreign_abi_ProgrammableInvoker_invokeNative__JJJ_3J", J9_BCLOOP_SEND_TARGET_INL_PROGRAMMABLEINVOKER_INVOKENATIVE },
 #endif /* JAVA_SPEC_VERSION >= 16 */
+#if JAVA_SPEC_VERSION >= 19
+	{ "Java_jdk_internal_vm_Continuation_enter__", J9_BCLOOP_SEND_TARGET_ENTER_CONTINUATION },
+	{ "Java_jdk_internal_vm_Continuation_yieldImpl__Ljdk_internal_vm_ContinuationScope_2", J9_BCLOOP_SEND_TARGET_YIELD_CONTINUATION },
+#endif /* JAVA_SPEC_VERSION >= 19 */
 };
 
 typedef struct J9OutOfLineINLMapping {

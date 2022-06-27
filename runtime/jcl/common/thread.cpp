@@ -529,6 +529,25 @@ Java_java_lang_Thread_registerNatives(JNIEnv *env, jclass clazz)
 	clearNonZAAPEligibleBit(env, clazz, natives, numNatives);
 #endif /* J9VM_OPT_JAVA_OFFLOAD_SUPPORT */
 }
+
+jboolean JNICALL
+Java_jdk_internal_vm_Continuation_createContinuationImpl(JNIEnv *env, jobject continuation)
+{
+	J9VMThread *currentThread = (J9VMThread*)env;
+	J9JavaVM *vm = currentThread->javaVM;
+	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	jboolean result = JNI_FALSE;
+
+	vmFuncs->internalEnterVMFromJNI(currentThread);
+
+	j9object_t continuationObject = J9_JNI_UNWRAP_REFERENCE(continuation);
+
+	result = vmFuncs->createContinuation(currentThread, continuationObject);
+
+	vmFuncs->internalExitVMToJNI(currentThread);
+
+	return result;
+}
 #endif /* JAVA_SPEC_VERSION >= 19 */
 
 }
