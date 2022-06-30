@@ -53,9 +53,6 @@
 #include "CRIUHelpers.hpp"
 #include "VMHelpers.hpp"
 #endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
-#if JAVA_SPEC_VERSION >= 19
-#include "OutOfLineINL.hpp"
-#endif /* JAVA_SPEC_VERSION >= 19 */
 
 extern "C" {
 
@@ -93,12 +90,6 @@ static void initMinCPUSpinCounts(J9JavaVM *vm);
 static void printCustomSpinOptions(void *element, void *userData);
 #endif /* J9VM_INTERP_CUSTOM_SPIN_OPTIONS */
 
-#ifdef J9VM_INTERP_GROWABLE_STACKS
-#define VMTHR_INITIAL_STACK_SIZE ((vm->initialStackSize > (UDATA) vm->stackSize) ? vm->stackSize : vm->initialStackSize)
-#else
-#define VMTHR_INITIAL_STACK_SIZE vm->stackSize
-#endif
-
 J9VMThread *
 allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void * memorySpace, J9Object * threadObject)
 {
@@ -108,6 +99,12 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 	BOOLEAN threadIsRecycled = FALSE;
 	J9MemoryManagerFunctions* gcFuncs = vm->memoryManagerFunctions;
 
+#ifdef J9VM_INTERP_GROWABLE_STACKS
+#define VMTHR_INITIAL_STACK_SIZE ((vm->initialStackSize > (UDATA) vm->stackSize) ? vm->stackSize : vm->initialStackSize)
+#else
+#define VMTHR_INITIAL_STACK_SIZE vm->stackSize
+#endif
+
 	omrthread_monitor_enter(vm->vmThreadListMutex);
 
 	/* Allocate the stack */
@@ -115,6 +112,8 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 	if ((stack = allocateJavaStack(vm, VMTHR_INITIAL_STACK_SIZE, NULL)) == NULL) {
 		goto fail;
 	}
+
+#undef VMTHR_INITIAL_STACK_SIZE
 
 	/* Try to reuse a dead thread; otherwise allocate a new one */
 	if (J9_LINKED_LIST_IS_EMPTY(vm->deadThreadList)) {
@@ -2435,154 +2434,5 @@ threadAboutToStart(J9VMThread *currentThread)
 
 	TRIGGER_J9HOOK_THREAD_ABOUT_TO_START(vm->hookInterface, currentThread);
 }
-
-#if JAVA_SPEC_VERSION >= 19
-J9_DECLARE_CONSTANT_UTF8(execute_sig, "(Ljdk/internal/vm/Continuation;)V");
-J9_DECLARE_CONSTANT_UTF8(execute_name, "execute");
-J9_DECLARE_CONSTANT_UTF8(continuationClass_name, "jdk/internal/vm/Continuation");
-
-extern void c_cInterpreter(J9VMThread *currentThread);
-
-void swapFieldsWithContinuation(J9VMThread *vmThread, J9VMContinuation *continuation)
-{
-/* Helper macro to swap fields between the two J9Class structs. */
-#define SWAP_MEMBER(fieldName, fieldType, class1, class2) \
-	do { \
-		fieldType temp = (fieldType) (class1)->fieldName; \
-		(class1)->fieldName = (class2)->fieldName; \
-		(class2)->fieldName = (fieldType) temp; \
-	} while (0)
-
-	SWAP_MEMBER(arg0EA, UDATA*, vmThread, continuation);
-	SWAP_MEMBER(bytecodes, UDATA*, vmThread, continuation);
-	SWAP_MEMBER(sp, UDATA*, vmThread, continuation);
-	SWAP_MEMBER(pc, U_8*, vmThread, continuation);
-	SWAP_MEMBER(literals, J9Method*, vmThread, continuation);
-	SWAP_MEMBER(stackOverflowMark, UDATA*, vmThread, continuation);
-	SWAP_MEMBER(stackOverflowMark2, UDATA*, vmThread, continuation);
-	SWAP_MEMBER(stackObject, J9JavaStack*, vmThread, continuation);
-}
-
-BOOLEAN
-createContinuation(J9VMThread *currentThread, j9object_t continuationObject)
-{
-	J9JavaVM *vm = currentThread->javaVM;
-	PORT_ACCESS_FROM_PORT(vm->portLibrary);
-	BOOLEAN result = TRUE;
-	J9JavaStack *stack = NULL;
-	J9SFJNINativeMethodFrame *frame = NULL;
-
-	J9VMContinuation *continuation = (J9VMContinuation *)j9mem_allocate_memory(sizeof(J9VMContinuation), OMRMEM_CATEGORY_THREADS);
-	if (NULL == continuation) {
-		vm->internalVMFunctions->setNativeOutOfMemoryError(currentThread, 0, 0);
-		result = FALSE;
-		goto end;
-	}
-
-	memset(continuation, 0, sizeof(J9VMContinuation));
-
-	if ((stack = allocateJavaStack(vm, VMTHR_INITIAL_STACK_SIZE, NULL)) == NULL) {
-		vm->internalVMFunctions->setNativeOutOfMemoryError(currentThread, 0, 0);
-		result = FALSE;
-		goto end;
-	}
-
-	continuation->stackObject = stack;
-	continuation->stackOverflowMark = continuation->stackOverflowMark2 = J9JAVASTACK_STACKOVERFLOWMARK(stack);
-
-	frame = ((J9SFJNINativeMethodFrame*)stack->end) - 1;
-	frame->method = NULL;
-	frame->specialFrameFlags = 0;
-	frame->savedCP = NULL;
-	frame->savedPC = (U_8*)(UDATA)J9SF_FRAME_TYPE_END_OF_STACK;
-	frame->savedA0 = (UDATA*)(UDATA)J9SF_A0_INVISIBLE_TAG;
-	continuation->sp = (UDATA*)frame;
-	continuation->literals = (J9Method*)0;
-	continuation->pc = (U_8*)J9SF_FRAME_TYPE_JNI_NATIVE_METHOD;
-	continuation->arg0EA = (UDATA*)&frame->savedA0;
-	continuation->stackObject->isVirtual = TRUE;
-
-	J9VMJDKINTERNALVMCONTINUATION_SET_VMREF(currentThread, continuationObject, continuation);
-
-	/* GC Hook to register Continuation object */
-end:
-	return result;
-}
-
-BOOLEAN
-enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
-{
-	BOOLEAN result = TRUE;
-	jboolean started = J9VMJDKINTERNALVMCONTINUATION_STARTED(currentThread, continuationObject);
-	J9VMContinuation *continuation = J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, continuationObject);
-
-	swapFieldsWithContinuation(currentThread, continuation);
-	currentThread->currentContinuation = continuation;
-
-	if (started) {
-		/* return from yield */
-		VM_OutOfLineINL_Helpers::returnSingle(currentThread, JNI_TRUE, 0);
-
-		currentThread->returnValue = J9_BCLOOP_EXECUTE_BYTECODE;
-
-		c_cInterpreter(currentThread);
-
-		restoreCallInFrame(currentThread);
-	} else {
-		/* start new */
-		UDATA args[] = { (UDATA) continuationObject };
-		J9NameAndSignature nas = {0};
-		nas.name = (J9UTF8 *)&execute_name;
-		nas.signature = (J9UTF8 *)&execute_sig;
-	
-		J9VMJDKINTERNALVMCONTINUATION_SET_STARTED(currentThread, continuationObject, JNI_TRUE);
-
-		runStaticMethod(currentThread, J9UTF8_DATA(&continuationClass_name), &nas, 1, args);
-	}
-
-	J9VMJDKINTERNALVMCONTINUATION_SET_FINISHED(currentThread, continuationObject, JNI_TRUE);
-
-	/* Swap to parent Continuation */
-	j9object_t parentContinuation = J9VMJDKINTERNALVMCONTINUATION_PARENT(currentThread, continuationObject);
-	if (NULL != parentContinuation) {
-		currentThread->currentContinuation = J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, parentContinuation);
-	} else {
-		currentThread->currentContinuation = NULL;
-	}
-
-	swapFieldsWithContinuation(currentThread, continuation);
-
-	/* For some reason the JCL swap thread objects when the VirtualThread dies, but it does
-	 * on enter and yield.
-	 */
-	currentThread->threadObject = currentThread->carrierThreadObject;
-
-	return result;
-}
-
-BOOLEAN
-yieldContinuation(J9VMThread *currentThread, j9object_t scope)
-{
-	BOOLEAN result = TRUE;
-	J9VMContinuation *continuation = currentThread->currentContinuation;
-
-	/* need to check pin state before yielding */
-
-	swapFieldsWithContinuation(currentThread, continuation);
-
-	/* Swap to parent Continuation */
-	/*
-	j9object_t parentContinuation = J9VMJDKINTERNALVMCONTINUATION_PARENT(currentThread, continuationObject);
-	if (NULL != parentContinuation) {
-		currentThread->currentContinuation = (J9VMContinuation *)(UDATA)J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, parentContinuation);
-	} else {
-		currentThread->currentContinuation = NULL;
-	}
-	*/
-
-	return result;
-}
-
-#endif /* JAVA_SPEC_VERSION >= 19 */
 
 } /* extern "C" */

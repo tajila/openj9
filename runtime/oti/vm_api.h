@@ -4265,6 +4265,8 @@ UDATA
 getJavaThreadPriority(struct J9JavaVM *vm, J9VMThread* thread );
 
 #if JAVA_SPEC_VERSION >= 19
+/* ---------------- ContinuationHelpers.cpp ---------------- */
+
 /**
  * @brief  Create the native J9VMContinuation structure for Continuation
  *

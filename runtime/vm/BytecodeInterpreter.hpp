@@ -5080,7 +5080,7 @@ ffi_OOM:
 #endif /* JAVA_SPEC_VERSION >= 16 */
 
 #if JAVA_SPEC_VERSION >= 19
-	/* jdk.internal.vm.Continuation: private native boolean enter(); */
+	/* jdk.internal.vm.Continuation: private native boolean enterImpl(); */
 	VMINLINE VM_BytecodeAction
 	enterContinuation(REGISTER_ARGS_LIST)
 	{

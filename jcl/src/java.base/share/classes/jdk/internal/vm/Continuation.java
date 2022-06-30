@@ -157,7 +157,7 @@ public class Continuation {
 		}
 
 		JLA.setContinuation(carrier, this);
-		enter();
+		enterImpl();
 		JLA.setContinuation(carrier, parent);
 	}
 
@@ -200,7 +200,7 @@ public class Continuation {
 
 	/* Continuation Native APIs */
 	private native boolean createContinuationImpl();
-	private native boolean enter();
+	private native boolean enterImpl();
 	private static native boolean yieldImpl(ContinuationScope scope);
 
 }

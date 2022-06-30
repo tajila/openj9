@@ -60,6 +60,7 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 	<xi:include href="uma/se8only_objects.xml"></xi:include>
 	<xi:include href="uma/se9_objects.xml"></xi:include>
 	<xi:include href="uma/se16_objects.xml"></xi:include>
+	<xi:include href="uma/se19_objects.xml"></xi:include>
 
 	<!-- vendor_jcl.xml can contain vendor specific configuration -->
 	<xi:include href="uma/vendor_jcl.xml">
@@ -192,6 +193,9 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-excepti
 			-->
 			<group name="se16">
 				<include-if condition="spec.java16"/>
+			</group>
+			<group name="se19">
+				<include-if condition="spec.java19"/>
 			</group>
 
 			<group name="vendor_jcl"/>
