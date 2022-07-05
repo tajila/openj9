@@ -97,8 +97,28 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 	jboolean started = J9VMJDKINTERNALVMCONTINUATION_STARTED(currentThread, continuationObject);
 	J9VMContinuation *continuation = J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, continuationObject);
 
+	if (NULL != currentThread->currentContinuation) {
+		printf("assert0 should not be possible\n");
+		*(UDATA*) 0x8 = -1;
+	}
+
+	if (continuation->stackObject->isVirtual) {
+		//printf("assert1 should not be possible\n");
+		//*(UDATA*) 0x8 = -1;
+	}
+
 	VM_ContinuationHelpers::swapFieldsWithContinuation(currentThread, continuation);
 	currentThread->currentContinuation = continuation;
+
+	if (NULL == currentThread->currentContinuation) {
+		printf("assert2 should not be possible\n");
+		*(UDATA*) 0x8 = -1;
+	}
+
+	if (!continuation->stackObject->isVirtual) {
+		//printf("assert3 should not be possible\n");
+		//*(UDATA*) 0x8 = -1;
+	}
 
 	if (started) {
 		/* resuming Continuation from yield */
@@ -123,14 +143,26 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 	J9VMJDKINTERNALVMCONTINUATION_SET_FINISHED(currentThread, continuationObject, JNI_TRUE);
 
 	/* Swap to parent Continuation */
-	j9object_t parentContinuation = J9VMJDKINTERNALVMCONTINUATION_PARENT(currentThread, continuationObject);
-	if (NULL != parentContinuation) {
-		currentThread->currentContinuation = J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, parentContinuation);
-	} else {
-		currentThread->currentContinuation = NULL;
-	}
+//	j9object_t parentContinuation = J9VMJDKINTERNALVMCONTINUATION_PARENT(currentThread, continuationObject);
+//	if (NULL != parentContinuation) {
+//		currentThread->currentContinuation = J9VMJDKINTERNALVMCONTINUATION_VMREF(currentThread, parentContinuation);
+//	} else {
+//		currentThread->currentContinuation = NULL;
+//	}
+
+	currentThread->currentContinuation = NULL;
 
 	VM_ContinuationHelpers::swapFieldsWithContinuation(currentThread, continuation);
+
+	if (NULL != currentThread->currentContinuation) {
+		printf("assert4 should not be possible\n");
+		*(UDATA*) 0x8 = -1;
+	}
+
+	if (continuation->stackObject->isVirtual) {
+		//printf("assert5 should not be possible\n");
+		//*(UDATA*) 0x8 = -1;
+	}
 
 	/* For some reason the JCL swap thread objects when the VirtualThread dies, but it does
 	 * on enter and yield.
@@ -159,6 +191,7 @@ yieldContinuation(J9VMThread *currentThread, j9object_t scope)
 		currentThread->currentContinuation = NULL;
 	}
 	*/
+	currentThread->currentContinuation = NULL;
 
 	return result;
 }
