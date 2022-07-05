@@ -101,8 +101,9 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 	currentThread->currentContinuation = continuation;
 
 	if (started) {
-		/* return from yield */
-		VM_OutOfLineINL_Helpers::returnSingle(currentThread, JNI_TRUE, 0);
+		/* resuming Continuation from yield */
+		VM_OutOfLineINL_Helpers::restoreInternalNativeStackFrame(currentThread);
+		VM_OutOfLineINL_Helpers::returnSingle(currentThread, JNI_TRUE, 1);
 
 		currentThread->returnValue = J9_BCLOOP_EXECUTE_BYTECODE;
 

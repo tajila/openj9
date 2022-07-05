@@ -4898,6 +4898,7 @@ typedef struct J9VMContinuation {
 	UDATA* stackOverflowMark;
 	UDATA* stackOverflowMark2;
 	J9JavaStack* stackObject;
+	struct J9VMEntryLocalStorage* entryLocalStorage;
 } J9VMContinuation;
 #endif /* JAVA_SPEC_VERSION >= 19 */
 

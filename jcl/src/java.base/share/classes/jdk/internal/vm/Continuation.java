@@ -147,6 +147,7 @@ public class Continuation {
 		if (finished) {
 			throw new IllegalStateException("Continuation has already finished.");
 		}
+/*
 		Thread carrier = JLA.currentCarrierThread();
 		Continuation currentContinuation = JLA.getContinuation(carrier);
 
@@ -157,8 +158,11 @@ public class Continuation {
 		}
 
 		JLA.setContinuation(carrier, this);
+*/
 		enterImpl();
+/*
 		JLA.setContinuation(carrier, parent);
+*/
 	}
 
 	/**

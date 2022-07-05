@@ -62,6 +62,7 @@ public:
 		SWAP_MEMBER(stackOverflowMark, UDATA*, vmThread, continuation);
 		SWAP_MEMBER(stackOverflowMark2, UDATA*, vmThread, continuation);
 		SWAP_MEMBER(stackObject, J9JavaStack*, vmThread, continuation);
+		SWAP_MEMBER(entryLocalStorage, J9VMEntryLocalStorage*, vmThread, continuation);
 	}
 
 };

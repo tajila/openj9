@@ -5115,6 +5115,7 @@ done:
 		J9InternalVMFunctions *vmFuncs = _vm->internalVMFunctions;
 		j9object_t continuationScope = *(j9object_t*)_sp;
 
+		buildInternalNativeStackFrame(REGISTER_ARGS);
 		updateVMStruct(REGISTER_ARGS);
 
 		/* this will just swap stack, should probably rename as such */
