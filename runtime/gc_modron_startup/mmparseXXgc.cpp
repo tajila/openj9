@@ -990,6 +990,35 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 
 #endif /* defined(J9VM_GC_MODRON_SCAVENGER) */
 
+#if defined(J9VM_OPT_CRIU_SUPPORT)
+		if (try_scan(&scan_start, "checkpointGCthreadCount=")) {
+			UDATA checkpointGCthreadCount = 0;
+			if (!scan_udata_helper(vm, &scan_start, &checkpointGCthreadCount, "checkpointGCthreadCount=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+
+			extensions->checkpointGCthreadCount = checkpointGCthreadCount;
+			continue;
+		}
+
+		if (try_scan(&scan_start, "restoreGCthreadCount=")) {
+			UDATA restoreGCthreadCount = 0;
+			if (!scan_udata_helper(vm, &scan_start, &restoreGCthreadCount, "restoreGCthreadCount=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+
+			extensions->restoreGCthreadCount = restoreGCthreadCount;
+			continue;
+		}
+
+		if (try_scan(&scan_start, "debugGCcheckpoint")) {
+			extensions->debugGCcheckpoint = true;
+			continue;
+		}
+#endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
+
 		if (try_scan(&scan_start, "enableFrequentObjectAllocationSampling")) {
 			extensions->doFrequentObjectAllocationSampling = true;
 			continue;

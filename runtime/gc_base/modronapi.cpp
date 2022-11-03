@@ -1089,6 +1089,30 @@ j9gc_notifyGCOfClassReplacement(J9VMThread *vmThread, J9Class *oldClass, J9Class
 	}
 }
 
+#if defined(J9VM_OPT_CRIU_SUPPORT)
+void
+j9gc_criu_checkPoint(J9VMThread *vmThread)
+{
+	MM_EnvironmentBase *env = MM_EnvironmentBase::getEnvironment(vmThread->omrVMThread);
+	MM_GCExtensionsBase *extensions = env->getExtensions();
+
+	/* trigger a GC to disclaim memory */
+	j9gc_modron_global_collect_with_overrides(vmThread, J9MMCONSTANT_EXPLICIT_GC_SYSTEM_GC);
+	j9gc_modron_global_collect_with_overrides(vmThread, J9MMCONSTANT_EXPLICIT_GC_PREPARE_FOR_CHECKPOINT);
+
+	extensions->dispatcher->shutDownThreads(env, MM_GCExtensions::getExtensions(env)->checkpointGCthreadCount);
+}
+
+void
+j9gc_criu_restore(J9VMThread *vmThread)
+{
+	MM_EnvironmentBase *env = MM_EnvironmentBase::getEnvironment(vmThread->omrVMThread);
+	MM_GCExtensionsBase *extensions = env->getExtensions();
+
+	extensions->dispatcher->startUpThreads(env, MM_GCExtensions::getExtensions(env)->restoreGCthreadCount);
+}
+#endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
+
 /* JAZZ 90354 Temporarily move obsolete GC table exported functions, to be removed shortly. */
 /* These calls remain, due to legacy symbol names - see Jazz 13097 for more information */
 #if defined (OMR_GC_MODRON_CONCURRENT_MARK) || defined (J9VM_GC_VLHGC)

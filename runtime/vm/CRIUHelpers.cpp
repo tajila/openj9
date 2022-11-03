@@ -413,6 +413,9 @@ runDelayedLockRelatedOperations(J9VMThread *currentThread)
 	J9DelayedLockingOpertionsRecord *delayedLockingOperation = static_cast<J9DelayedLockingOpertionsRecord*>(J9_LINKED_LIST_START_DO(vm->checkpointState.delayedLockingOperationsRoot));
 	BOOLEAN rc = TRUE;
 
+	printf("delyaed lock ops thread=%p", currentThread);
+	fflush(stdout);
+
 	Assert_VM_true(vm->checkpointState.checkpointThread == currentThread);
 
 	while (NULL != delayedLockingOperation) {
