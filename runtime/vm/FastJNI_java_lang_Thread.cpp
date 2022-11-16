@@ -55,6 +55,13 @@ Fast_java_lang_Thread_setCurrentThread(J9VMThread *currentThread, j9object_t rec
 	 * which is assumed alive, hence targetThread can't be null.
 	 */
 	targetThread->threadObject = threadObject;
+
+	/* We need a full fence here to preserve happens-before relationship on PPC and other weakly
+	 * ordered architectures since learning/reservation is turned on by default. Since we have the
+	 * global pin lock counters we only need to need to address yield points, as thats the
+	 * only time a different virtualThread can run on the underlying j9vmthread.
+	 */
+	VM_AtomicSupport::readWriteBarrier();
 }
 #endif /* JAVA_SPEC_VERSION >= 19 */
 

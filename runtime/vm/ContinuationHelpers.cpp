@@ -171,12 +171,6 @@ yieldContinuation(J9VMThread *currentThread)
 	currentThread->currentContinuation = NULL;
 	VM_ContinuationHelpers::swapFieldsWithContinuation(currentThread, continuation);
 
-	/* We need a full fence here to preserve happens-before relationship on PPC and other weakly
-	 * ordered architectures since learning/reservation is turned on by default. Since we have the
-	 * global pin lock counters we only need to need to address yield points, as thats the
-	 * only time a different virtualThread can run on the underlying j9vmthread.
-	 */
-	VM_AtomicSupport::readWriteBarrier();
 	/* we don't need atomic here, since no GC thread should be able to start scanning while continuation is mounted,
 	 * nor should another carrier thread be able to mount before we complete the unmount (hence no risk to overwrite anything in a race).
 	 * Order

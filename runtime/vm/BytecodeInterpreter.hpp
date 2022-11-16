@@ -2660,6 +2660,13 @@ done:
 		 * which is assumed alive, hence targetThread can't be null.
 		 */
 		targetThread->threadObject = thread;
+		/* We need a full fence here to preserve happens-before relationship on PPC and other weakly
+		 * ordered architectures since learning/reservation is turned on by default. Since we have the
+		 * global pin lock counters we only need to need to address yield points, as thats the
+		 * only time a different virtualThread can run on the underlying j9vmthread.
+		 */
+		VM_AtomicSupport::readWriteBarrier();
+
 		returnVoidFromINL(REGISTER_ARGS, 2);
 		return EXECUTE_BYTECODE;
 	}
