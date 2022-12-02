@@ -246,6 +246,21 @@ JVM_IsPreviewEnabled(void)
 	return isPreviewEnabled;
 }
 
+static void
+walkVthreadList(J9VMThread *currentThread)
+{
+	J9JavaVM *vm = currentThread->javaVM;
+	if (NULL != vm->liveVirtualThreadList) {
+		j9object_t root = *(vm->liveVirtualThreadList);
+		j9object_t walkVirtualThread = J9OBJECT_OBJECT_LOAD(currentThread, root, vm->virtualThreadLinkNextOffset);
+		do {
+			Assert_SC_true(((J9Class*)J9OBJECT_CLAZZ(currentThread, walkVirtualThread))->eyecatcher == 0x99669966);
+
+			 walkVirtualThread = J9OBJECT_OBJECT_LOAD(currentThread, walkVirtualThread, vm->virtualThreadLinkNextOffset);
+		} while (root != walkVirtualThread);
+	}
+}
+
 JNIEXPORT void JNICALL
 JVM_VirtualThreadMountBegin(JNIEnv *env, jobject thread, jboolean firstMount)
 {
@@ -260,6 +275,8 @@ JVM_VirtualThreadMountBegin(JNIEnv *env, jobject thread, jboolean firstMount)
 	j9object_t threadObj = J9_JNI_UNWRAP_REFERENCE(thread);
 
 	Assert_SC_true(IS_JAVA_LANG_VIRTUALTHREAD(currentThread, threadObj));
+
+	walkVthreadList(currentThread);
 
 	if (TrcEnabled_Trc_SC_VirtualThread_Info) {
 		j9object_t continuationObj = J9VMJAVALANGVIRTUALTHREAD_CONT(currentThread, threadObj);
@@ -292,6 +309,8 @@ JVM_VirtualThreadMountBegin(JNIEnv *env, jobject thread, jboolean firstMount)
 	 * to notifyJvmtiMountEnd. See getVMThread() in jvmtiHelpers.c.
 	 */
 	J9OBJECT_I64_STORE(currentThread, threadObj, vm->virtualThreadInspectorCountOffset, -1);
+
+	walkVthreadList(currentThread);
 
 	f_monitorExit(vm->liveVirtualThreadListMutex);
 	vmFuncs->internalExitVMToJNI(currentThread);
@@ -348,6 +367,8 @@ JVM_VirtualThreadMountEnd(JNIEnv *env, jobject thread, jboolean firstMount)
 
 	f_monitorEnter(vm->liveVirtualThreadListMutex);
 
+	walkVthreadList(currentThread);
+
 	if (firstMount) {
 		if (NULL == vm->liveVirtualThreadList) {
 			Assert_SC_true(NULL != rootVirtualThread);
@@ -400,6 +421,8 @@ JVM_VirtualThreadMountEnd(JNIEnv *env, jobject thread, jboolean firstMount)
 		vmFuncs->setHaltFlag(currentThread, J9_PUBLIC_FLAGS_HALT_THREAD_JAVA_SUSPEND);
 	}
 
+	walkVthreadList(currentThread);
+
 	f_monitorNotifyAll(vm->liveVirtualThreadListMutex);
 release2:
 	f_monitorExit(vm->liveVirtualThreadListMutex);
@@ -423,6 +446,8 @@ JVM_VirtualThreadUnmountBegin(JNIEnv *env, jobject thread, jboolean lastUnmount)
 	j9object_t threadObj = J9_JNI_UNWRAP_REFERENCE(thread);
 
 	Assert_SC_true(IS_JAVA_LANG_VIRTUALTHREAD(currentThread, threadObj));
+
+	walkVthreadList(currentThread);
 
 	if (TrcEnabled_Trc_SC_VirtualThread_Info) {
 		j9object_t continuationObj = J9VMJAVALANGVIRTUALTHREAD_CONT(currentThread, threadObj);
@@ -478,6 +503,8 @@ JVM_VirtualThreadUnmountBegin(JNIEnv *env, jobject thread, jboolean lastUnmount)
 		TRIGGER_J9HOOK_VM_VIRTUAL_THREAD_END(vm->hookInterface, currentThread);
 	}
 
+	walkVthreadList(currentThread);
+
 	f_monitorExit(vm->liveVirtualThreadListMutex);
 	vmFuncs->internalExitVMToJNI(currentThread);
 
@@ -498,6 +525,8 @@ JVM_VirtualThreadUnmountEnd(JNIEnv *env, jobject thread, jboolean lastUnmount)
 	j9object_t threadObj = J9_JNI_UNWRAP_REFERENCE(thread);
 
 	Assert_SC_true(IS_JAVA_LANG_VIRTUALTHREAD(currentThread, threadObj));
+
+	walkVthreadList(currentThread);
 
 	if (TrcEnabled_Trc_SC_VirtualThread_Info) {
 		j9object_t continuationObj = J9VMJAVALANGVIRTUALTHREAD_CONT(currentThread, threadObj);
@@ -522,6 +551,8 @@ JVM_VirtualThreadUnmountEnd(JNIEnv *env, jobject thread, jboolean lastUnmount)
 	Assert_SC_true(-1 == J9OBJECT_I64_LOAD(currentThread, threadObj, vm->virtualThreadInspectorCountOffset));
 	J9OBJECT_I64_STORE(currentThread, threadObj, vm->virtualThreadInspectorCountOffset, 0);
 	f_monitorNotifyAll(vm->liveVirtualThreadListMutex);
+
+	walkVthreadList(currentThread);
 
 	f_monitorExit(vm->liveVirtualThreadListMutex);
 	vmFuncs->internalExitVMToJNI(currentThread);
