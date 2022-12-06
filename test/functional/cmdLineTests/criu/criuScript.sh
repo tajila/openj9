@@ -44,6 +44,10 @@ fi
 
 cat testOutput;
 
+echo "logs -------------- start";
+cat cpData/logs
+echo "logs -------------- end";
+
 if  [ "$7" != true ]; then
     rm -rf testOutput
     echo "Removed testOutput file"
