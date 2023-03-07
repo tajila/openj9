@@ -45,6 +45,7 @@ target_link_libraries(j9criu
 		dl
 		j9utilcore
 		j9pool
+		omrutil
 )
 
 include(exports.cmake)

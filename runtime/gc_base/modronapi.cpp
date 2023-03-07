@@ -67,9 +67,9 @@ j9gc_modron_global_collect(J9VMThread *vmThread)
 
 /**
  * Trigger a global GC with the specified override code
- * 
+ *
  * @param[in] vmThread - the current thread
- * @param[in] gcCode - one of: 
+ * @param[in] gcCode - one of:
  * <ul>
  * 	<li>J9MMCONSTANT_IMPLICIT_GC_DEFAULT - collect due to normal GC activity</li>
  *  <li>J9MMCONSTANT_IMPLICIT_GC_AGGRESSIVE - second collect since first collect was insufficient</li>
@@ -154,7 +154,7 @@ j9gc_is_garbagecollection_disabled(J9JavaVM *javaVM)
  * in part because defered work (e.g., concurrent sweep) may be hiding potential free memory.
  * @return The approximate free memory available on the heap.
  */
-UDATA 
+UDATA
 j9gc_heap_free_memory(J9JavaVM *javaVM)
 {
 	return MM_GCExtensions::getExtensions(javaVM)->heap->getApproximateFreeMemorySize();
@@ -163,7 +163,7 @@ j9gc_heap_free_memory(J9JavaVM *javaVM)
 /* -- new APIs for providing information about supported memorypools and garbage collectors by current jvm  -- start */
 
 /**
- * return integer presents all memory pool IDs supported by current jvm. 
+ * return integer presents all memory pool IDs supported by current jvm.
  * base on current gcpolicy settings, set supported all memory pool IDs for current jvm
  * possible memorypool ID is defined in omrgcconsts.h, one bit for each possible memorypool, the bit is set if the memory pool is supported by currrent jvm.
  * gc also can decide which memory pools should expose to outside via updating this method.
@@ -504,7 +504,7 @@ j9gc_pools_memory(J9JavaVM *javaVM, UDATA poolIDs, UDATA *totals, UDATA *frees, 
 	MM_HeapMemorySnapshot snapShot;
 	manager->getHeapMemorySnapshot(extensions, &snapShot, (TRUE == gcEnd));
 	UDATA idx = 0;
-	
+
 	for (UDATA count = 0, mask = 1; count < J9_GC_MANAGEMENT_MAX_POOL; count++, mask <<= 1)
 	{
 		if (0 != (poolIDs & mask)) {
@@ -563,7 +563,7 @@ j9gc_pools_memory(J9JavaVM *javaVM, UDATA poolIDs, UDATA *totals, UDATA *frees, 
 }
 
 /**
- * retrieve the maximum memory size for the memory pools 
+ * retrieve the maximum memory size for the memory pools
  */
 UDATA
 j9gc_pool_maxmemory(J9JavaVM *javaVM, UDATA poolID)
@@ -773,7 +773,7 @@ j9gc_get_gc_cause(OMR_VMThread *omrVMthread)
 /* -- new APIs for providing information about supported memorypools and garbage collectors by current jvm  -- end */
 
 /**
- * API for the jit to call to find out the maximum allocation size, including the 
+ * API for the jit to call to find out the maximum allocation size, including the
  * object header, that is guaranteed not to overflow the address range.
  */
 UDATA
@@ -790,7 +790,7 @@ UDATA
 j9gc_set_softmx(J9JavaVM *javaVM, UDATA newsoftMx)
 {
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(javaVM);
-	
+
 	/* make sure the parameter is heap aligned */
 	UDATA softMx = MM_Math::roundToFloor(extensions->heapAlignment, newsoftMx);
 
@@ -798,7 +798,7 @@ j9gc_set_softmx(J9JavaVM *javaVM, UDATA newsoftMx)
 		/* you can only set a softmx between -Xms and -Xmx */
 		return 1;
 	}
-	
+
 	extensions->softMx = softMx;
 	return 0;
 }
@@ -850,7 +850,7 @@ j9gc_get_gcmodestring(J9JavaVM *javaVM)
  * taking into account object alignment and minimum object size.
  * @param objectPtr Pointer to an object
  * @return The consumed heap size of an object, in bytes, including the header
- */ 
+ */
 UDATA
 j9gc_get_object_size_in_bytes(J9JavaVM *javaVM, j9object_t objectPtr)
 {
@@ -873,7 +873,7 @@ j9gc_get_object_total_footprint_in_bytes(J9JavaVM *javaVM, j9object_t objectPtr)
 
 /**
  * Called whenever the allocation threshold values or enablement state changes.
- * 
+ *
  * @parm[in] currentThread The current VM Thread
  */
 void
@@ -892,7 +892,7 @@ j9gc_allocation_threshold_changed(J9VMThread *currentThread)
 
 /**
  * Set the allocation sampling interval to trigger a J9HOOK_MM_OBJECT_ALLOCATION_SAMPLING event
- * 
+ *
  * Examples:
  * 	To trigger an event whenever 4K objects have been allocated:
  *		j9gc_set_allocation_sampling_interval(vm, (UDATA)4096);
@@ -901,11 +901,11 @@ j9gc_allocation_threshold_changed(J9VMThread *currentThread)
  *	To disable allocation sampling
  *		j9gc_set_allocation_sampling_interval(vm, UDATA_MAX);
  * The initial MM_GCExtensionsBase::objectSamplingBytesGranularity value is UDATA_MAX.
- * 
+ *
  * @parm[in] vm The J9JavaVM
  * @parm[in] samplingInterval The allocation sampling interval.
  */
-void 
+void
 j9gc_set_allocation_sampling_interval(J9JavaVM *vm, UDATA samplingInterval)
 {
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(vm);
@@ -925,7 +925,7 @@ j9gc_set_allocation_sampling_interval(J9JavaVM *vm, UDATA samplingInterval)
  * Sets the allocation threshold (VMDESIGN 2006) to trigger a J9HOOK_MM_ALLOCATION_THRESHOLD event
  * whenever an object is allocated on the heap whose is between the lower bound and the upper bound
  * of the allocation threshold range.
- * 
+ *
  * Examples:
  * 	To trigger an event whenever an object is allocated between 1K and 4K:
  *		j9gc_set_allocation_threshold(vmThread, (UDATA)1024, (UDATA)4096);
@@ -933,20 +933,20 @@ j9gc_set_allocation_sampling_interval(J9JavaVM *vm, UDATA samplingInterval)
  *		j9gc_set_allocation_threshold(vmThread, (UDATA)(32*1024), UDATA_MAX);
  *	To trigger an event for all object allocates:
  *		j9gc_set_allocation_threshold(vmThread, (UDATA)0, UDATA_MAX);
- * 
+ *
  * @parm[in] vmThread The current VM Thread
  * @parm[in] low The lower bound of the allocation threshold range.
  * @parm[in] high The upper bound of the allocation threshold range.
  */
-void 
+void
 j9gc_set_allocation_threshold(J9VMThread *vmThread, UDATA low, UDATA high)
 {
 	J9JavaVM *vm = vmThread->javaVM;
 	MM_GCExtensions *ext = MM_GCExtensions::getExtensions(vm);
 	Trc_MM_AllocationThreshold_setAllocationThreshold_Entry(vmThread,low,high,ext->lowAllocationThreshold,ext->highAllocationThreshold);
-	
+
 	Assert_MM_true( low <= high );
-	
+
 	ext->lowAllocationThreshold = low;
 	ext->highAllocationThreshold = high;
 	j9gc_allocation_threshold_changed(vmThread);
@@ -967,7 +967,7 @@ j9gc_get_bytes_allocated_by_thread(J9VMThread *vmThread)
  * Return information about the total CPU time consumed by GC threads, as well
  * as the number of GC threads. The time for the main and worker threads is
  * reported separately, with the worker threads returned as a total.
- * 
+ *
  * @parm[in] vm The J9JavaVM
  * @parm[out] mainCpuMillis The amount of CPU time spent in the GC by the main thread, in milliseconds
  * @parm[out] workerCpuMillis The amount of CPU time spent in the GC by the all worker threads, in milliseconds
@@ -986,7 +986,7 @@ j9gc_get_CPU_times(J9JavaVM *javaVM, U_64 *mainCpuMillis, U_64 *workerCpuMillis,
 	while (NULL != vmThread) {
 		MM_EnvironmentBase *env = MM_EnvironmentBase::getEnvironment(vmThread->omrVMThread);
 		if (!env->isMainThread()) {
-			/* For a large number of worker threads and very long runs, a sum of 
+			/* For a large number of worker threads and very long runs, a sum of
 			 * nanos might overflow a U_64. Sum the millis and nanos separately.
 			 */
 			workerMillis += env->_workerThreadCpuTimeNanos / 1000000;
@@ -1006,11 +1006,11 @@ j9gc_get_CPU_times(J9JavaVM *javaVM, U_64 *mainCpuMillis, U_64 *workerCpuMillis,
 	if ((extensions->_mainThreadCpuTimeNanos % 1000000) > 500000) {
 		mainMillis += 1;
 	}
-	
+
 	/* Store the results */
 	*mainCpuMillis = mainMillis;
 	*workerCpuMillis = workerMillis;
-	*maxThreads = (U_32)extensions->dispatcher->threadCountMaximum();	
+	*maxThreads = (U_32)extensions->dispatcher->threadCountMaximum();
 	*currentThreads = (U_32)extensions->dispatcher->activeThreadCount();
 }
 
@@ -1115,8 +1115,9 @@ j9gc_prepare_for_checkpoint(J9VMThread *vmThread)
 	if (NULL != verboseGCManager) {
 		verboseGCManager->prepareForCheckpoint(env);
 	}
-
+	releaseVMAccess(vmThread);
 	extensions->configuration->adjustGCThreadCountForCheckpoint(env);
+	acquireVMAccess(vmThread);
 }
 
 BOOLEAN
