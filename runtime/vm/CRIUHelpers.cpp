@@ -41,7 +41,7 @@ J9_DECLARE_CONSTANT_UTF8(runPreCheckpointHooks_sig, "()V");
 J9_DECLARE_CONSTANT_UTF8(runPreCheckpointHooks_name, "runPreCheckpointHooks");
 J9_DECLARE_CONSTANT_UTF8(j9InternalCheckpointHookAPI_name, "org/eclipse/openj9/criu/J9InternalCheckpointHookAPI");
 
-static void addInternalJVMCheckpointHook(J9VMThread *currentThread, BOOLEAN isRestore, J9Class *instanceType, BOOLEAN includeSubClass, hookFunc hookFunc);
+// static void addInternalJVMCheckpointHook(J9VMThread *currentThread, BOOLEAN isRestore, J9Class *instanceType, BOOLEAN includeSubClass, hookFunc hookFunc);
 static void cleanupCriuHooks(J9VMThread *currentThread);
 static BOOLEAN fillinHookRecords(J9VMThread *currentThread, j9object_t object);
 static IDATA findinstanceFieldOffsetHelper(J9VMThread *currentThread, J9Class *instanceType, const char *fieldName, const char *fieldSig);
@@ -135,21 +135,21 @@ isNonPortableRestoreMode(J9VMThread *currentThread)
  *
  * @return void
  */
-static void
-addInternalJVMCheckpointHook(J9VMThread *currentThread, BOOLEAN isRestore, J9Class *instanceType, BOOLEAN includeSubClass, hookFunc hookFunc)
-{
-	J9JavaVM *vm = currentThread->javaVM;
-	J9InternalHookRecord *newHook = (J9InternalHookRecord*)pool_newElement(vm->checkpointState.hookRecords);
-	if (NULL == newHook) {
-		setNativeOutOfMemoryError(currentThread, 0, 0);
-	} else {
-		newHook->isRestore = isRestore;
-		newHook->instanceType = instanceType;
-		newHook->includeSubClass = includeSubClass;
-		newHook->hookFunc = hookFunc;
-		/* newHook->instanceObjects is to be lazily initialized */
-	}
-}
+// static void
+// addInternalJVMCheckpointHook(J9VMThread *currentThread, BOOLEAN isRestore, J9Class *instanceType, BOOLEAN includeSubClass, hookFunc hookFunc)
+// {
+// 	J9JavaVM *vm = currentThread->javaVM;
+// 	J9InternalHookRecord *newHook = (J9InternalHookRecord*)pool_newElement(vm->checkpointState.hookRecords);
+// 	if (NULL == newHook) {
+// 		setNativeOutOfMemoryError(currentThread, 0, 0);
+// 	} else {
+// 		newHook->isRestore = isRestore;
+// 		newHook->instanceType = instanceType;
+// 		newHook->includeSubClass = includeSubClass;
+// 		newHook->hookFunc = hookFunc;
+// 		/* newHook->instanceObjects is to be lazily initialized */
+// 	}
+// }
 
 static IDATA
 findinstanceFieldOffsetHelper(J9VMThread *currentThread, J9Class *instanceType, const char *fieldName, const char *fieldSig)
@@ -347,7 +347,7 @@ initializeCriuHooks(J9VMThread *currentThread)
 		if (NULL != juRandomClass) {
 			addInternalJVMCheckpointHook(currentThread, TRUE, juRandomClass, FALSE, juRandomReseed);
 		}
-		addInternalJVMCheckpointHook(currentThread, TRUE, NULL, FALSE, criuRestoreInitializeTrace);
+		//addInternalJVMCheckpointHook(currentThread, TRUE, NULL, FALSE, criuRestoreInitializeTrace);
 	}
 
 done:
