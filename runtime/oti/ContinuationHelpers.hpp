@@ -61,6 +61,8 @@ public:
 		(class2)->fieldName = (fieldType)temp; \
 	} while (0)
 
+
+
 		SWAP_MEMBER(arg0EA, UDATA*, vmThread, continuation);
 		SWAP_MEMBER(bytecodes, UDATA*, vmThread, continuation);
 		SWAP_MEMBER(sp, UDATA*, vmThread, continuation);

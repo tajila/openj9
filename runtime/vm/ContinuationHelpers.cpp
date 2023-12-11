@@ -127,7 +127,7 @@ createContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 		continuation->pc = (U_8*)J9SF_FRAME_TYPE_JNI_NATIVE_METHOD;
 		continuation->arg0EA = (UDATA*)&frame->savedA0;
 		continuation->stackObject->isVirtual = TRUE;
-
+		continuation->initState = 1;
 #if defined(J9VM_PROF_CONTINUATION_ALLOCATION)
 		I_64 totalTime = (I_64)j9time_hires_delta(start, j9time_hires_clock(), OMRPORT_TIME_DELTA_IN_NANOSECONDS);
 		if (totalTime > 10000) {
@@ -210,8 +210,13 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 	bool started = VM_ContinuationHelpers::isStarted(*continuationStatePtr);
 	Assert_VM_Null(currentThread->currentContinuation);
 
+	Trc_event1(continuationObject);
+
+	Trc_eventStackCont(currentThread->sp);
 	if ((!started) && (NULL == continuation)) {
+
 		result = createContinuation(currentThread, continuationObject);
+		Trc_event2(result);
 		if (!result) {
 			/* Directly return result if the create code failed, exception is already set. */
 			return result;
@@ -233,7 +238,17 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 		currentThread->javaVM->memoryManagerFunctions->preMountContinuation(currentThread, continuationObject);
 	}
 
+	Trc_event3(continuation);
+	Assert_VM_false(currentThread->sp == continuation->sp);
+	Trc_eventStackCont(currentThread->sp);
+	Assert_VM_Null(currentThread->sp2);
+	currentThread->sp2 = currentThread->sp;
 	VM_ContinuationHelpers::swapFieldsWithContinuation(currentThread, continuation, continuationObject, started);
+	Trc_eventStackCont(currentThread->sp);
+	continuation->initState |= 2;
+	continuation->isCarrierState = TRUE;
+
+	Trc_event4(continuation);
 
 	currentThread->currentContinuation = continuation;
 	/* Reset counters which determine if the current continuation is pinned. */
@@ -242,11 +257,13 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 	currentThread->callOutCount = 0;
 
 	if (started) {
+		Trc_event5(continuation);
 		/* resuming Continuation from yieldImpl */
 		VM_OutOfLineINL_Helpers::restoreInternalNativeStackFrame(currentThread);
 		VM_OutOfLineINL_Helpers::returnSingle(currentThread, JNI_TRUE, 1);
 		result = FALSE;
 	} else {
+		Trc_event6(continuation);
 		/* start new Continuation execution */
 		VM_ContinuationHelpers::setStarted(continuationStatePtr);
 
@@ -266,7 +283,8 @@ enterContinuation(J9VMThread *currentThread, j9object_t continuationObject)
 		/* push argument to stack */
 		*--currentThread->sp = (UDATA)continuationObject;
 	}
-
+	Trc_eventStackCont(currentThread->sp);
+	Trc_event12(result);
 	return result;
 }
 
@@ -280,13 +298,23 @@ yieldContinuation(J9VMThread *currentThread, BOOLEAN isFinished)
 	Assert_VM_notNull(currentThread->currentContinuation);
 	Assert_VM_false(VM_ContinuationHelpers::isPendingToBeMounted(*continuationStatePtr));
 
+	Trc_event7(continuation);
+	Trc_eventStackCont(currentThread->sp);
 	if (isFinished) {
 		VM_ContinuationHelpers::setFinished(continuationStatePtr);
 	}
 
 	currentThread->currentContinuation = NULL;
+	Trc_event8(continuation);
+	Assert_VM_false(currentThread->sp == continuation->sp);
+	Trc_eventStackCont(currentThread->sp);
+	Assert_VM_notNull(currentThread->sp2);
 	VM_ContinuationHelpers::swapFieldsWithContinuation(currentThread, continuation, continuationObject);
-
+	Trc_eventStackCont(currentThread->sp);
+	Assert_VM_true(currentThread->sp2 == currentThread->sp);
+	currentThread->sp2 = NULL;
+	continuation->isCarrierState = FALSE;
+	Trc_event9(continuation);
 	/* We need a full fence here to preserve happens-before relationship on PPC and other weakly
 	 * ordered architectures since learning/reservation is turned on by default. Since we have the
 	 * global pin lock counters we only need to need to address yield points, as thats the
@@ -314,12 +342,14 @@ yieldContinuation(J9VMThread *currentThread, BOOLEAN isFinished)
 	 */
 	if (isFinished) {
 		/* Cleanup the native structure allocated */
+		Trc_event10(continuationObject);
 		freeContinuation(currentThread, continuationObject, FALSE);
 	} else {
 		/* Notify GC of Continuation stack swap */
 		currentThread->javaVM->memoryManagerFunctions->postUnmountContinuation(currentThread, continuationObject);
 	}
-
+	Trc_eventStackCont(currentThread->sp);
+	Trc_event11(result);
 	return result;
 }
 
@@ -332,6 +362,8 @@ freeContinuation(J9VMThread *currentThread, j9object_t continuationObject, BOOLE
 		Assert_VM_true(
 					!VM_ContinuationHelpers::isConcurrentlyScanned(continuationState)
 					&& (NULL == VM_ContinuationHelpers::getCarrierThread(continuationState)));
+
+		Assert_VM_true(!continuation->isCarrierState);
 
 		/* Free old stack used by continuation. */
 		J9JavaStack *currentStack = continuation->stackObject->previous;

@@ -22,8 +22,8 @@
 
 /* #define PAINT_OLD_STACK */
 
-/* 
- * to enable tracing, use: -Xtrace:iprint=tpid(064030-06404A) 
+/*
+ * to enable tracing, use: -Xtrace:iprint=tpid(064030-06404A)
  */
 
 #define GROW_STACK_PAINT_VALUE 0xD7
@@ -58,24 +58,24 @@ extern "C" {
 #define FIX_IF_IN_RANGE(slot) \
 	if (IS_IN_STACK(slot)) { *(UDATA**)&(slot) = (((UDATA *) (slot)) + delta); }
 
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static void fixI2J (void * element, void * userData);
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static void growSlotIterator (J9VMThread * vmThread, J9StackWalkState * walkState, j9object_t * objectSlotInNewStack, const void * stackLocation);
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
-#if (defined(J9VM_JIT_FULL_SPEED_DEBUG)) 
+#if (defined(J9VM_JIT_FULL_SPEED_DEBUG))
 static void fixDecompilationRecords (J9VMThread * vmThread, UDATA delta, UDATA oldStackStart, UDATA oldStackEnd);
 #endif /* J9VM_JIT_FULL_SPEED_DEBUG */
 static void fixStackWalkState (J9StackWalkState * walkState, UDATA oldStackStart, UDATA oldStackEnd, UDATA delta);
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static UDATA addI2J (J9StackWalkState * walkState, J9I2JState * i2jState);
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
 static UDATA growFrameIterator (J9VMThread * vmThread, J9StackWalkState * walkState);
 static UDATA internalGrowJavaStack(J9VMThread * vmThread, UDATA newStackSize);
 
 
-#if (defined(J9VM_JIT_FULL_SPEED_DEBUG)) 
+#if (defined(J9VM_JIT_FULL_SPEED_DEBUG))
 static void fixDecompilationRecords(J9VMThread * vmThread, UDATA delta, UDATA oldStackStart, UDATA oldStackEnd)
 {
 	J9JITDecompilationInfo * current = vmThread->decompilationStack;
@@ -122,6 +122,8 @@ static UDATA internalGrowJavaStack(J9VMThread * vmThread, UDATA newStackSize)
 	vmThread->omrVMThread->vmState = J9VMSTATE_GROW_STACK;
 
 	Trc_VM_growJavaStack_Entry(vmThread, oldStack->size, newStackSize, vmThread->sp, vmThread->stackOverflowMark, vmThread->stackOverflowMark2);
+
+	Trc_eventStack(IS_JAVA_LANG_VIRTUALTHREAD(vmThread, vmThread->threadObject));
 
 	if (usedBytes > newStackSize) {
 		Trc_VM_growJavaStack_TooSmall(vmThread, usedBytes, newStackSize);
@@ -453,7 +455,7 @@ addFailed:
 			UDATA temp = vmThread->tempSlot & ~J9_REDIRECTED_REFERENCE;
 
 			vmThread->tempSlot = vmThread->returnValue;
-			PAINT_STACK_MEMORY(temp);					
+			PAINT_STACK_MEMORY(temp);
 			vmThread->tempSlot = (UDATA) (walkState->arg0EA + 1);
 		}
 	}
@@ -516,7 +518,7 @@ static void fixStackWalkState(J9StackWalkState * walkState, UDATA oldStackStart,
 
 
 
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static void growSlotIterator(J9VMThread * vmThread, J9StackWalkState * walkState, j9object_t * objectSlotInNewStack, const void * stackLocation)
 {
 	UDATA oldStackStart = (UDATA) walkState->userData3;
@@ -537,7 +539,7 @@ static void growSlotIterator(J9VMThread * vmThread, J9StackWalkState * walkState
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
 
 
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static UDATA addI2J(J9StackWalkState * walkState, J9I2JState * i2jState)
 {
 	J9I2JState ** element;
@@ -552,7 +554,7 @@ static UDATA addI2J(J9StackWalkState * walkState, J9I2JState * i2jState)
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
 
 
-#if (defined(J9VM_INTERP_NATIVE_SUPPORT)) 
+#if (defined(J9VM_INTERP_NATIVE_SUPPORT))
 static void fixI2J(void * element, void * userData)
 {
 	J9I2JState * i2jState = *((J9I2JState **) element);

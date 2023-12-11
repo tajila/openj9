@@ -5168,6 +5168,8 @@ typedef struct J9VMContinuation {
 	struct J9I2JState i2jState;
 	struct J9VMEntryLocalStorage* oldEntryLocalStorage;
 	UDATA dropFlags;
+	UDATA initState;
+	BOOLEAN isCarrierState;
 } J9VMContinuation;
 #endif /* JAVA_SPEC_VERSION >= 19 */
 
@@ -5425,6 +5427,7 @@ typedef struct J9VMThread {
 #if JAVA_SPEC_VERSION >= 21
 	BOOLEAN isInTrivialDownCall;
 #endif /* JAVA_SPEC_VERSION >= 21 */
+	UDATA* sp2;
 } J9VMThread;
 
 #define J9VMTHREAD_ALIGNMENT  0x100
