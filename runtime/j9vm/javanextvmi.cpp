@@ -26,10 +26,14 @@
 #include "bcverify_api.h"
 #include "j9.h"
 #include "j9cfg.h"
+#include "j9protos.h"
+#include "j9consts.h"
 #include "jvminit.h"
 #include "rommeth.h"
 #include "ut_j9scar.h"
 #include "util_api.h"
+#include "omrthread.h"
+#include "omr.h"
 
 #if JAVA_SPEC_VERSION >= 19
 #include "VMHelpers.hpp"
@@ -47,6 +51,10 @@ extern IDATA (*f_threadSleep)(I_64 millis);
 /* Define for debug
 #define DEBUG_BCV
 */
+
+extern IDATA (*f_monitorEnter)(omrthread_monitor_t monitor);
+extern IDATA (*f_monitorExit)(omrthread_monitor_t monitor);
+extern IDATA (*f_monitorWait)(omrthread_monitor_t monitor);
 
 #if JAVA_SPEC_VERSION >= 16
 JNIEXPORT void JNICALL
@@ -717,6 +725,22 @@ JVM_VirtualThreadEnd(JNIEnv *env, jobject vthread)
 	vmFuncs->internalExitVMToJNI(currentThread);
 
 	Trc_SC_VirtualThreadEnd_Exit(currentThread, vthread);
+}
+
+JNIEXPORT jobject JNICALL
+JVM_VirtualThreadWaitForPendingList(JNIEnv *env)
+{
+	J9VMThread *currentThread = (J9VMThread *)env;
+	J9JavaVM *vm = currentThread->javaVM;
+	printf("JVM_VirtualThreadWaitForPendingList native start \n");
+
+	f_monitorEnter(vm->vthreadWaitListMutex);
+
+	f_monitorWait(vm->vthreadWaitListMutex);
+
+	f_monitorExit(vm->vthreadWaitListMutex);
+
+	return NULL;
 }
 #endif /* JAVA_SPEC_VERSION >= 21 */
 

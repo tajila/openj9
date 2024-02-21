@@ -6015,6 +6015,7 @@ typedef struct J9JavaVM {
 	omrthread_monitor_t delayedLockingOperationsMutex;
 #endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
 	U_32 compatibilityFlags;
+	omrthread_monitor_t vthreadWaitListMutex;
 } J9JavaVM;
 
 #define J9VM_PHASE_STARTUP  1

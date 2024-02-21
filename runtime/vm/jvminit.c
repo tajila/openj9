@@ -4156,6 +4156,17 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 		if (showCarrierFrames > noShowCarrierFrames) {
 			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_SHOW_CARRIER_FRAMES;
 		}
+
+		IDATA argIndex = -1;
+		if ((argIndex = FIND_AND_CONSUME_VMARG(STARTSWITH_MATCH, VMOPT_XXLOCKING_MODE_EQUALS, NULL)) >= 0) {
+			UDATA option = 0;
+			char *optname = VMOPT_XXLOCKING_MODE_EQUALS;
+			GET_INTEGER_VALUE(argIndex, optname, option);
+			if (2 == option) {
+				vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_LOOM_EXTENDED_LOCKING_SUPPORT;
+			}
+		}
+
 	}
 #endif /* JAVA_SPEC_VERSION >= 19 */
 

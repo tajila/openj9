@@ -432,6 +432,7 @@ if(NOT JAVA_SPEC_VERSION LESS 21)
 		JVM_VirtualThreadMount
 		JVM_VirtualThreadStart
 		JVM_VirtualThreadUnmount
+		JVM_VirtualThreadWaitForPendingList
 	)
 endif()
 

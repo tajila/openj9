@@ -421,6 +421,8 @@ _IF([JAVA_SPEC_VERSION >= 21],
 _IF([JAVA_SPEC_VERSION >= 21],
 	[_X(JVM_VirtualThreadEnd, JNICALL, false, void, JNIEnv *env, jobject vthread)])
 _IF([JAVA_SPEC_VERSION >= 21],
+	[_X(JVM_VirtualThreadWaitForPendingList, JNICALL, false, jobject, JNIEnv *env)])
+_IF([JAVA_SPEC_VERSION >= 21],
 	[_X(JVM_VirtualThreadMount, JNICALL, false, void, JNIEnv *env, jobject vthread, jboolean hide)])
 _IF([JAVA_SPEC_VERSION >= 21],
 	[_X(JVM_VirtualThreadStart, JNICALL, false, void, JNIEnv *env, jobject vthread)])

@@ -98,6 +98,7 @@ UDATA initializeVMThreading(J9JavaVM *vm)
 #if defined(J9VM_OPT_CRIU_SUPPORT)
 		omrthread_monitor_init_with_name(&vm->delayedLockingOperationsMutex, 0, "Delayed locking operations mutex") ||
 #endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
+		omrthread_monitor_init_with_name(&vm->vthreadWaitListMutex, 0, "Virtual thread wait list mutex") ||
 
 		initializeMonitorTable(vm)
 	)

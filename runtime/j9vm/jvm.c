@@ -207,6 +207,7 @@ typedef IDATA (*ThreadAttachEx)(omrthread_t *handle, omrthread_attr_t *attr);
 typedef void (*ThreadDetach)(omrthread_t thread);
 typedef IDATA (*MonitorEnter)(omrthread_monitor_t monitor);
 typedef IDATA (*MonitorExit)(omrthread_monitor_t monitor);
+typedef IDATA (*MonitorWait)(omrthread_monitor_t monitor);
 typedef IDATA (*MonitorInit)(omrthread_monitor_t* handle, UDATA flags, char* name);
 typedef IDATA (*MonitorDestroy)(omrthread_monitor_t monitor);
 typedef IDATA (* ThreadLibControl)(const char * key, UDATA value);
@@ -268,6 +269,7 @@ static ThreadDetach f_threadDetach;
 /* Share these with the other *.c in the DLL */
 MonitorEnter f_monitorEnter;
 MonitorExit f_monitorExit;
+MonitorWait f_monitorWait;
 static MonitorInit f_monitorInit;
 static MonitorDestroy f_monitorDestroy;
 static PortInitLibrary portInitLibrary;
@@ -1012,6 +1014,7 @@ preloadLibraries(void)
 	f_threadDetach = (ThreadDetach) GetProcAddress (threadDLL, (LPCSTR) "omrthread_detach");
 	f_monitorEnter = (MonitorEnter) GetProcAddress (threadDLL, (LPCSTR) "omrthread_monitor_enter");
 	f_monitorExit = (MonitorExit) GetProcAddress (threadDLL, (LPCSTR) "omrthread_monitor_exit");
+	f_monitorWait = (MonitorWait) GetProcAddress (threadDLL, (LPCSTR) "omrthread_monitor_wait");
 	f_monitorInit = (MonitorInit) GetProcAddress (threadDLL, (LPCSTR) "omrthread_monitor_init_with_name");
 	f_monitorDestroy = (MonitorDestroy) GetProcAddress (threadDLL, (LPCSTR) "omrthread_monitor_destroy");
 	f_threadLibControl = (ThreadLibControl) GetProcAddress (threadDLL, (LPCSTR) "omrthread_lib_control");
@@ -1019,7 +1022,7 @@ preloadLibraries(void)
 	f_libEnableCPUMonitor = (LibEnableCPUMonitor) GetProcAddress (threadDLL, (LPCSTR) "omrthread_lib_enable_cpu_monitor");
 	f_threadSleep = (ThreadSleep) GetProcAddress (threadDLL, (LPCSTR) "omrthread_sleep");
 	if (!f_threadGlobal || !f_threadAttachEx || !f_threadDetach || !f_monitorEnter || !f_monitorExit || !f_monitorInit
-		|| !f_monitorDestroy || !f_threadLibControl || !f_setCategory || !f_libEnableCPUMonitor || !f_threadSleep
+		|| !f_monitorDestroy || !f_threadLibControl || !f_setCategory || !f_libEnableCPUMonitor || !f_threadSleep || !f_monitorWait
 	) {
 		FreeLibrary(vmDLL);
 		FreeLibrary(threadDLL);
@@ -1440,6 +1443,7 @@ preloadLibraries(void)
 	f_threadDetach = (ThreadDetach) dlsym (threadDLL, "omrthread_detach");
 	f_monitorEnter = (MonitorEnter) dlsym (threadDLL, "omrthread_monitor_enter");
 	f_monitorExit = (MonitorExit) dlsym (threadDLL, "omrthread_monitor_exit");
+	f_monitorWait = (MonitorExit) dlsym (threadDLL, "omrthread_monitor_wait");
 	f_monitorInit = (MonitorInit) dlsym (threadDLL, "omrthread_monitor_init_with_name");
 	f_monitorDestroy = (MonitorDestroy) dlsym (threadDLL, "omrthread_monitor_destroy");
 	f_threadLibControl = (ThreadLibControl) dlsym (threadDLL, "omrthread_lib_control");
@@ -1447,7 +1451,7 @@ preloadLibraries(void)
 	f_libEnableCPUMonitor = (LibEnableCPUMonitor) dlsym (threadDLL, "omrthread_lib_enable_cpu_monitor");
 	f_threadSleep = (ThreadSleep) dlsym (threadDLL, "omrthread_sleep");
 	if (!f_threadGlobal || !f_threadAttachEx || !f_threadDetach || !f_monitorEnter || !f_monitorExit || !f_monitorInit
-		|| !f_monitorDestroy || !f_threadLibControl || !f_setCategory || !f_libEnableCPUMonitor || !f_threadSleep
+		|| !f_monitorDestroy || !f_threadLibControl || !f_setCategory || !f_libEnableCPUMonitor || !f_threadSleep || !f_monitorWait
 	) {
 		dlclose(vmDLL);
 #ifdef J9ZOS390
