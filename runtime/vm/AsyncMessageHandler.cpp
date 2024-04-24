@@ -46,6 +46,23 @@ extern "C" {
 static UDATA
 closeScope0FrameWalkFunction(J9VMThread *vmThread, J9StackWalkState *walkState)
 {
+	J9Method *method = walkState->method;
+	printf("-------------------------------------------------------------- \n");
+	if (method != NULL) {
+		J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
+		if (NULL != romMethod && J9ROMMETHOD_HAS_EXTENDED_MODIFIERS(romMethod)) {
+			U_32 extraModifiers = getExtendedModifiersDataFromROMMethod(romMethod);
+			if (J9ROMMETHOD_HAS_SCOPED_ANNOTATION(extraModifiers)) {
+				printf("is @scoped ");
+			}
+		}
+		printf("frame %.*s::%.*s \n", (int)J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (int)J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), (char*)J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)));
+
+	} else {
+		printf("no method frame \n");
+	}
+
+
 	if (*(bool *)walkState->userData2) {
 		/* Scope has been found. */
 		return J9_STACKWALK_STOP_ITERATING;
@@ -70,12 +87,23 @@ closeScope0OSlotWalkFunction(J9VMThread *vmThread, J9StackWalkState *walkState, 
 		if (NULL != romMethod && J9ROMMETHOD_HAS_EXTENDED_MODIFIERS(romMethod)) {
 			U_32 extraModifiers = getExtendedModifiersDataFromROMMethod(romMethod);
 			if (J9ROMMETHOD_HAS_SCOPED_ANNOTATION(extraModifiers)) {
+				printf("oslot found @scoped annotation %.*s::%.*s \n", (int)J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (int)J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), (char*)J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)));
+
 				if (*slot == walkState->userData1) {
 					*(bool *)walkState->userData2 = true;
+					printf("set flag\n");
 				}
+			} else {
+				printf("oslot no @scoped annotation %.*s::%.*s \n", (int)J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (int)J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), (char*)J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)));
 			}
+		} else {
+			printf("oslot no @scoped annotation %.*s::%.*s\n", (int)J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (char*)J9UTF8_DATA(J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass)), (int)J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), (char*)J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)));
 		}
 	}
+	if (*slot == walkState->userData1) {
+		printf("found obj \n");
+	}
+
 }
 
 BOOLEAN
