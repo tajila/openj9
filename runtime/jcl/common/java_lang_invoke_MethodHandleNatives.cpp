@@ -1060,7 +1060,6 @@ Java_java_lang_invoke_MethodHandleNatives_resolve(
 					lookupOptions |= J9_RESOLVE_FLAG_NO_THROW_ON_FAIL;
 				}
 #endif /* JAVA_SPEC_VERSION >= 11 */
-				printf("resolve  field ref \n");
 				/* MemberName doesn't differentiate if a field is static or not,
 				 * the resolve code have to attempt to resolve as instance field first,
 				 * then as static field if the first attempt failed.
@@ -1087,7 +1086,6 @@ Java_java_lang_invoke_MethodHandleNatives_resolve(
 						lookupOptions,
 						NULL);
 
-					printf("resolve static field ref \n");
 
 					if (fieldAddress == NULL) {
 						declaringClass = NULL;
@@ -1097,7 +1095,6 @@ Java_java_lang_invoke_MethodHandleNatives_resolve(
 				}
 
 				if (NULL != declaringClass) {
-					printf("second path ref \n");
 					if ((NULL != callerClass)
 #if JAVA_SPEC_VERSION >= 16
 					 && (J9_ARE_NO_BITS_SET(lookupMode, MN_UNCONDITIONAL_MODE))
@@ -1140,15 +1137,13 @@ Java_java_lang_invoke_MethodHandleNatives_resolve(
 					if (VM_VMHelpers::isTrustedFinalField(fieldID->field, fieldID->declaringClass->romClass)) {
 						new_flags |= MN_TRUSTED_FINAL;
 					}
-					printf("second path ref jni field \n");
 					romField = fieldID->field;
 
 					if (J9_ARE_ANY_BITS_SET(romField->modifiers, J9AccStatic)) {
-						printf("static jni field \n");
+
 						offset = VM_VMHelpers::staticFieldOffset(currentThread, fieldID);
 
 						if (J9VM_STATIC_FIELD_IS_SINGLE_OR_DOUBLE(romField->modifiers)) {
-							printf("***resolve static field ref single/double***\n");
 							new_flags |= MN_SINGLE_OR_DOUBLE_STATIC;
 						} else if (J9_ARE_ANY_BITS_SET(romField->modifiers, J9AccFinal)) {
 							offset |= J9_SUN_FINAL_FIELD_OFFSET_TAG;
@@ -1161,7 +1156,6 @@ Java_java_lang_invoke_MethodHandleNatives_resolve(
 						}
 
 					} else {
-						printf("instance jni field \n");
 						if ((MH_REF_PUTFIELD == ref_kind) || (MH_REF_PUTSTATIC == ref_kind)) {
 							new_flags |= (MH_REF_PUTFIELD << MN_REFERENCE_KIND_SHIFT);
 						} else {
@@ -1553,19 +1547,11 @@ Java_java_lang_invoke_MethodHandleNatives_objectFieldOffset(JNIEnv *env, jclass 
 			vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
 		} else {
 			jint flags = J9VMJAVALANGINVOKEMEMBERNAME_FLAGS(currentThread, membernameObject);
-			if (J9_ARE_ALL_BITS_SET(flags, MN_SINGLE_OR_DOUBLE_STATIC)) {
-				printf("\n !!!! single/double static field 2 \n");
-			}
 			if (J9_ARE_ALL_BITS_SET(flags, MN_IS_FIELD) && J9_ARE_NO_BITS_SET(flags, J9AccStatic)) {
 				J9JNIFieldID *fieldID = (J9JNIFieldID*)(UDATA)J9OBJECT_U64_LOAD(currentThread, membernameObject, vm->vmindexOffset);
 				result = (jlong)fieldID->offset + J9VMTHREAD_OBJECT_HEADER_SIZE(currentThread);
 			} else {
 				vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
-			}
-			if (J9_ARE_ALL_BITS_SET(flags, MN_SINGLE_OR_DOUBLE_STATIC)) {
-				if (J9_ARE_ANY_BITS_SET(result, J9_SUN_STATIC_FIELD_OFFSET_TAG)) {
-					printf("\n !!!! Low tagged single/double static field 2 \n");
-				}
 			}
 		}
 	}
@@ -1603,19 +1589,10 @@ Java_java_lang_invoke_MethodHandleNatives_staticFieldOffset(JNIEnv *env, jclass 
 		} else {
 			jint flags = J9VMJAVALANGINVOKEMEMBERNAME_FLAGS(currentThread, membernameObject);
 
-			if (J9_ARE_ALL_BITS_SET(flags, MN_SINGLE_OR_DOUBLE_STATIC)) {
-				printf("\n !!!! single/double static field \n");
-			}
-
 			if (J9_ARE_ALL_BITS_SET(flags, MN_IS_FIELD & J9AccStatic)) {
 				result = (jlong)(UDATA)J9OBJECT_U64_LOAD(currentThread, membernameObject, vm->vmtargetOffset);
 			} else {
 				vmFuncs->setCurrentExceptionUTF(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
-			}
-			if (J9_ARE_ALL_BITS_SET(flags, MN_SINGLE_OR_DOUBLE_STATIC)) {
-				if (J9_ARE_ANY_BITS_SET(result, J9_SUN_STATIC_FIELD_OFFSET_TAG)) {
-					printf("\n !!!! Low tagged single/double static field \n");
-				}
 			}
 		}
 	}
