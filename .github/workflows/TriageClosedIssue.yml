@@ -66,6 +66,9 @@ jobs:
 
             if (prAuthors.length > 0) {
               resultString += `PR Authors: ${prAuthors.join(', ')}`;
+            }
+            if (prAuthors.length > 0) {
+              resultString += `PR Authors: ${prAuthors.join(', ')}\n`;
             } else {
               resultString += `PR Authors: No one :(`;
             }
@@ -75,8 +78,5 @@ jobs:
               owner: sandboxOwner,
               repo: sandboxRepo,
               body: resultString,
+              body: resultString,
             });
-
-
-
-
