@@ -2431,3 +2431,10 @@ J9NLS_VM_CRIU_DISCLAIM_CLASSES_INVALID_PAGE_SIZE.explanation=-XX:+DisclaimClasse
 J9NLS_VM_CRIU_DISCLAIM_CLASSES_INVALID_PAGE_SIZE.system_action=The JVM will print a warning.
 J9NLS_VM_CRIU_DISCLAIM_CLASSES_INVALID_PAGE_SIZE.user_response=Set page size to 4K or use -XX:-DisclaimClasses.
 # END NON-TRANSLATABLE
+
+J9NLS_VM_CLASS_NAME_EXCEEDS_MAX_LENGTH=Class name exceeds maximum length
+# START NON-TRANSLATABLE
+J9NLS_VM_CLASS_NAME_EXCEEDS_MAX_LENGTH.explanation=Class name cannot be longer than 65535 characters.
+J9NLS_VM_CLASS_NAME_EXCEEDS_MAX_LENGTH.system_action=The JVM will throw a ClassNotFoundException.
+J9NLS_VM_CLASS_NAME_EXCEEDS_MAX_LENGTH.user_response=Shorten the class name.
+# END NON-TRANSLATABLE
