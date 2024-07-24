@@ -38,9 +38,9 @@ import static com.ibm.j9ddr.vm29.structure.J9PortLibrary.*;
 import static com.ibm.j9ddr.vm29.pointer.helper.J9MemTagHelper.*;
 
 /**
- * Iterator encapsulating the knowledge of how to search for J9-malloc'd sections in 
+ * Iterator encapsulating the knowledge of how to search for J9-malloc'd sections in
  * memory.
- * 
+ *
  * Iterates over header tags. Use J9MemTagHelper to get from headers to footers and vice-versa.
  *
  */
@@ -54,7 +54,7 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 	private long currentSearchAddress;
 	private boolean isFooterCorrupted;
 	private boolean lookingForFreedCallSites;
-	
+
 	private J9MemTagIterator(long baseAddress, long topAddress,
 			long headerEyecatcher, long footerEyecatcher)
 	{
@@ -81,14 +81,14 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 		b.order(DataType.getProcess().getByteOrder());
 		b.putLong(input);
 		b.flip();
-		
+
 		/* Eyecatcher is 4 bytes - need to copy it out of the appropriate end of the bytebuffer buffer */
 		byte[] toReturn = new byte[4];
 		if (b.order() == ByteOrder.BIG_ENDIAN) {
 			b.position(4);
 		}
 		b.get(toReturn, 0, 4);
-		
+
 		return toReturn;
 	}
 
@@ -101,20 +101,20 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 			return current != null;
 		}
 	}
-	
+
 	public void moveCurrentSearchAddress(long jumpSize) {
 		/*
 		 * By default, currentSearchAddress is moved beyond the current address by internalNext() once it is called.
-		 * UDATA.SIZEOF needs to be subtracted from currentSearchAddress to be at current searched address which next() call returned. 
-		 * 
-		 * If jump size is not bigger than UDATA.SIZEOF, 
+		 * UDATA.SIZEOF needs to be subtracted from currentSearchAddress to be at current searched address which next() call returned.
+		 *
+		 * If jump size is not bigger than UDATA.SIZEOF,
 		 * skip this step since it moves current search address backward, where it should always go forward
 		 */
 		if (jumpSize > UDATA.SIZEOF) {
 			this.currentSearchAddress += jumpSize - UDATA.SIZEOF;
 		}
 	}
-	
+
 	public boolean isFooterCorrupted() {
 		return this.isFooterCorrupted;
 	}
@@ -123,28 +123,28 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 	{
 		long result;
 		this.isFooterCorrupted = false;
-		
+
 		/* Hunt for the header eyecatcher */
 		do {
 			result = DataType.getProcess().findPattern(headerEyecatcherBytes, UDATA.SIZEOF, currentSearchAddress);
-			
+
 			if (result == -1) {
 				return null;
 			}
-			
+
 			if (Addresses.greaterThan(result,topAddress)) {
 				return null;
 			}
-			
+
 			/* Move the current search address beyond the current result */
 			currentSearchAddress = result + UDATA.SIZEOF;
-			
+
 			/* Address is in range - does it point to a valid block? */
 			VoidPointer memoryBase = j9mem_get_memory_base(J9MemTagPointer.cast(result));
-			
+
 			try {
 				IDATA corruption = j9mem_check_tags(VoidPointer.cast(memoryBase), headerEyecatcher, footerEyecatcher);
-				
+
 				if (corruption.allBitsIn(J9PORT_MEMTAG_NOT_A_TAG.longValue()) ) {
 					/* This is not a memory tag */
 					continue;
@@ -152,26 +152,27 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 				if (corruption.allBitsIn(J9PORT_MEMTAG_FOOTER_TAG_CORRUPTED.longValue())
 						|| corruption.allBitsIn(J9PORT_MEMTAG_FOOTER_PADDING_CORRUPTED.longValue())) {
 					/*
-					 * A block with corrupted footer is accepted only and only if 
+					 * A block with corrupted footer is accepted only and only if
 					 * we are dealing with freed memory. Therefore, following check is double check.
-					 * If we are here, then it is freed memory is being looked for with the current algorithm. 
-					 *	
+					 * If we are here, then it is freed memory is being looked for with the current algorithm.
+					 *
 					 */
-					if (headerEyecatcher == J9MEMTAG_EYECATCHER_FREED_HEADER 
+					if (headerEyecatcher == J9MEMTAG_EYECATCHER_FREED_HEADER
 						&& footerEyecatcher == J9MEMTAG_EYECATCHER_FREED_FOOTER) {
 						this.isFooterCorrupted = true;
 						return J9MemTagPointer.cast(result);
 					}
-				}						
+				}
 			} catch (J9MemTagCheckError e) {
 				/* Tag is readable, but corrupt */
 				if (!lookingForFreedCallSites) {
 					EventManager.raiseCorruptDataEvent("Corrupt memory section found", e, false);
 				}
+				System.out.println("corupt memtag: " + result);
 				/* Find the next section */
 				continue;
 			}
-			
+
 			return J9MemTagPointer.cast(result);
 		} while (true);
 	}
@@ -196,7 +197,7 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 	{
 		return new J9MemTagIterator(baseAddress, topAddress, headerEyecatcher, footerEyecatcher);
 	}
-	
+
 	public static J9MemTagIterator iterateHeaders(long baseAddress, long topAddress, long headerEyecatcher, long footerEyecatcher, boolean lookingForFreedCallSites)
 	{
 		return new J9MemTagIterator(baseAddress, topAddress, headerEyecatcher, footerEyecatcher, lookingForFreedCallSites);
@@ -206,12 +207,12 @@ public class J9MemTagIterator implements Iterator<J9MemTagPointer>
 	{
 		return iterateHeaders(baseAddress, topAddress, J9MEMTAG_EYECATCHER_ALLOC_HEADER, J9MEMTAG_EYECATCHER_ALLOC_FOOTER);
 	}
-	
+
 	public static J9MemTagIterator iterateAllocatedHeaders()
 	{
 		return iterateAllocatedHeaders(0, UDATA.MASK);
 	}
-	
+
 	public static J9MemTagIterator iterateFreedHeaders()
 	{
 		return iterateFreedHeaders(0, UDATA.MASK);

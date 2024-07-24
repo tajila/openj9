@@ -450,6 +450,7 @@ public class J9MemTagCommands extends Command implements IEventListener
 
 			try {
 				callsite = getCString(header.callSite());
+				System.out.println("callsite: " + callsite);
 			} catch (CorruptDataException ex) {
 				callsite = "<FAULT> reading callsite string: " + ex.getMessage();
 			}
