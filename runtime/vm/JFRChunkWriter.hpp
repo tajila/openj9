@@ -66,6 +66,10 @@ enum MetadataTypeID {
 	ThreadEndID = 3,
 	ThreadSleepID = 4,
 	JVMInformationID = 86,
+	OSInformationID = 87,
+	VirtualizationInformationID = 88,
+	CPUInformationID = 92,
+	PhysicalMemoryID = 107,
 	ExecutionSampleID = 108,
 	ThreadID = 163,
 	ThreadGroupID = 164,
@@ -145,6 +149,10 @@ private:
 	static constexpr int THREAD_END_EVENT_SIZE = (4 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int THREAD_SLEEP_EVENT_SIZE = (7 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int JVM_INFORMATION_EVENT_SIZE = 3000;
+	static constexpr int PHYSICAL_MEMORY_EVENT_SIZE = (4 * sizeof(U_64)) + sizeof(U_32);
+	static constexpr int VIRTUALIZATION_INFORMATION_EVENT_SIZE = 50;
+	static constexpr int CPU_INFORMATION_EVENT_SIZE = 600;
+	static constexpr int OS_INFORMATION_EVENT_SIZE = 30;
 
 	static constexpr int METADATA_ID = 1;
 
@@ -262,6 +270,17 @@ done:
 
 			_bufferWriter = &writer;
 
+			if (FALSE == _vm->jfrState.isConstantEventsInitialized) {
+				omrthread_monitor_enter(_vm->jfrState.isConstantEventsInitializedMutex);
+				if (FALSE == _vm->jfrState.isConstantEventsInitialized) {
+					VM_JFRConstantPoolTypes::initializeJFRConstantEvents(_vm);
+						/* Ensure that initialization is complete when the initialized variable is set to true */
+					VM_AtomicSupport::writeBarrier();
+					_vm->jfrState.isConstantEventsInitialized = TRUE;
+				}
+				omrthread_monitor_exit(_vm->jfrState.isConstantEventsInitializedMutex);
+			}
+
 			/* write the header last */
 			_jfrHeaderCursor = _bufferWriter->getAndIncCursor(JFR_CHUNK_HEADER_SIZE);
 
@@ -299,6 +318,14 @@ done:
 			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
 
 			writeJVMInformationEvent();
+
+			writePhysicalMemoryEvent();
+
+			writeCPUInformationEvent();
+
+			writeVirtualizationInformationEvent();
+
+			writeOSInformationEvent();
 
 			writeJFRHeader();
 
@@ -482,6 +509,14 @@ done:
 
 	U_8 *writeJVMInformationEvent();
 
+	U_8 *writePhysicalMemoryEvent();
+
+	U_8 *writeCPUInformationEvent();
+
+	U_8 *writeVirtualizationInformationEvent();
+
+	U_8 *writeOSInformationEvent();
+
 	UDATA
 	calculateRequiredBufferSize()
 	{
@@ -521,6 +556,14 @@ done:
 		requireBufferSize += _constantPoolTypes.getThreadSleepCount() * THREAD_SLEEP_EVENT_SIZE;
 
 		requireBufferSize += JVM_INFORMATION_EVENT_SIZE;
+
+		requireBufferSize += OS_INFORMATION_EVENT_SIZE;
+
+		requireBufferSize += PHYSICAL_MEMORY_EVENT_SIZE;
+
+		requireBufferSize += VIRTUALIZATION_INFORMATION_EVENT_SIZE;
+
+		requireBufferSize += CPU_INFORMATION_EVENT_SIZE;
 
 		return requireBufferSize;
 	}
