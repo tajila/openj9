@@ -435,6 +435,10 @@ private:
 		VM_JFRConstantPoolTypes *cp = (VM_JFRConstantPoolTypes*) userData;
 		StackFrame *frame = &cp->_currentStackFrameBuffer[cp->_currentFrameCount];
 
+		if ((NULL == ramClass) || (NULL == romMethod)) {
+			goto done;
+		}
+
 		cp->_currentFrameCount++;
 
 		if ((NULL == ramClass) || (NULL == romMethod)) {
@@ -457,7 +461,7 @@ private:
 		} else {
 			frame->lineNumber = lineNumber;
 		}
-
+done:
 		return J9_STACKWALK_KEEP_ITERATING;
 	}
 

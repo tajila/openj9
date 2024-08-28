@@ -262,7 +262,7 @@ done:
 			goto done;
 		}
 
-		buffer = (U_8 *)j9mem_allocate_memory(requiredBufferSize, J9MEM_CATEGORY_CLASSES);
+		buffer = (U_8 *)j9mem_allocate_memory(8*1924*1024, J9MEM_CATEGORY_CLASSES);
 		if (NULL == buffer) {
 			_buildResult = OutOfMemory;
 		} else {
@@ -315,7 +315,7 @@ done:
 
 			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
 
-			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
+			//pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
 
 			writeJVMInformationEvent();
 

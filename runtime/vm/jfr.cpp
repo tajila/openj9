@@ -505,6 +505,7 @@ jfrVMSlept(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userDa
 		I_64 currentNanos = j9time_current_time_nanos(&result);
 		if (0 != result) {
 			jfrEvent->duration = currentNanos - event->startNanos;
+			jfrEvent->startTime = event->startNanos/1000000;
 		}
 	}
 }
