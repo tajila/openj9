@@ -165,6 +165,7 @@ threadSleepImpl(J9VMThread *vmThread, I_64 millis, I_32 nanos)
 		PORT_ACCESS_FROM_JAVAVM(javaVM);
 		UDATA result = 0;
 		I_64 startNanos = (U_64) j9time_current_time_nanos(&result);
+		I_64 startMillis = j9time_current_time_millis();
 		if (0 == result){
 			setCurrentException(vmThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
 			rc = -1;
@@ -178,7 +179,7 @@ threadSleepImpl(J9VMThread *vmThread, I_64 millis, I_32 nanos)
 			internalReleaseVMAccessSetStatus(vmThread, J9_PUBLIC_FLAGS_THREAD_SLEEPING);
 			rc = timeCompensationHelper(vmThread, HELPER_TYPE_THREAD_SLEEP, NULL, millis, nanos);
 			internalAcquireVMAccessClearStatus(vmThread, J9_PUBLIC_FLAGS_THREAD_SLEEPING);
-			TRIGGER_J9HOOK_VM_SLEPT(javaVM->hookInterface, vmThread, millis, nanos, startNanos);
+			TRIGGER_J9HOOK_VM_SLEPT(javaVM->hookInterface, vmThread, millis, nanos, startNanos, startMillis);
 		}
 
 		if (0 == rc) {

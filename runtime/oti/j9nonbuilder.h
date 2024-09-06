@@ -5617,6 +5617,9 @@ typedef struct JFRState {
 	void *constantEvents;
 	BOOLEAN isConstantEventsInitialized;
 	omrthread_monitor_t isConstantEventsInitializedMutex;
+	U_64 startTimeNanos;
+	U_64 startTicks;
+	U_64 lastChunkOffset;
 } JFRState;
 
 typedef struct J9ReflectFunctionTable {

@@ -326,6 +326,13 @@ jfrThreadCreated(J9HookInterface **hook, UDATA eventNum, void *eventData, void *
 		currentThread->jfrBuffer.bufferSize = J9JFR_THREAD_BUFFER_SIZE;
 		currentThread->jfrBuffer.bufferRemaining = J9JFR_THREAD_BUFFER_SIZE;
 	}
+	if (currentThread == currentThread->javaVM->mainThread) {
+		J9JFRThreadStart *jfrEvent = (J9JFRThreadStart*)reserveBufferWithStackTrace(currentThread, currentThread, J9JFR_EVENT_TYPE_THREAD_START, sizeof(*jfrEvent));
+		if (NULL != jfrEvent) {
+			jfrEvent->thread = currentThread;
+			jfrEvent->parentThread = currentThread;
+		}
+	}
 }
 
 /**
@@ -442,7 +449,9 @@ jfrThreadStarting(J9HookInterface **hook, UDATA eventNum, void *eventData, void 
 
 #if defined(DEBUG)
 	PORT_ACCESS_FROM_VMC(currentThread);
-	j9tty_printf(PORTLIB, "\n!!! thread starting %p %p\n", currentThread, startedThread);
+	char *threadName = getOMRVMThreadName(startedThread->omrVMThread);
+	j9tty_printf(PORTLIB, "\n!!! thread starting %p %p %s\n", currentThread, startedThread, threadName);
+	releaseOMRVMThreadName(startedThread->omrVMThread);
 #endif /* defined(DEBUG) */
 
 	J9JFRThreadStart *jfrEvent = (J9JFRThreadStart*)reserveBufferWithStackTrace(currentThread, currentThread, J9JFR_EVENT_TYPE_THREAD_START, sizeof(*jfrEvent));
@@ -501,11 +510,13 @@ jfrVMSlept(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userDa
 		// TODO: worry about overflow?
 		jfrEvent->time = (event->millis * 1000000) + event->nanos;
 		jfrEvent->duration = 0;
+		jfrEvent->startTime = event->startMillis;
 		UDATA result = 0;
 		I_64 currentNanos = j9time_current_time_nanos(&result);
 		if (0 != result) {
 			jfrEvent->duration = currentNanos - event->startNanos;
 		}
+		jfrEvent->startTime -= jfrEvent->duration/1000000;
 	}
 }
 
@@ -551,6 +562,7 @@ initializeJFR(J9JavaVM *vm)
 	jint rc = JNI_ERR;
 	J9HookInterface **vmHooks = getVMHookInterface(vm);
 	U_8 *buffer = NULL;
+	UDATA timeSuccess = 0;
 
 	/* Register async handler for execution samples */
 	vm->jfrAsyncKey = J9RegisterAsyncEvent(vm, jfrExecutionSampleCallback, NULL);
@@ -600,6 +612,8 @@ initializeJFR(J9JavaVM *vm)
 	vm->jfrBuffer.bufferRemaining = J9JFR_GLOBAL_BUFFER_SIZE;
 	vm->jfrState.jfrChunkCount = 0;
 	vm->jfrState.isConstantEventsInitialized = FALSE;
+	vm->jfrState.startTimeNanos = (U_64) j9time_current_time_nanos(&timeSuccess);
+
 	if (omrthread_monitor_init_with_name(&vm->jfrBufferMutex, 0, "JFR global buffer mutex")) {
 		goto fail;
 	}

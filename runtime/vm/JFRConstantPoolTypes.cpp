@@ -308,6 +308,37 @@ VM_JFRConstantPoolTypes::walkStackTraceTablePrint(void *entry, void *userData)
 	return FALSE;
 }
 
+
+void
+VM_JFRConstantPoolTypes::walkThreadStartTablePrint(void *anElement, void *userData)
+{
+	ThreadStartEntry *tableEntry = (ThreadStartEntry *) anElement;
+	J9VMThread *currentThread = (J9VMThread *)userData;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+	j9tty_printf(PORTLIB, "%u) time=%lu parentthread=%u \n", tableEntry->threadIndex, tableEntry->time, tableEntry->parentThreadIndex);
+}
+
+void
+VM_JFRConstantPoolTypes::walkThreadEndTablePrint(void *anElement, void *userData)
+{
+	ThreadEndEntry *tableEntry = (ThreadEndEntry *) anElement;
+	J9VMThread *currentThread = (J9VMThread *)userData;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+	j9tty_printf(PORTLIB, "%u) time=%lu\n", tableEntry->threadIndex, tableEntry->time);
+}
+
+void
+VM_JFRConstantPoolTypes::walkThreadSleepTablePrint(void *anElement, void *userData)
+{
+	ThreadSleepEntry *tableEntry = (ThreadSleepEntry *) anElement;
+	J9VMThread *currentThread = (J9VMThread *)userData;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+	j9tty_printf(PORTLIB, "%u) time=%lu duration=%lu sleepTime=%lu stackTraceIndex=%u\n", tableEntry->threadIndex, tableEntry->time, tableEntry->duration, tableEntry->sleepTime, tableEntry->stackTraceIndex);
+}
+
 UDATA
 VM_JFRConstantPoolTypes::fixupShallowEntries(void *entry, void *userData)
 {
@@ -370,6 +401,8 @@ VM_JFRConstantPoolTypes::getMethodEntry(J9ROMMethod *romMethod, J9Class *ramClas
 
 	entry->descriptorStringUTF8Index = addStringUTF8Entry(J9ROMMETHOD_SIGNATURE(romMethod));
 	if (isResultNotOKay()) goto done;
+
+	printf("methodentry: %.*s -> %d sig: %.*s -> %d\n", J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)), entry->nameStringUTF8Index, J9UTF8_LENGTH(J9ROMMETHOD_SIGNATURE(romMethod)), J9UTF8_DATA(J9ROMMETHOD_SIGNATURE(romMethod)), entry->descriptorStringUTF8Index);
 
 	entry->modifiers = romMethod->modifiers;
 	entry->index = _methodCount;
@@ -875,6 +908,8 @@ VM_JFRConstantPoolTypes::addStackTraceEntry(J9VMThread *vmThread, I_64 time, U_3
 	entry = &entryBuffer;
 	entry->vmThread = vmThread;
 	entry->time = time;
+	checkTime(entry->time * 1000000);
+
 	_buildResult = OK;
 
 	entry = (StackTraceEntry *) hashTableFind(_stackTraceTable, entry);
@@ -930,12 +965,14 @@ VM_JFRConstantPoolTypes::addExecutionSampleEntry(J9JFRExecutionSample *execution
 
 	entry->vmThread = executionSampleData->vmThread;
 	entry->time = executionSampleData->startTime;
+	checkTime(entry->time * 1000000);
+
 	entry->state = RUNNABLE; //TODO
 
 	entry->threadIndex = addThreadEntry(entry->vmThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(entry->vmThread, (UDATA*) (executionSampleData + 1), executionSampleData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(entry->vmThread, (UDATA*) (executionSampleData + 1), executionSampleData->stackTraceSize, entry->time);
 	if (isResultNotOKay()) goto done;
 
 	index = _executionSampleCount++;
@@ -957,6 +994,7 @@ VM_JFRConstantPoolTypes::addThreadStartEntry(J9JFRThreadStart *threadStartData)
 	}
 
 	entry->time = threadStartData->startTime;
+	checkTime(entry->time * 1000000);
 
 	entry->threadIndex = addThreadEntry(threadStartData->thread);
 	if (isResultNotOKay()) goto done;
@@ -967,7 +1005,7 @@ VM_JFRConstantPoolTypes::addThreadStartEntry(J9JFRThreadStart *threadStartData)
 	entry->parentThreadIndex = addThreadEntry(threadStartData->parentThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(threadStartData->parentThread, (UDATA*)(threadStartData + 1), threadStartData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(threadStartData->parentThread, (UDATA*)(threadStartData + 1), threadStartData->stackTraceSize, entry->time);
 	if (isResultNotOKay()) goto done;
 
 	index = _threadStartCount++;
@@ -988,6 +1026,7 @@ VM_JFRConstantPoolTypes::addThreadEndEntry(J9JFREvent *threadEndData)
 	}
 
 	entry->time = threadEndData->startTime;
+	checkTime(entry->time * 1000000);
 
 	entry->threadIndex = addThreadEntry(threadEndData->vmThread);
 	if (isResultNotOKay()) goto done;
@@ -1013,7 +1052,9 @@ VM_JFRConstantPoolTypes::addThreadSleepEntry(J9JFRThreadSlept *threadSleepData)
 	}
 
 	entry->time = threadSleepData->startTime;
+	checkTime(entry->time * 1000000);
 	entry->duration = threadSleepData->duration;
+	checkTime((entry->time * 1000000) + entry->duration);
 	entry->sleepTime = threadSleepData->time;
 
 	entry->threadIndex = addThreadEntry(threadSleepData->vmThread);
@@ -1022,7 +1063,7 @@ VM_JFRConstantPoolTypes::addThreadSleepEntry(J9JFRThreadSlept *threadSleepData)
 	entry->eventThreadIndex = addThreadEntry(threadSleepData->vmThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(threadSleepData->vmThread, (UDATA*)(threadSleepData + 1), threadSleepData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(threadSleepData->vmThread, (UDATA*)(threadSleepData + 1), threadSleepData->stackTraceSize, entry->time);
 	if (isResultNotOKay()) goto done;
 
 	index = _threadEndCount++;
@@ -1035,32 +1076,42 @@ done:
 void
 VM_JFRConstantPoolTypes::printTables()
 {
-	j9tty_printf(PORTLIB, "--------------- StringUTF8Table ---------------\n");
-	hashTableForEachDo(_stringUTF8Table, &walkStringUTF8TablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- StringUTF8Table ---------------\n");
+	//hashTableForEachDo(_stringUTF8Table, &walkStringUTF8TablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- Classes Table ---------------\n");
-	hashTableForEachDo(_classTable, &walkClassesTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- Classes Table ---------------\n");
+	//hashTableForEachDo(_classTable, &walkClassesTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- ClassLoader Table ---------------\n");
-	hashTableForEachDo(_classLoaderTable, &walkClassLoadersTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- ClassLoader Table ---------------\n");
+	//hashTableForEachDo(_classLoaderTable, &walkClassLoadersTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- Method Table ---------------\n");
-	hashTableForEachDo(_methodTable, &walkMethodTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- Method Table ---------------\n");
+	//hashTableForEachDo(_methodTable, &walkMethodTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- Module Table ---------------\n");
-	hashTableForEachDo(_moduleTable, &walkModuleTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- Module Table ---------------\n");
+	//hashTableForEachDo(_moduleTable, &walkModuleTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- Package Table ---------------\n");
-	hashTableForEachDo(_packageTable, &walkPackageTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- Package Table ---------------\n");
+	//hashTableForEachDo(_packageTable, &walkPackageTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- Thread Table ---------------\n");
-	hashTableForEachDo(_threadTable, &walkThreadTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- Thread Table ---------------\n");
+	//hashTableForEachDo(_threadTable, &walkThreadTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- ThreadGroup Table ---------------\n");
-	hashTableForEachDo(_threadGroupTable, &walkThreadGroupTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- ThreadGroup Table ---------------\n");
+	//hashTableForEachDo(_threadGroupTable, &walkThreadGroupTablePrint, _currentThread);
 
-	j9tty_printf(PORTLIB, "--------------- StackTrace Table ---------------\n");
-	hashTableForEachDo(_stackTraceTable, &walkStackTraceTablePrint, _currentThread);
+	//j9tty_printf(PORTLIB, "--------------- StackTrace Table ---------------\n");
+	//hashTableForEachDo(_stackTraceTable, &walkStackTraceTablePrint, _currentThread);
+
+	//j9tty_printf(PORTLIB, "--------------- ThreadStart Table ---------------\n");
+	//pool_do(_threadStartTable, &walkThreadStartTablePrint, _currentThread);
+
+	//j9tty_printf(PORTLIB, "--------------- ThreadSleep Table ---------------\n");
+	//pool_do(_threadSleepTable, &walkThreadSleepTablePrint, _currentThread);
+
+	//j9tty_printf(PORTLIB, "--------------- ThreadEnd Table ---------------\n");
+	//pool_do(_threadEndTable, &walkThreadEndTablePrint, _currentThread);
+
 }
 
 void

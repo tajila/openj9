@@ -253,9 +253,9 @@ done:
 			goto done;
 		}
 
-		if (_debug) {
+		//if (_debug) {
 			_constantPoolTypes.printTables();
-		}
+		//}
 
 		if (FALSE == _vm->jfrState.isConstantEventsInitialized) {
 			omrthread_monitor_enter(_vm->jfrState.isConstantEventsInitializedMutex);
@@ -277,7 +277,7 @@ done:
 			goto done;
 		}
 
-		buffer = (U_8 *)j9mem_allocate_memory(requiredBufferSize, J9MEM_CATEGORY_CLASSES);
+		buffer = (U_8 *)j9mem_allocate_memory(8*1024*1024, J9MEM_CATEGORY_CLASSES);
 		if (NULL == buffer) {
 			_buildResult = OutOfMemory;
 		} else {
@@ -313,23 +313,23 @@ done:
 
 			writeStacktraceCheckpointEvent();
 
-			pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, _bufferWriter);
 
-			pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, _bufferWriter);
 
 			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
 
 			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
 
-			writeJVMInformationEvent();
+			// writeJVMInformationEvent();
 
-			writePhysicalMemoryEvent();
+			// writePhysicalMemoryEvent();
 
-			writeCPUInformationEvent();
+			// writeCPUInformationEvent();
 
-			writeVirtualizationInformationEvent();
+			// writeVirtualizationInformationEvent();
 
-			writeOSInformationEvent();
+			// writeOSInformationEvent();
 
 			writeJFRHeader();
 
@@ -337,7 +337,7 @@ done:
 				Trc_VM_jfr_ErrorWritingChunk(_currentThread, _buildResult);
 				goto freeBuffer;
 			}
-
+			_vm->jfrState.lastChunkOffset += _bufferWriter->getSize();
 			writeJFRChunkToFile();
 
 			_vm->jfrState.jfrChunkCount += 1;
@@ -477,14 +477,14 @@ done:
 			_buildResult = FileIOError;
 		}
 
-		if (_debug) {
+		//if (_debug) {
 			writeIntermediateJFRChunkToFile();
-		}
+		//}
 
 		return;
 	}
 
-	void writeJFRHeader();
+	U_8* writeJFRHeader();
 
 	U_8 *writeJFRMetadata();
 

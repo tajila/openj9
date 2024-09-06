@@ -309,6 +309,8 @@ private:
 	UDATA _requiredBufferSize;
 	U_32 _currentFrameCount;
 	void **_globalStringTable;
+	U_64 _startTime;
+	U_64 _endTime;
 
 protected:
 
@@ -373,6 +375,12 @@ private:
 
 	static UDATA walkStackTraceTablePrint(void *entry, void *userData);
 
+	static void walkThreadStartTablePrint(void *anElement, void *userData);
+
+	static void walkThreadEndTablePrint(void *anElement, void *userData);
+
+	static void walkThreadSleepTablePrint(void *anElement, void *userData);
+
 	static UDATA fixupShallowEntries(void *entry, void *userData);
 
 	static UDATA walkMethodTablePrint(void *entry, void *userData);
@@ -436,12 +444,13 @@ private:
 		VM_JFRConstantPoolTypes *cp = (VM_JFRConstantPoolTypes*) userData;
 		StackFrame *frame = &cp->_currentStackFrameBuffer[cp->_currentFrameCount];
 
-		cp->_currentFrameCount++;
+
 
 		if ((NULL == ramClass) || (NULL == romMethod)) {
 			/* unknown native method */
-			frame->methodIndex = 0;
-			frame->frameType = Native;
+			goto done;
+			// frame->methodIndex = 0;
+			// frame->frameType = Native;
 		} else {
 			frame->methodIndex = cp->getMethodEntry(romMethod, ramClass);
 			frame->frameType = Interpreted; /* TODO need a way to know if its JIT'ed and inlined */
@@ -458,7 +467,8 @@ private:
 		} else {
 			frame->lineNumber = lineNumber;
 		}
-
+		cp->_currentFrameCount++;
+done:
 		return J9_STACKWALK_KEEP_ITERATING;
 	}
 
@@ -479,9 +489,9 @@ private:
 		hashTableForEachDo(_stringUTF8Table, &mergeStringUTF8EntriesToGlobalTable, this);
 		hashTableForEachDo(_packageTable, &mergePackageEntriesToGlobalTable, this);
 
-		if (_debug) {
+		//if (_debug) {
 			printMergedStringTables();
-		}
+		//}
 done:
 		return;
 	}
@@ -670,6 +680,25 @@ public:
 		return (JFRConstantEvents *)vm->jfrState.constantEvents;
 	}
 
+	void checkTime(U_64 time)
+	{
+		if (time < _startTime) {
+			_startTime = time;
+		}
+		if (time > _endTime) {
+			_endTime = time;
+		}
+	}
+
+	U_64 getStartTime()
+	{
+		return _startTime;
+	}
+
+	U_64 getEndTime()
+	{
+		return _endTime;
+	}
 
 	void printTables();
 
@@ -706,7 +735,7 @@ public:
 		mergeStringTables();
 	}
 
-	U_32 consumeStackTrace(J9VMThread *walkThread, UDATA *walkStateCache, UDATA numberOfFrames) {
+	U_32 consumeStackTrace(J9VMThread *walkThread, UDATA *walkStateCache, UDATA numberOfFrames, I_64 time) {
 		U_32 index = U_32_MAX;
 		UDATA expandedStackTraceCount = 0;
 
@@ -726,7 +755,7 @@ public:
 
 		iterateStackTraceImpl(_currentThread, (j9object_t*)walkStateCache, &stackTraceCallback, this, FALSE, FALSE, numberOfFrames, FALSE);
 
-		index = addStackTraceEntry(walkThread, VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult), _currentFrameCount);
+		index = addStackTraceEntry(walkThread, time, _currentFrameCount);
 		_stackFrameCount += expandedStackTraceCount;
 		_currentStackFrameBuffer = NULL;
 
@@ -1003,6 +1032,8 @@ done:
 		, _previousPackageEntry(NULL)
 		, _firstPackageEntry(NULL)
 		, _requiredBufferSize(0)
+		, _startTime(U_64_MAX)
+		, _endTime(0)
 	{
 		_classTable = hashTableNew(OMRPORT_FROM_J9PORT(privatePortLibrary), J9_GET_CALLSITE(), 0, sizeof(ClassEntry), sizeof(ClassEntry *), J9HASH_TABLE_ALLOW_SIZE_OPTIMIZATION, J9MEM_CATEGORY_CLASSES, jfrClassHashFn, jfrClassHashEqualFn, NULL, _vm);
 		if (NULL == _classTable) {
@@ -1139,6 +1170,9 @@ done:
 		_defaultStackTraceEntry = {0};
 		_firstStackTraceEntry = &_defaultStackTraceEntry;
 		_previousStackTraceEntry = _firstStackTraceEntry;
+
+		/* make sure that is at least one valid time in this checkpoint */
+		checkTime(VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult));
 
 done:
 		return;

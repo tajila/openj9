@@ -27,7 +27,7 @@
 #include "JFRChunkWriter.hpp"
 #include "JFRConstantPoolTypes.hpp"
 
-void
+U_8*
 VM_JFRChunkWriter::writeJFRHeader()
 {
 	_bufferWriter->setCursor(_jfrHeaderCursor);
@@ -49,10 +49,13 @@ VM_JFRChunkWriter::writeJFRHeader()
 	_bufferWriter->writeU64(_bufferWriter->getFileOffsetFromStart(_metadataOffset)); // 24
 
 	/* start time */
-	_bufferWriter->writeU64(VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult)); // 32
+	_bufferWriter->writeU64(_vm->jfrState.startTimeNanos); // 32
+
+	printf("write header start1=%lu start2=%lu end=%lu\n", VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult), _constantPoolTypes.getStartTime(), _constantPoolTypes.getEndTime());
 
 	/* duration */
-	_bufferWriter->writeU64(0); // 40
+	//_bufferWriter->writeU64(_constantPoolTypes.getEndTime() - _constantPoolTypes.getStartTime()); // 40
+	_bufferWriter->writeU64(0);
 
 	/* start ticks */
 	_bufferWriter->writeU64(0); // 48
@@ -68,9 +71,12 @@ VM_JFRChunkWriter::writeJFRHeader()
 
 	U_8 flags = JFR_HEADER_SPECIALFLAGS_COMPRESSED_INTS;
 	if (_finalWrite) {
-		flags |= JFR_HEADER_SPECIALFLAGS_LAST_CHUNK;
+		//flags |= JFR_HEADER_SPECIALFLAGS_LAST_CHUNK;
 	}
 	_bufferWriter->writeU8(flags);
+
+	return _bufferWriter->getCursor();
+	printf("write chunk-----------------\n");
 }
 
 U_8 *
@@ -649,7 +655,7 @@ VM_JFRChunkWriter::writeJVMInformationEvent()
 	_bufferWriter->writeLEB128(JVMInformationID);
 
 	/* write start time */
-	_bufferWriter->writeLEB128(j9time_current_time_millis());
+	_bufferWriter->writeLEB128(jvmInfo->jvmStartTime);
 
 	/* write JVM name */
 	writeStringLiteral(jvmInfo->jvmName);

@@ -70,6 +70,11 @@ public:
 		return result;
 	}
 
+	static U_64 convertMillisToNanos(U_64 time)
+	{
+		return time * 1000000;
+	}
+
 };
 
 #endif /* defined(J9VM_OPT_JFR) */
