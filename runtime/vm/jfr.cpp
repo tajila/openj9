@@ -55,6 +55,7 @@ static void jfrVMInitialized(J9HookInterface **hook, UDATA eventNum, void *event
 static void initializeEventFields(J9VMThread *currentThread, J9JFREvent *jfrEvent, UDATA eventType);
 static int J9THREAD_PROC jfrSamplingThreadProc(void *entryArg);
 static void jfrExecutionSampleCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData);
+static void jfrThreadCPULoadCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData);
 
 /**
  * Calculate the size in bytes of a JFR event.
@@ -79,6 +80,12 @@ jfrEventSize(J9JFREvent *jfrEvent)
 		break;
 	case J9JFR_EVENT_TYPE_THREAD_SLEEP:
 		size = sizeof(J9JFRThreadSlept) + (((J9JFRThreadSlept*)jfrEvent)->stackTraceSize * sizeof(UDATA));
+		break;
+	case J9JFR_EVENT_TYPE_CPU_LOAD:
+		size = sizeof(J9JFRCPULoad);
+		break;
+	case J9JFR_EVENT_TYPE_THREAD_CPU_LOAD:
+		size = sizeof(J9JFRThreadCPULoad);
 		break;
 	default:
 		Assert_VM_unreachable();
@@ -558,6 +565,11 @@ initializeJFR(J9JavaVM *vm)
 		goto fail;
 	}
 
+	vm->jfrThreadCPULoadAsyncKey = J9RegisterAsyncEvent(vm, jfrThreadCPULoadCallback, NULL);
+	if (vm->jfrThreadCPULoadAsyncKey < 0) {
+		goto fail;
+	}
+
 	if ((*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_THREAD_CREATED, jfrThreadCreated, OMR_GET_CALLSITE(), NULL)) {
 		goto fail;
 	}
@@ -600,6 +612,8 @@ initializeJFR(J9JavaVM *vm)
 	vm->jfrBuffer.bufferRemaining = J9JFR_GLOBAL_BUFFER_SIZE;
 	vm->jfrState.jfrChunkCount = 0;
 	vm->jfrState.isConstantEventsInitialized = FALSE;
+	vm->jfrState.prevSysCPUTime.timestamp = -1;
+	vm->jfrState.prevProcTimestamp = -1;
 	if (omrthread_monitor_init_with_name(&vm->jfrBufferMutex, 0, "JFR global buffer mutex")) {
 		goto fail;
 	}
@@ -680,6 +694,10 @@ tearDownJFR(J9JavaVM *vm)
 		J9UnregisterAsyncEvent(vm, vm->jfrAsyncKey);
 		vm->jfrAsyncKey = -1;
 	}
+	if (vm->jfrThreadCPULoadAsyncKey >= 0) {
+		J9UnregisterAsyncEvent(vm, vm->jfrThreadCPULoadAsyncKey);
+		vm->jfrThreadCPULoadAsyncKey = -1;
+	}
 
 }
 
@@ -720,6 +738,104 @@ jfrExecutionSampleCallback(J9VMThread *currentThread, IDATA handlerKey, void *us
 	jfrExecutionSample(currentThread, currentThread);
 }
 
+void
+jfrCPULoad(J9VMThread *currentThread)
+{
+	PORT_ACCESS_FROM_VMC(currentThread);
+	OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+
+	J9JFRCPULoad *jfrEvent = (J9JFRCPULoad *)reserveBuffer(currentThread, sizeof(J9JFRCPULoad));
+	if (NULL != jfrEvent) {
+		initializeEventFields(currentThread, (J9JFREvent *)jfrEvent, J9JFR_EVENT_TYPE_CPU_LOAD);
+		UDATA numberOfCpus = j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_ONLINE);
+
+		omrthread_process_time_t currentProcCPUTime = {0};
+		intptr_t rc = omrthread_get_process_times(&currentProcCPUTime);
+
+		UDATA success = 0;
+		U_64 currentTime = (U_64)j9time_current_time_nanos(&success);
+		if (rc < 0 || 0 == success) {
+			jfrEvent->jvmUser = -1;
+			jfrEvent->jvmSystem = -1;
+		} else {
+			omrthread_process_time_t *prevProcCPUTime = &currentThread->javaVM->jfrState.prevProcCPUTime;
+			I_64 *prevProcTimestamp = &currentThread->javaVM->jfrState.prevProcTimestamp;
+			if (-1 == *prevProcTimestamp) {
+				jfrEvent->jvmUser = 0;
+				jfrEvent->jvmSystem = 0;
+			} else {
+				U_64 timeDelta = currentTime - *prevProcTimestamp;
+				jfrEvent->jvmUser = OMR_MIN((currentProcCPUTime._userTime - prevProcCPUTime->_userTime) / ((double)numberOfCpus * timeDelta), 1.0);
+				jfrEvent->jvmSystem = OMR_MIN((currentProcCPUTime._systemTime - prevProcCPUTime->_systemTime) / ((double)numberOfCpus * timeDelta), 1.0);
+			}
+			*prevProcCPUTime = currentProcCPUTime;
+			*prevProcTimestamp = currentTime;
+		}
+
+		J9SysinfoCPUTime currentSysCPUTime = {0};
+		rc = omrsysinfo_get_CPU_utilization(&currentSysCPUTime);
+		if (rc < 0) {
+			jfrEvent->machineTotal = rc;
+		} else {
+			J9SysinfoCPUTime *prevSysCPUTime = &currentThread->javaVM->jfrState.prevSysCPUTime;
+			if (-1 == prevSysCPUTime->timestamp) {
+				jfrEvent->machineTotal = 0;
+			} else {
+				jfrEvent->machineTotal = OMR_MIN((currentSysCPUTime.cpuTime - prevSysCPUTime->cpuTime) / ((double)numberOfCpus * (currentSysCPUTime.timestamp - prevSysCPUTime->timestamp)), 1.0);
+			}
+			*prevSysCPUTime = currentSysCPUTime;
+		}
+	}
+}
+
+void
+jfrThreadCPULoad(J9VMThread *currentThread, J9VMThread *sampleThread)
+{
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+	J9JFRThreadCPULoad *jfrEvent = (J9JFRThreadCPULoad*)reserveBuffer(currentThread, sizeof(*jfrEvent));
+	if (NULL != jfrEvent) {
+		initializeEventFields(currentThread, (J9JFREvent *)jfrEvent, J9JFR_EVENT_TYPE_THREAD_CPU_LOAD);
+		/* Currently omrthread_get_user_time is not supported on all platforms.
+		 * If not supported, system time will be the total CPU time.
+		 */
+		I_64 cpuTime = (I_64)omrthread_get_cpu_time(sampleThread->osThread);
+		I_64 userTime = (I_64)omrthread_get_user_time(sampleThread->osThread);
+		UDATA success = 0;
+		U_64 currentTime = (U_64)j9time_current_time_nanos(&success);
+		if (0 == success || -1 == cpuTime) {
+			jfrEvent->user = -1;
+			jfrEvent->system = -1;
+		} else {
+			ThreadJFRState* jfrState = &sampleThread->jfrState;
+			I_64 *prevTimestamp = &jfrState->prevTimestamp;
+			if (-1 == *prevTimestamp) {
+				jfrEvent->user = 0;
+				jfrEvent->system = 0;
+			} else {
+				U_64 timeDelta = currentTime - *prevTimestamp;
+				UDATA numberOfCpus = j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_ONLINE);
+				if (-1 == userTime) {
+					jfrEvent->user = -1;
+					jfrEvent->system = OMR_MIN((cpuTime - jfrState->prevSysTime) / ((double)numberOfCpus * timeDelta), 1.0);
+				} else {
+					jfrEvent->user = OMR_MIN((userTime - jfrState->prevUserTime) / ((double)numberOfCpus * timeDelta), 1.0);
+					jfrEvent->system = OMR_MIN(((cpuTime - userTime) - jfrState->prevSysTime) / ((double)numberOfCpus * timeDelta), 1.0);
+				}
+			}
+			*prevTimestamp = currentTime;
+			jfrState->prevUserTime = userTime;
+			jfrState->prevSysTime = cpuTime - (-1 == userTime ? 0 : userTime);
+		}
+	}
+}
+
+static void
+jfrThreadCPULoadCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData)
+{
+	jfrThreadCPULoad(currentThread, currentThread);
+}
+
 static int J9THREAD_PROC
 jfrSamplingThreadProc(void *entryArg)
 {
@@ -730,8 +846,16 @@ jfrSamplingThreadProc(void *entryArg)
 		omrthread_monitor_enter(vm->jfrSamplerMutex);
 		vm->jfrSamplerState = J9JFR_SAMPLER_STATE_RUNNING;
 		omrthread_monitor_notify_all(vm->jfrSamplerMutex);
+		UDATA count = 0;
 		while (J9JFR_SAMPLER_STATE_STOP != vm->jfrSamplerState) {
 			J9SignalAsyncEvent(vm, NULL, vm->jfrAsyncKey);
+			if (count % 100 == 0) { // 1000ms
+				jfrCPULoad(currentThread);
+			}
+			if (count % 1000 == 0) { // 10s
+				J9SignalAsyncEvent(vm, NULL, vm->jfrThreadCPULoadAsyncKey);
+			}
+			count++;
 			omrthread_monitor_wait_timed(vm->jfrSamplerMutex, J9JFR_SAMPLING_RATE, 0);
 		}
 		omrthread_monitor_exit(vm->jfrSamplerMutex);

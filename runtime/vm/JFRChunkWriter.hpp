@@ -69,6 +69,8 @@ enum MetadataTypeID {
 	OSInformationID = 87,
 	VirtualizationInformationID = 88,
 	CPUInformationID = 92,
+	CPULoadID = 94,
+	ThreadCPULoadID = 95,
 	PhysicalMemoryID = 107,
 	ExecutionSampleID = 108,
 	ThreadID = 163,
@@ -153,6 +155,8 @@ private:
 	static constexpr int VIRTUALIZATION_INFORMATION_EVENT_SIZE = 50;
 	static constexpr int CPU_INFORMATION_EVENT_SIZE = 600;
 	static constexpr int OS_INFORMATION_EVENT_SIZE = 100;
+	static constexpr int CPU_LOAD_EVENT_SIZE = 3 * sizeof(float) + 3 * sizeof(I_64);
+	static constexpr int THREAD_CPU_LOAD_EVENT_SIZE = 2 * sizeof(float) + 4 * sizeof(I_64);
 
 	static constexpr int METADATA_ID = 1;
 
@@ -321,6 +325,10 @@ done:
 
 			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
 
+			pool_do(_constantPoolTypes.getCPULoadTable(), &writeCPULoadEvent, _bufferWriter);
+
+			pool_do(_constantPoolTypes.getThreadCPULoadTable(), &writeThreadCPULoadEvent, _bufferWriter);
+
 			/* Only write constant events in first chunk */
 			if (0 == _vm->jfrState.jfrChunkCount) {
 				writeJVMInformationEvent();
@@ -469,6 +477,62 @@ done:
 		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
 	}
 
+	static void
+	writeCPULoadEvent(void *anElement, void *userData)
+	{
+		CPULoadEntry *entry = (CPULoadEntry *)anElement;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)userData;
+
+		/* reserve size field */
+		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
+
+		/* write event type */
+		_bufferWriter->writeLEB128(CPULoadID);
+
+		/* write start time */
+		_bufferWriter->writeLEB128(entry->time);
+
+		/* write user CPU load */
+		_bufferWriter->writeFloat(entry->jvmUser);
+
+		/* write system CPU load */
+		_bufferWriter->writeFloat(entry->jvmSystem);
+
+		/* write machine total CPU load */
+		_bufferWriter->writeFloat(entry->machineTotal);
+
+		/* write size */
+		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
+	}
+
+	static void
+	writeThreadCPULoadEvent(void *anElement, void *userData)
+	{
+		ThreadCPULoadEntry *entry = (ThreadCPULoadEntry *)anElement;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)userData;
+
+		/* reserve size field */
+		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
+
+		/* write event type */
+		_bufferWriter->writeLEB128(ThreadCPULoadID);
+
+		/* write start time */
+		_bufferWriter->writeLEB128(entry->time);
+
+		/* write thread index */
+		_bufferWriter->writeLEB128(entry->threadIndex);
+
+		/* write user thread CPU load */
+		_bufferWriter->writeFloat(entry->user);
+
+		/* write system thread CPU load */
+		_bufferWriter->writeFloat(entry->system);
+
+		/* write size */
+		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
+	}
+
 	void
 	writeJFRChunkToFile()
 	{
@@ -578,6 +642,10 @@ done:
 		requireBufferSize += VIRTUALIZATION_INFORMATION_EVENT_SIZE;
 
 		requireBufferSize += CPU_INFORMATION_EVENT_SIZE;
+
+		requireBufferSize += _constantPoolTypes.getCPULoadCount() * CPU_LOAD_EVENT_SIZE;
+
+		requireBufferSize += _constantPoolTypes.getThreadCPULoadCount() * THREAD_CPU_LOAD_EVENT_SIZE;
 
 		return requireBufferSize;
 	}
