@@ -4241,9 +4241,11 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 			char* jfrOptionBuffer = NULL;
 			GET_OPTION_VALUE(jfrOptionIndex, '=', &jfrOptionBuffer);
 			if (NULL == jfrOptionBuffer) {
+				printf("jfr option1\n");
 				vm->jfrState.jfrCMDLineOption = (char*)"dumponexit=false";
 			}
 			else {
+				printf("jfr option2\n");
 				vm->jfrState.jfrCMDLineOption = jfrOptionBuffer;
 			}
 		}

@@ -299,14 +299,14 @@ public static void ensureCalledFromBootstrapClass() {
  */
 public static native void dumpString(String str);
 
-/*[IF JFR_SUPPORT]*/
+
 /**
  * Native used to get a jfr option string
  *
  * @return a String which is jfr option
  */
 public static native String getjfrCMDLineOption();
-/*[ENDIF] JFR_SUPPORT */
+
 
 /**
  * Native used to set the classpath for an OTI implemented classloader
@@ -647,10 +647,10 @@ public static Properties internalGetProperties() {
 	return getVMLangAccess().internalGetProperties();
 }
 
-/*[IF JFR_SUPPORT]*/
+
 /**
  * Trigger ExecutionSample JFR event on all Java threads.
  */
 public static native void triggerExecutionSample();
-/*[ENDIF] JFR_SUPPORT */
+
 }
