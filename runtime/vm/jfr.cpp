@@ -326,6 +326,14 @@ jfrThreadCreated(J9HookInterface **hook, UDATA eventNum, void *eventData, void *
 		currentThread->jfrBuffer.bufferSize = J9JFR_THREAD_BUFFER_SIZE;
 		currentThread->jfrBuffer.bufferRemaining = J9JFR_THREAD_BUFFER_SIZE;
 	}
+
+	if (currentThread == currentThread->javaVM->mainThread) {
+		J9JFRThreadStart *jfrEvent = (J9JFRThreadStart*)reserveBufferWithStackTrace(currentThread, currentThread, J9JFR_EVENT_TYPE_THREAD_START, sizeof(*jfrEvent));
+		if (NULL != jfrEvent) {
+			jfrEvent->thread = currentThread;
+			jfrEvent->parentThread = currentThread;
+		}
+	}
 }
 
 /**

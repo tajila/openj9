@@ -48,11 +48,11 @@ VM_JFRChunkWriter::writeJFRHeader()
 	/* metadata offset */
 	_bufferWriter->writeU64(_bufferWriter->getFileOffsetFromStart(_metadataOffset)); // 24
 
-	/* start time */
-	_bufferWriter->writeU64(VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult)); // 32
+	/* start time - all event times begin at this offset */
+	_bufferWriter->writeU64(_vm->j9ras->startTimeMillis * 1000000); // 32
 
 	/* duration */
-	_bufferWriter->writeU64(0); // 40
+	_bufferWriter->writeU64((_vm->j9ras->startTimeMillis - j9time_current_time_millis()) * 1000000); // 40
 
 	/* start ticks */
 	_bufferWriter->writeU64(0); // 48
@@ -68,7 +68,7 @@ VM_JFRChunkWriter::writeJFRHeader()
 
 	U_8 flags = JFR_HEADER_SPECIALFLAGS_COMPRESSED_INTS;
 	if (_finalWrite) {
-		flags |= JFR_HEADER_SPECIALFLAGS_LAST_CHUNK;
+		//flags |= JFR_HEADER_SPECIALFLAGS_LAST_CHUNK;
 	}
 	_bufferWriter->writeU8(flags);
 }
@@ -138,7 +138,7 @@ VM_JFRChunkWriter::writeCheckpointEventHeader(CheckpointTypeMask typeMask, U_32 
 	_bufferWriter->writeU8(EventCheckpoint);
 
 	/* start time */
-	_bufferWriter->writeLEB128(VM_JFRUtils::getCurrentTimeNanos(privatePortLibrary, _buildResult));
+	_bufferWriter->writeLEB128((j9time_current_time_millis() - _vm->j9ras->startTimeMillis) * 1000000);
 
 	/* duration */
 	_bufferWriter->writeLEB128((U_64)0);

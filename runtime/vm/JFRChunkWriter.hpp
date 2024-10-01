@@ -315,13 +315,13 @@ done:
 
 			writeStacktraceCheckpointEvent();
 
-			pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, _bufferWriter);
+			//pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, this);
 
-			pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, _bufferWriter);
+			pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, this);
 
-			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
+			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, this);
 
-			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
+			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, this);
 
 			/* Only write constant events in first chunk */
 			if (0 == _vm->jfrState.jfrChunkCount) {
@@ -362,7 +362,9 @@ done:
 	writeExecutionSampleEvent(void *anElement, void *userData)
 	{
 		ExecutionSampleEntry *entry = (ExecutionSampleEntry *)anElement;
-		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)userData;
+		VM_JFRChunkWriter *chunkWriter = (VM_JFRChunkWriter*)userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)chunkWriter->_bufferWriter;
+		J9JavaVM *vm = chunkWriter->_vm;
 
 		/* reserve size field */
 		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
@@ -371,7 +373,7 @@ done:
 		_bufferWriter->writeLEB128(ExecutionSampleID);
 
 		/* write start time */
-		_bufferWriter->writeLEB128(entry->time);
+		_bufferWriter->writeLEB128((entry->time - vm->j9ras->startTimeMillis)  * 1000000);
 
 		/* write sampling thread index */
 		_bufferWriter->writeLEB128(entry->threadIndex);
@@ -390,7 +392,9 @@ done:
 	writeThreadStartEvent(void *anElement, void *userData)
 	{
 		ThreadStartEntry *entry = (ThreadStartEntry *)anElement;
-		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)userData;
+		VM_JFRChunkWriter *chunkWriter = (VM_JFRChunkWriter*)userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)chunkWriter->_bufferWriter;
+		J9JavaVM *vm = chunkWriter->_vm;
 
 		/* reserve size field */
 		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
@@ -399,7 +403,7 @@ done:
 		_bufferWriter->writeLEB128(ThreadStartID);
 
 		/* write start time */
-		_bufferWriter->writeLEB128(entry->time);
+		_bufferWriter->writeLEB128((entry->time - vm->j9ras->startTimeMillis) * 1000000);
 
 		/* write event thread index */
 		_bufferWriter->writeLEB128(entry->eventThreadIndex);
@@ -421,7 +425,9 @@ done:
 	writeThreadEndEvent(void *anElement, void *userData)
 	{
 		ThreadEndEntry *entry = (ThreadEndEntry *)anElement;
-		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)userData;
+		VM_JFRChunkWriter *chunkWriter = (VM_JFRChunkWriter*)userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)chunkWriter->_bufferWriter;
+		J9JavaVM *vm = chunkWriter->_vm;
 
 		/* reserve size field */
 		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
@@ -430,7 +436,7 @@ done:
 		_bufferWriter->writeLEB128(ThreadEndID);
 
 		/* write start time */
-		_bufferWriter->writeLEB128(entry->time);
+		_bufferWriter->writeLEB128((entry->time - vm->j9ras->startTimeMillis) * 1000000);
 
 		/* write event thread index */
 		_bufferWriter->writeLEB128(entry->eventThreadIndex);
@@ -446,7 +452,9 @@ done:
 	writeThreadSleepEvent(void *anElement, void *userData)
 	{
 		ThreadSleepEntry *entry = (ThreadSleepEntry *)anElement;
-		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *) userData;
+		VM_JFRChunkWriter *chunkWriter = (VM_JFRChunkWriter*)userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *)chunkWriter->_bufferWriter;
+		J9JavaVM *vm = chunkWriter->_vm;
 
 		/* reserve size field */
 		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
@@ -455,7 +463,7 @@ done:
 		_bufferWriter->writeLEB128(ThreadSleepID);
 
 		/* write start time */
-		_bufferWriter->writeLEB128(entry->time);
+		_bufferWriter->writeLEB128((entry->time - vm->j9ras->startTimeMillis) * 1000000);
 
 		/* write duration time which is always in ticks, in our case nanos */
 		_bufferWriter->writeLEB128(entry->duration);
