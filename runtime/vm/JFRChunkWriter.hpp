@@ -84,6 +84,8 @@ enum MetadataTypeID {
 	StackTraceID = 187,
 	FrameTypeID = 188,
 	StackFrameID = 196,
+	JavaErrorThrowID = 1304,
+	JavaExceptionThrowID = 1300,
 };
 
 enum ReservedEvent {
@@ -183,7 +185,7 @@ public:
 		: _currentThread(currentThread)
 		, _vm(currentThread->javaVM)
 		, _buildResult(OK)
-		, _debug(false)
+		, _debug(true)
 		, privatePortLibrary(_vm->portLibrary)
 		, _finalWrite(finalWrite)
 		, _constantPoolTypes(currentThread)
@@ -322,6 +324,8 @@ done:
 			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
 
 			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
+
+			pool_do(_constantPoolTypes.getThrowTable(), &writeThrowableAndExceptionEvent, this);
 
 			/* Only write constant events in first chunk */
 			if (0 == _vm->jfrState.jfrChunkCount) {
@@ -477,6 +481,45 @@ done:
 		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
 	}
 
+	static void
+	writeThrowableAndExceptionEvent(void *anElement, void *userData)
+	{
+		ThrowEntry *entry = (ThrowEntry *)anElement;
+		VM_JFRChunkWriter *writer = (VM_JFRChunkWriter*) userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *) writer->_bufferWriter;
+
+		/* reserve size field */
+		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
+
+		/* write event type */
+		if (entry->isException) {
+			_bufferWriter->writeLEB128(JavaExceptionThrowID);
+		} else {
+			_bufferWriter->writeLEB128(JavaErrorThrowID);
+		}
+
+		/* write start time */
+		_bufferWriter->writeLEB128(entry->ticks);
+
+		/* write duration - TODO write zero for now */
+		_bufferWriter->writeLEB128(1);
+
+		/* write event thread index */
+		_bufferWriter->writeLEB128(entry->eventThreadIndex);
+
+		/* stacktrace index */
+		_bufferWriter->writeLEB128(entry->stackTraceIndex);
+
+		/* write message index */
+		writer->writeUTF8String(entry->messageUTF8);
+
+		/* write thrown class index */
+		_bufferWriter->writeLEB128(entry->classIndex);
+
+		/* write size */
+		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
+	}
+
 	void
 	writeJFRChunkToFile()
 	{
@@ -590,6 +633,8 @@ done:
 		requireBufferSize += CPU_INFORMATION_EVENT_SIZE;
 
 		requireBufferSize += INITIAL_SYSTEM_PROPERTY_EVENT_SIZE;
+
+		requireBufferSize += 4*1024*1024;
 		return requireBufferSize;
 	}
 

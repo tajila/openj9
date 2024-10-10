@@ -504,7 +504,7 @@ intializeVMConstants(J9VMThread *currentThread)
 	if (JNI_OK != rc) {
 		goto done;
 	}
-	
+
 	rc = initializeStaticIntField(currentThread, vmClass, J9VMCONSTANTPOOL_COMIBMOTIVMVM_J9_STRING_COMPRESSION_ENABLED, (I_32)IS_STRING_COMPRESSION_ENABLED_VM(vm));
 	if (JNI_OK != rc) {
 		goto done;
@@ -581,6 +581,7 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 			J9VMCONSTANTPOOL_JAVALANGCLASSLOADER,
 			J9VMCONSTANTPOOL_JAVALANGSTACKTRACEELEMENT,
 			J9VMCONSTANTPOOL_JAVALANGTHROWABLE,
+			J9VMCONSTANTPOOL_JAVALANGEXCEPTION,
 			J9VMCONSTANTPOOL_JAVALANGSTACKOVERFLOWERROR,
 			J9VMCONSTANTPOOL_JAVALANGCLASSNOTFOUNDEXCEPTION,
 			J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR,
@@ -606,7 +607,7 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 
 	/* CANNOT hold VM Access while calling registerBootstrapLibrary */
 	vmFuncs->internalReleaseVMAccess(vmThread);
-	
+
 	if (vmFuncs->registerBootstrapLibrary(vmThread, dllName, &nativeLibrary, FALSE) != J9NATIVELIB_LOAD_OK) {
 		return 1;
 	}
@@ -614,7 +615,7 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 	/* If we have a JitConfig, add the JIT dll to the bootstrap loader so we can add JNI natives in the JIT */
 	if (NULL != vm->jitConfig) {
 		J9NativeLibrary* jitLibrary = NULL;
-	
+
 		if (vmFuncs->registerBootstrapLibrary(vmThread, J9_JIT_DLL_NAME, &jitLibrary, FALSE) != J9NATIVELIB_LOAD_OK) {
 			return 1;
 		}
@@ -729,7 +730,7 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 		return 1;
 	}
 
-	/* Initialize early since sendInitialize() uses this */ 
+	/* Initialize early since sendInitialize() uses this */
 	if (initializeStaticMethod(vm, J9VMCONSTANTPOOL_JAVALANGJ9VMINTERNALS_INITIALIZATIONALREADYFAILED)) {
 		return 1;
 	}
@@ -743,7 +744,7 @@ initializeRequiredClasses(J9VMThread *vmThread, char* dllName)
 	if ((NULL == stringClass) || (NULL != vmThread->currentException)) {
 		return 1;
 	}
-	
+
 	/* Initialize the java.lang.String.compressionFlag static field early enough so that we have
 	 * access to it during the resolution of other classes in which Strings may need to be created
 	 * in StringTable.cpp
