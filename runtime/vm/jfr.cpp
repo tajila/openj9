@@ -52,6 +52,7 @@ static void jfrVMShutdown(J9HookInterface **hook, UDATA eventNum, void *eventDat
 static void jfrThreadStarting(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void jfrThreadEnd(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void jfrVMInitialized(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
+static void jfrVMThrow(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void initializeEventFields(J9VMThread *currentThread, J9JFREvent *jfrEvent, UDATA eventType);
 static int J9THREAD_PROC jfrSamplingThreadProc(void *entryArg);
 static void jfrExecutionSampleCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData);
@@ -79,6 +80,9 @@ jfrEventSize(J9JFREvent *jfrEvent)
 		break;
 	case J9JFR_EVENT_TYPE_THREAD_SLEEP:
 		size = sizeof(J9JFRThreadSlept) + (((J9JFRThreadSlept*)jfrEvent)->stackTraceSize * sizeof(UDATA));
+		break;
+	case J9JFR_EVENT_TYPE_THROW:
+		size = sizeof(J9JFRThrow) + (((J9JFRThrow*)jfrEvent)->stackTraceSize * sizeof(UDATA));
 		break;
 	default:
 		Assert_VM_unreachable();
@@ -544,6 +548,37 @@ jfrVMInitialized(J9HookInterface **hook, UDATA eventNum, void *eventData, void *
 	}
 }
 
+void
+jfrVMThrow(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData)
+{
+	J9VMExceptionThrowEvent *event = (J9VMExceptionThrowEvent*) eventData;
+	J9VMThread *currentThread = event->currentThread;
+
+#if defined(DEBUG)
+	PORT_ACCESS_FROM_VMC(currentThread);
+	j9tty_printf(PORTLIB, "\n!!! exception throw  %p, throwable=%p\n", currentThread, event->exception);
+#endif /* defined(DEBUG) */
+
+	J9JFRThrow *jfrEvent = (J9JFRThrow*)reserveBufferWithStackTrace(currentThread, currentThread, J9JFR_EVENT_TYPE_THROW, sizeof(*jfrEvent));
+	jfrEvent->message = NULL;
+
+	if (NULL != jfrEvent) {
+		J9Class *throwableClass = J9OBJECT_CLAZZ(currentThread, event->exception);
+		j9object_t message = J9VMJAVALANGTHROWABLE_DETAILMESSAGE(currentThread, event->exception);
+
+		jfrEvent->throwableClass = throwableClass;
+
+		if (NULL != message) {
+			J9JavaVM *javaVM = currentThread->javaVM;
+			J9InternalVMFunctions *vmFuncs = javaVM->internalVMFunctions;
+			jfrEvent->message = vmFuncs->copyStringToJ9UTF8WithMemAlloc(currentThread, message, J9_STR_NULL_TERMINATE_RESULT, "", 0, NULL, 0);
+			if (NULL == jfrEvent->message && (J9VMJAVALANGTHROWABLE_OR_NULL(javaVM) != throwableClass)) {
+				vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
+			}
+		}
+	}
+}
+
 jint
 initializeJFR(J9JavaVM *vm)
 {
@@ -581,6 +616,12 @@ initializeJFR(J9JavaVM *vm)
 		goto fail;
 	}
 	if ((*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_INITIALIZED, jfrVMInitialized, OMR_GET_CALLSITE(), NULL)) {
+		goto fail;
+	}
+	if ((*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_EXCEPTION_THROW, jfrVMThrow, OMR_GET_CALLSITE(), NULL)) {
+		goto fail;
+	}
+	if ((*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_EXCEPTION_SYSTHROW, jfrVMThrow, OMR_GET_CALLSITE(), NULL)) {
 		goto fail;
 	}
 

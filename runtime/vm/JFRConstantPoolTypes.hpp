@@ -189,6 +189,15 @@ struct ThreadSleepEntry {
 	U_32 stackTraceIndex;
 };
 
+struct ThrowEntry {
+	I_64 ticks;
+	bool isException;
+	U_32 classIndex;
+	J9UTF8 *messageUTF8;
+	U_32 stackTraceIndex;
+	U_32 eventThreadIndex;
+};
+
 struct StackTraceEntry {
 	J9VMThread *vmThread;
 	I_64 ticks;
@@ -274,6 +283,8 @@ private:
 	UDATA _threadEndCount;
 	J9Pool *_threadSleepTable;
 	UDATA _threadSleepCount;
+	J9Pool *_throwTable;
+	UDATA _throwCount;
 
 	/* Processing buffers */
 	StackFrame *_currentStackFrameBuffer;
@@ -515,6 +526,8 @@ public:
 
 	U_32 addThreadSleepEntry(J9JFRThreadSlept *threadSleepData);
 
+	U_32 addThrowEntry(J9JFRThrow *throwEvent);
+
 	J9Pool *getExecutionSampleTable()
 	{
 		return _executionSampleTable;
@@ -535,6 +548,11 @@ public:
 		return _threadSleepTable;
 	}
 
+	J9Pool *getThrowTable()
+	{
+		return _throwTable;
+	}
+
 	UDATA getExecutionSampleCount()
 	{
 		return _executionSampleCount;
@@ -553,6 +571,11 @@ public:
 	UDATA getThreadSleepCount()
 	{
 		return _threadSleepCount;
+	}
+
+	UDATA getThrowCount()
+	{
+		return _throwCount;
 	}
 
 	ClassloaderEntry *getClassloaderEntry()
@@ -693,6 +716,9 @@ public:
 				break;
 			case J9JFR_EVENT_TYPE_THREAD_SLEEP:
 				addThreadSleepEntry((J9JFRThreadSlept*) event);
+				break;
+			case J9JFR_EVENT_TYPE_THROW:
+				addThrowEntry((J9JFRThrow*) event);
 				break;
 			default:
 				Assert_VM_unreachable();
@@ -986,6 +1012,8 @@ done:
 		, _threadEndCount(0)
 		, _threadSleepTable(NULL)
 		, _threadSleepCount(0)
+		, _throwTable(NULL)
+		, _throwCount(0)
 		, _previousStackTraceEntry(NULL)
 		, _firstStackTraceEntry(NULL)
 		, _previousThreadEntry(NULL)
@@ -1082,6 +1110,12 @@ done:
 			goto done;
 		}
 
+		_throwTable = pool_new(sizeof(ThrowEntry), 0, sizeof(U_64), 0, J9_GET_CALLSITE(), OMRMEM_CATEGORY_VM, POOL_FOR_PORT(privatePortLibrary));
+		if (NULL == _throwTable) {
+			_buildResult = OutOfMemory;
+			goto done;
+		}
+
 		/* Add reserved index for default entries. For strings zero is the empty or NUll string.
 		 * For package zero is the deafult package, for Module zero is the unnamed module. ThreadGroup
 		 * zero is NULL threadGroup.
@@ -1161,6 +1195,7 @@ done:
 		pool_kill(_threadStartTable);
 		pool_kill(_threadEndTable);
 		pool_kill(_threadSleepTable);
+		pool_kill(_throwTable);
 		j9mem_free_memory(_globalStringTable);
 	}
 

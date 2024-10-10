@@ -402,6 +402,14 @@ typedef struct J9JFRThreadSlept {
 
 #define J9JFRTHREADSLEPT_STACKTRACE(jfrEvent) ((UDATA*)(((J9JFRThreadSlept*)(jfrEvent)) + 1))
 
+typedef struct J9JFRThrow {
+	J9JFR_EVENT_WITH_STACKTRACE_FIELDS
+	struct J9Class *throwableClass;
+	struct J9UTF8 *message;
+} J9JFRThrow;
+
+#define J9JFRTHROW_STACKTRACE(jfrEvent) ((UDATA*)(((J9JFRThrow*)(jfrEvent)) + 1))
+
 #endif /* defined(J9VM_OPT_JFR) */
 
 /* @ddr_namespace: map_to_type=J9CfrError */

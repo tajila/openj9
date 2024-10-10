@@ -61,6 +61,7 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 	<classref name="com/ibm/oti/vm/ReflectObjectInvalidException" flags="opt_reflect"/>
 	<classref name="java/lang/StringIndexOutOfBoundsException"/>
 	<classref name="java/lang/ThreadDeath"/>
+	<classref name="java/lang/Exception"/>
 	<classref name="java/lang/IllegalAccessException"/>
 	<classref name="java/lang/IllegalArgumentException"/>
 	<classref name="java/lang/LayerInstantiationException" versions="9-"/>

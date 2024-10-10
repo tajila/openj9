@@ -84,6 +84,8 @@ enum MetadataTypeID {
 	StackTraceID = 187,
 	FrameTypeID = 188,
 	StackFrameID = 196,
+	JavaErrorThrowID = 1304,
+	JavaExceptionThrowID = 1300,
 };
 
 enum ReservedEvent {
@@ -315,13 +317,15 @@ done:
 
 			writeStacktraceCheckpointEvent();
 
-			pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getExecutionSampleTable(), &writeExecutionSampleEvent, _bufferWriter);
 
-			pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getThreadStartTable(), &writeThreadStartEvent, _bufferWriter);
 
-			pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getThreadEndTable(), &writeThreadEndEvent, _bufferWriter);
 
-			pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
+			// pool_do(_constantPoolTypes.getThreadSleepTable(), &writeThreadSleepEvent, _bufferWriter);
+
+			pool_do(_constantPoolTypes.getThrowTable(), &writeThrowableAndExceptionEvent, this);
 
 			/* Only write constant events in first chunk */
 			if (0 == _vm->jfrState.jfrChunkCount) {
@@ -477,6 +481,57 @@ done:
 		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
 	}
 
+
+// 227: id=1300 jdk.JavaExceptionThrow(1300) {
+//   type=long(205) name=startTime
+//   type=long(205) name=duration
+//   type=java.lang.Thread(163) name=eventThread
+//   type=jdk.types.StackTrace(187) name=stackTrace
+//   type=java.lang.String(213) name=message
+//   type=java.lang.Class(165) name=thrownClass
+// }
+	static void
+	writeThrowableAndExceptionEvent(void *anElement, void *userData)
+	{
+		ThrowEntry *entry = (ThrowEntry *)anElement;
+		VM_JFRChunkWriter *writer = (VM_JFRChunkWriter*) userData;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *) writer->_bufferWriter;
+
+		/* reserve size field */
+		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
+
+		/* write event type */
+		if (entry->isException) {
+			_bufferWriter->writeLEB128(1327);
+		} else {
+			_bufferWriter->writeLEB128(1327);
+		}
+
+		/* write start time */
+		_bufferWriter->writeLEB128(entry->ticks);
+
+		/* write duration - TODO write zero for now */
+		_bufferWriter->writeLEB128(0);
+
+		/* write event thread index */
+		_bufferWriter->writeLEB128(entry->eventThreadIndex);
+
+		/* stacktrace index */
+		_bufferWriter->writeLEB128(entry->stackTraceIndex);
+
+		/* write message index */
+		writer->writeUTF8String(entry->messageUTF8);
+		//writer->writeUTF8String(NULL);
+
+		//writer->writeUTF8String(NULL);
+
+		/* write thrown class index */
+		_bufferWriter->writeLEB128(entry->classIndex);
+
+		/* write size */
+		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
+	}
+
 	void
 	writeJFRChunkToFile()
 	{
@@ -590,6 +645,8 @@ done:
 		requireBufferSize += CPU_INFORMATION_EVENT_SIZE;
 
 		requireBufferSize += INITIAL_SYSTEM_PROPERTY_EVENT_SIZE;
+
+		requireBufferSize += 4*1024*1024;
 		return requireBufferSize;
 	}
 

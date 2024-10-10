@@ -27,6 +27,7 @@
 #if defined(J9VM_OPT_JFR)
 
 #include "JFRConstantPoolTypes.hpp"
+#include "VMHelpers.hpp"
 
 UDATA
 VM_JFRConstantPoolTypes::jfrClassHashFn(void *key, void *userData)
@@ -935,7 +936,7 @@ VM_JFRConstantPoolTypes::addExecutionSampleEntry(J9JFRExecutionSample *execution
 	entry->threadIndex = addThreadEntry(entry->vmThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(entry->vmThread, (UDATA*) (executionSampleData + 1), executionSampleData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(entry->vmThread, J9JFREXECUTIONSAMPLE_STACKTRACE(executionSampleData), executionSampleData->stackTraceSize);
 	if (isResultNotOKay()) goto done;
 
 	index = _executionSampleCount++;
@@ -967,7 +968,7 @@ VM_JFRConstantPoolTypes::addThreadStartEntry(J9JFRThreadStart *threadStartData)
 	entry->parentThreadIndex = addThreadEntry(threadStartData->parentThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(threadStartData->parentThread, (UDATA*)(threadStartData + 1), threadStartData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(threadStartData->parentThread, J9JFRTHREADSTART_STACKTRACE(threadStartData), threadStartData->stackTraceSize);
 	if (isResultNotOKay()) goto done;
 
 	index = _threadStartCount++;
@@ -1022,7 +1023,7 @@ VM_JFRConstantPoolTypes::addThreadSleepEntry(J9JFRThreadSlept *threadSleepData)
 	entry->eventThreadIndex = addThreadEntry(threadSleepData->vmThread);
 	if (isResultNotOKay()) goto done;
 
-	entry->stackTraceIndex = consumeStackTrace(threadSleepData->vmThread, (UDATA*)(threadSleepData + 1), threadSleepData->stackTraceSize);
+	entry->stackTraceIndex = consumeStackTrace(threadSleepData->vmThread, J9JFRTHREADSLEPT_STACKTRACE(threadSleepData), threadSleepData->stackTraceSize);
 	if (isResultNotOKay()) goto done;
 
 	index = _threadEndCount++;
@@ -1031,6 +1032,37 @@ done:
 	return index;
 }
 
+U_32
+VM_JFRConstantPoolTypes::addThrowEntry(J9JFRThrow *throwEventData)
+{
+	ThrowEntry *entry = (ThrowEntry*)pool_newElement(_throwTable);
+	U_32 index = U_32_MAX;
+
+	if (NULL == entry) {
+		_buildResult = OutOfMemory;
+		goto done;
+	}
+
+	entry->ticks = throwEventData->startTicks;
+
+	entry->isException = VM_VMHelpers::isSameOrSuperclass(J9VMJAVALANGEXCEPTION_OR_NULL(_vm), throwEventData->throwableClass);
+
+	entry->classIndex = getClassEntry(throwEventData->throwableClass);
+	if (isResultNotOKay()) goto done;
+
+	entry->eventThreadIndex = addThreadEntry(throwEventData->vmThread);
+	if (isResultNotOKay()) goto done;
+
+	entry->stackTraceIndex = consumeStackTrace(throwEventData->vmThread, J9JFRTHROW_STACKTRACE(throwEventData), throwEventData->stackTraceSize);
+	if (isResultNotOKay()) goto done;
+
+	entry->messageUTF8 = throwEventData->message;
+
+	index = _throwCount++;
+
+done:
+	return index;
+}
 
 void
 VM_JFRConstantPoolTypes::printTables()
