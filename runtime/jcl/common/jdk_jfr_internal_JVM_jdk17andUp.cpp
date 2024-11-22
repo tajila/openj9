@@ -25,6 +25,8 @@
 
 extern "C" {
 
+#define STRING_BUFFER_LENGTH 128
+
 void JNICALL
 Java_jdk_jfr_internal_JVM_markChunkFinal(JNIEnv *env, jobject obj)
 {
@@ -84,8 +86,29 @@ Java_jdk_jfr_internal_JVM_getChunkStartNanos(JNIEnv *env, jobject obj)
 jlong JNICALL
 Java_jdk_jfr_internal_JVM_getTypeId__Ljava_lang_String_2(JNIEnv *env, jobject obj, jstring name)
 {
-	// TODO: implementation
-	return 0;
+	J9VMThread *currentThread = (J9VMThread *)env;
+	J9JavaVM *vm = currentThread->javaVM;
+	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	jlong result = -1;
+	char buf[STRING_BUFFER_LENGTH];
+
+	vmFuncs->internalEnterVMFromJNI(currentThread);
+
+	j9object_t stringObject = J9_JNI_UNWRAP_REFERENCE(name);
+
+	J9UTF8 *typeName = vmFuncs->copyStringToJ9UTF8WithMemAlloc(currentThread, stringObject, J9_STR_XLAT, "", 0, buf, STRING_BUFFER_LENGTH);
+	if (NULL == typeName) {
+		vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
+	} else {
+		result = vmFuncs->getTypeIDUTF8(currentThread, typeName);
+		if (buf != (char*)typeName) {
+			PORT_ACCESS_FROM_JAVAVM(vm);
+			j9mem_free_memory(typeName);
+		}
+	}
+
+	vmFuncs->internalExitVMToJNI(currentThread);
+	return result;
 }
 
 void JNICALL

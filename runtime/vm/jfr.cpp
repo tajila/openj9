@@ -34,12 +34,20 @@
 
 extern "C" {
 
+typedef struct J9JFRTypeID {
+	I_64 id;
+	J9Class *clazz;
+} J9JFRTypeID;
+
 #undef DEBUG
 
 // TODO: allow configureable values
 #define J9JFR_THREAD_BUFFER_SIZE (1024*1024)
 #define J9JFR_GLOBAL_BUFFER_SIZE (10 * J9JFR_THREAD_BUFFER_SIZE)
 #define J9JFR_SAMPLING_RATE 10
+
+/* Value needs to be the same as jdk.jfr.internal.JVM.RESERVED_CLASS_ID_LIMIT. */
+#define RESERVED_CLASS_ID_LIMIT 500
 
 static UDATA jfrEventSize(J9JFREvent *jfrEvent);
 static bool flushBufferToGlobal(J9VMThread *currentThread, J9VMThread *flushThread);
@@ -60,6 +68,9 @@ static int J9THREAD_PROC jfrSamplingThreadProc(void *entryArg);
 static void jfrExecutionSampleCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData);
 static void jfrThreadCPULoadCallback(J9VMThread *currentThread, IDATA handlerKey, void *userData);
 static bool areJFRBuffersReadyForWrite(J9VMThread *currentThread);
+
+static UDATA jfrTypeIDHashFn(void *key, void *userData);
+static UDATA jfrTypeIDHashEqualFn(void *tableNode, void *queryNode, void *userData);
 
 /**
  * Calculate the size in bytes of a JFR event.
@@ -1152,6 +1163,163 @@ jfrDump(J9VMThread *currentThread, BOOLEAN finalWrite)
 	flushAllThreadBuffers(currentThread, finalWrite);
 	writeOutGlobalBuffer(currentThread, finalWrite);
 }
+
+static UDATA
+jfrTypeIDHashFn(void *key, void *userData)
+{
+	const J9JFRTypeID *entry = (const J9JFRTypeID *)key;
+
+	return (UDATA)entry->clazz;
+}
+
+static UDATA
+jfrTypeIDHashEqualFn(void *tableNode, void *queryNode, void *userData)
+{
+	const J9JFRTypeID *tableEntry = (const J9JFRTypeID *)tableNode;
+	const J9JFRTypeID *queryEntry = (const J9JFRTypeID *)queryNode;
+
+	return tableEntry->clazz == queryEntry->clazz;
+}
+
+UDATA
+initializeJFRIDs(J9JavaVM *vm)
+{
+	UDATA result = 0;
+
+	if (omrthread_monitor_init_with_name(&vm->jfrState.typeIDMonitor, 0, "JFR Type ID monitor")) {
+		result = 1;
+		goto done;
+	}
+
+	vm->jfrState.typeIDcount = RESERVED_CLASS_ID_LIMIT;
+
+done:
+	return result;
+}
+
+void
+shutdownJFRIDs(J9JavaVM *vm)
+{
+	if (NULL != vm->jfrState.typeIDMonitor) {
+		omrthread_monitor_destroy(vm->jfrState.typeIDMonitor);
+		vm->jfrState.typeIDMonitor = NULL;
+	}
+}
+
+/**
+ * Known event types are only ever looked up by name and are always
+ * JVM event types so they can be below the RESERVED_CLASS_ID_LIMIT. The
+ * JVM determines the IDs for these types. They will always be loaded
+ * by the boot loader.
+ */
+I_64
+getKnownJFREventType(const J9UTF8 *className)
+{
+	if (J9UTF8_LITERAL_EQUALS_UTF8(className, "boolean")) {
+		return 1;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "byte")) {
+		return 2;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "char")) {
+		return 3;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "short")) {
+		return 4;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "int")) {
+		return 5;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "float")) {
+		return 6;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "long")) {
+		return 7;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "double")) {
+		return 8;
+	} else if (J9UTF8_LITERAL_EQUALS_UTF8(className, "jdk/types/StackTrace")) {
+		return 9;
+	}
+
+	return -1;
+}
+
+I_64
+getTypeIDUTF8(J9VMThread *currentThread, const J9UTF8 *className)
+{
+	jlong result = -1;
+
+	Trc_VM_getTypeIDUTF8_Entry(currentThread, J9UTF8_LENGTH(className), J9UTF8_DATA(className));
+
+	J9Class *clazz = hashClassTableAt(currentThread->javaVM->systemClassLoader, J9UTF8_DATA(className), J9UTF8_LENGTH(className));
+
+	if (NULL != clazz) {
+		result = getTypeID(currentThread, clazz);
+	} else {
+		result = getKnownJFREventType(className);
+	}
+
+	Trc_VM_getTypeIDUTF8_Exit(currentThread, J9UTF8_LENGTH(className), J9UTF8_DATA(className), clazz, result);
+
+	return result;
+}
+
+I_64
+getTypeID(J9VMThread *currentThread, J9Class *clazz)
+{
+	J9JavaVM *vm = currentThread->javaVM;
+	J9HashTable *typeIDTable = clazz->classLoader->typeIDs;
+	I_64 result = -1;
+	J9JFRTypeID entry = {0};
+	J9JFRTypeID *jfrTypeID = &entry;
+
+	Trc_VM_getTypeID_Entry(currentThread, clazz);
+
+	Assert_VM_mustHaveVMAccess(currentThread);
+
+	if (NULL == typeIDTable) {
+		PORT_ACCESS_FROM_JAVAVM(vm);
+
+		typeIDTable = hashTableNew(OMRPORT_FROM_J9PORT(privatePortLibrary),
+								J9_GET_CALLSITE(),
+								0,
+								sizeof(J9JFRTypeID),
+								sizeof(J9JFRTypeID *),
+								0,
+								J9MEM_CATEGORY_CLASSES,
+								jfrTypeIDHashFn,
+								jfrTypeIDHashEqualFn,
+								NULL,
+								NULL);
+
+		if (NULL == typeIDTable) {
+			setNativeOutOfMemoryError(currentThread, 0, 0);
+			goto done;
+		}
+		clazz->classLoader->typeIDs = typeIDTable;
+	}
+
+	omrthread_monitor_enter(vm->jfrState.typeIDMonitor);
+	jfrTypeID->clazz = clazz;
+	jfrTypeID = (J9JFRTypeID *)hashTableFind(typeIDTable, jfrTypeID);
+
+	if (NULL == jfrTypeID) {
+		jfrTypeID = &entry;
+		jfrTypeID->id = vm->jfrState.typeIDcount;
+
+		vm->jfrState.typeIDcount += 1;
+
+		jfrTypeID = (J9JFRTypeID *)hashTableAdd(typeIDTable, jfrTypeID);
+		if (NULL == jfrTypeID) {
+			setNativeOutOfMemoryError(currentThread, 0, 0);
+			goto doneWithMutex;
+		}
+	}
+	result = jfrTypeID->id;
+
+doneWithMutex:
+	omrthread_monitor_exit(vm->jfrState.typeIDMonitor);
+
+done:
+	Trc_VM_getTypeID_Exit(currentThread, clazz, result);
+
+	return result;
+}
+
 } /* extern "C" */
 
 #endif /* defined(J9VM_OPT_JFR) */
