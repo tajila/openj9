@@ -652,6 +652,7 @@ initializeJFR(J9JavaVM *vm, BOOLEAN lateInit)
 	/* Register async handler for execution samples. */
 	vm->jfrAsyncKey = J9RegisterAsyncEvent(vm, jfrExecutionSampleCallback, NULL);
 	if (vm->jfrAsyncKey < 0) {
+
 		goto fail;
 	}
 
@@ -1029,10 +1030,10 @@ jfrSamplingThreadProc(void *entryArg)
 jboolean
 setJFRRecordingFileName(J9JavaVM *vm, char *fileName)
 {
-	if ((char*)DEFAULT_JFR_FILE_NAME != vm->jfrState.jfrFileName) {
-		PORT_ACCESS_FROM_JAVAVM(vm);
-		j9mem_free_memory(vm->jfrState.jfrFileName);
-	}
+	// if ((UDATA)DEFAULT_JFR_FILE_NAME != (UDATA)vm->jfrState.jfrFileName) {
+	// 	PORT_ACCESS_FROM_JAVAVM(vm);
+	// 	j9mem_free_memory(vm->jfrState.jfrFileName);
+	// }
 	vm->jfrState.jfrFileName = fileName;
 	VM_JFRWriter::closeJFRFile(vm);
 	return VM_JFRWriter::openJFRFile(vm) ? JNI_TRUE : JNI_FALSE;
