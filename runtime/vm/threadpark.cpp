@@ -88,6 +88,9 @@ threadParkImpl(J9VMThread *vmThread, BOOLEAN timeoutIsEpochRelative, I_64 timeou
 
 	if (J9THREAD_TIMED_OUT != rc) {
 		PORT_ACCESS_FROM_VMC(vmThread);
+        J9Class *parkedClass = J9OBJECT_CLAZZ(vmThread, VM_VMHelpers::getThreadParkClassObject(vmThread));
+        UDATA parkedAddress = (UDATA) vmThread->threadObject;
+		I_64 startTicks = (U_64) j9time_nano_time();
 		/* vmThread->threadObject != NULL because vmThread must be the current thread */
 		J9VMTHREAD_SET_BLOCKINGENTEROBJECT(vmThread, vmThread, J9VMJAVALANGTHREAD_PARKBLOCKER(vmThread, vmThread->threadObject));
 		TRIGGER_J9HOOK_VM_PARK(vm->hookInterface, vmThread, millis, nanos);
@@ -109,7 +112,7 @@ threadParkImpl(J9VMThread *vmThread, BOOLEAN timeoutIsEpochRelative, I_64 timeou
 		}
 
 		internalAcquireVMAccessClearStatus(vmThread, thrstate);
-		TRIGGER_J9HOOK_VM_UNPARKED(vm->hookInterface, vmThread);
+		TRIGGER_J9HOOK_VM_UNPARKED(vm->hookInterface, vmThread, millis, nanos, startTicks, (UDATA) parkedAddress, VM_VMHelpers::currentClass(parkedClass));
 		J9VMTHREAD_SET_BLOCKINGENTEROBJECT(vmThread, vmThread, NULL);
 	}
 	/* Trc_JCL_park_Exit(vmThread, rc); */

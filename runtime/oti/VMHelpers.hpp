@@ -42,6 +42,7 @@
 #include "j9cp.h"
 #include "vm_api.h"
 #include "ute.h"
+//#include "ut_j9vm.h"
 #include "AtomicSupport.hpp"
 #include "ObjectAllocationAPI.hpp"
 
@@ -2274,6 +2275,39 @@ exit:
 	{
 		targetThread->privateFlags2 |= J9_PRIVATE_FLAGS2_REENTER_INTERPRETER;
 		indicateAsyncMessagePending(targetThread);
+	}
+
+	static VMINLINE J9Class*
+	getThreadParkClassObject(J9VMThread *targetThread)
+	{
+		J9JavaVM *vm = targetThread->javaVM;
+		//J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+		J9StackWalkState walkState =  {0};
+		J9Class *result = NULL;
+		jint depth = 2;
+		walkState.frameWalkFunction = getThreadParkClassIterator;
+		walkState.walkThread = targetThread;
+		walkState.skipCount = 0;
+		walkState.flags = J9_STACKWALK_VISIBLE_ONLY | J9_STACKWALK_INCLUDE_NATIVES | J9_STACKWALK_ITERATE_FRAMES;
+		walkState.userData1 = (void *) (IDATA) depth;
+		walkState.userData2 = NULL;
+		vm->walkStackFrames(targetThread, &walkState);
+		result = (J9Class*) walkState.userData2;
+		return result;
+	}
+
+	static VMINLINE UDATA
+	getThreadParkClassIterator(J9VMThread *targetThread, J9StackWalkState *walkState)
+	{
+		J9Class *currentClass = J9_CLASS_FROM_CP(walkState->constantPool);
+		if ((UDATA)walkState->userData1 == 0) {
+			walkState->userData2 = currentClass;
+			//Assert_VM_notNull(walkState->userData2);
+			return J9_STACKWALK_STOP_ITERATING;
+		} else {
+			walkState->userData1 = (void *) (((UDATA) walkState->userData1) - 1);
+			return J9_STACKWALK_KEEP_ITERATING;
+		}
 	}
 };
 
