@@ -952,6 +952,7 @@ extern "C" {
 #define J9JFR_EVENT_TYPE_THREAD_CPU_LOAD 6
 #define J9JFR_EVENT_TYPE_CLASS_LOADING_STATISTICS 7
 #define J9JFR_EVENT_TYPE_THREAD_CONTEXT_SWITCH_RATE 8
+#define J9JFR_EVENT_TYPE_THREAD_PARK 9
 
 /* JFR thread states */
 
@@ -964,7 +965,7 @@ extern "C" {
 
 /* Class version minimum for value type support. */
 
-#define VALUE_TYPES_MAJOR_VERSION 68
+#define VALUE_TYPES_MAJOR_VERSION 69
 #define PREVIEW_MINOR_VERSION 65535
 #define J9_IS_CLASSFILE_OR_ROMCLASS_VALUETYPE_VERSION(classfileOrRomClass) (((classfileOrRomClass)->majorVersion >= VALUE_TYPES_MAJOR_VERSION) && (PREVIEW_MINOR_VERSION == (classfileOrRomClass)->minorVersion))
 
