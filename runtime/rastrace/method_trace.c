@@ -200,8 +200,46 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 			if (modifiers & J9AccNative) {
 				Trc_MethodEntryN(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), receiver);
 			} else {
-				Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), receiver);
-			}
+				J9JavaVM *vm = thr->javaVM;
+				const unsigned int maxStringLength = RAS_GLOBAL_FROM_JAVAVM(maxStringLength, vm);
+
+				if (receiverClazz == J9VMJAVALANGSTRING_OR_NULL(vm)
+					&& (0 != maxStringLength)
+				) {
+					
+					PORT_ACCESS_FROM_VMC(thr);
+					char utf8Buffer[RAS_MAX_STRING_LENGTH_LIMIT + 1];
+					char outputString[RAS_MAX_STRING_LENGTH_LIMIT + 1];
+					UDATA utf8Length = 0;
+
+					char *utf8String = vm->internalVMFunctions->copyStringToUTF8WithMemAlloc(
+							thr,
+							receiver,
+							0,
+							"",
+							0,
+							utf8Buffer,
+							sizeof(utf8Buffer),
+							&utf8Length);
+
+					if (NULL == utf8String) {
+						sprintf(outputString, "(String)<Memory allocation error>");
+					} else if (utf8Length > maxStringLength) {
+						sprintf(outputString, "(String)\"%.*s\"...", (U_32)maxStringLength, utf8String);
+					} else {
+						sprintf(outputString, "(String)\"%.*s\"", (U_32)utf8Length, utf8String);
+					}
+
+					Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), J9UTF8_LENGTH(outputString),  outputString, receiver);
+					
+					if (utf8Buffer != utf8String) {
+						j9mem_free_memory(utf8String);
+					}
+				} else {
+					Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), receiver, "", 0);
+				}
+
+				}
 
 			if (doParameters) {
 				Trc_MethodArguments(

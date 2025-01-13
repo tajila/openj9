@@ -23,7 +23,7 @@
 Executable=mt
 DATFileName=J9TraceFormat.dat
 
-TraceEntry=Trc_MethodEntry   Overhead=1 Level=5 Group=bytecodeMethods                Template="%.*s.%.*s%.*s bytecode method, this = 0x%zx"
+TraceEntry=Trc_MethodEntry   Overhead=1 Level=5 Group=bytecodeMethods                Template="%.*s.%.*s%.*s bytecode method, this = %.*s 0x%zx,"
 TraceEntry=Trc_MethodEntryC  Overhead=1 Level=5 Group=compiledMethods                Template="%.*s.%.*s%.*s compiled method, this = 0x%zx"
 TraceEntry=Trc_MethodEntryN  Overhead=1 Level=5 Group=nativeMethods                  Template="%.*s.%.*s%.*s native method, this = 0x%zx"
 TraceEntry=Trc_MethodEntryS  Overhead=1 Level=5 Group=bytecodeMethods,staticMethods  Template="%.*s.%.*s%.*s bytecode static method"
