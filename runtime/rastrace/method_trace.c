@@ -200,7 +200,7 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 			if (modifiers & J9AccNative) {
 				Trc_MethodEntryN(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), receiver);
 			} else {
-				Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), receiver, "", 0);
+				Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), 0, "", receiver);
 			}
 
 			if (doParameters) {
@@ -210,6 +210,7 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 				if ((NULL != receiver)
 					&& (receiverClazz == J9VMJAVALANGSTRING_OR_NULL(vm))
 					&& (0 != maxStringLength)
+					&& !J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodName), "<init>")
 				) {
 					
 					PORT_ACCESS_FROM_VMC(thr);
