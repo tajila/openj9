@@ -2078,6 +2078,13 @@ J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
          {
          case TR::java_lang_invoke_MethodHandle_asType:
             {
+#if defined(J9VM_OPT_JITSERVER)
+            // The J9VMJAVALANG macros used later
+            // will access vm information which is not available on the JITServer,
+            // bypass in this case to prevent an invalid class pointer being retrieved
+            if (comp()->isOutOfProcessCompilation())
+               break;
+#endif // J9VM_OPT_JITSERVER
             TR::Node* mh = node->getArgument(0);
             TR::Node* mt = node->getArgument(1);
             bool mhConstraintGlobal, mtConstraintGlobal;
@@ -2129,11 +2136,13 @@ J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
 #if defined(J9VM_OPT_METHOD_HANDLE)
          case TR::java_lang_invoke_PrimitiveHandle_initializeClassIfRequired:
             {
+#if defined(J9VM_OPT_JITSERVER)
             // The macro J9VMJAVALANGINVOKEPRIMITIVEHANDLE used later
             // will access vm information which is not available on the JITServer,
             // bypass in this case to prevent an invalid class pointer being retrieved
             if (comp()->isOutOfProcessCompilation())
                break;
+#endif // J9VM_OPT_JITSERVER
             TR::Node* mh = node->getArgument(0);
             bool mhConstraintGlobal;
             TR::VPConstraint* mhConstraint = getConstraint(mh, mhConstraintGlobal);
@@ -3830,6 +3839,54 @@ bool J9::ValuePropagation::isUnreliableSignatureType(
 
    if (erased == objectClass)
       erased = NULL; // java/lang/Object is uninformative
+
+   return true;
+   }
+
+bool J9::ValuePropagation::canArrayClassBeTrustedAsFixedClass(TR_OpaqueClassBlock *arrayClass, TR_OpaqueClassBlock *componentClass)
+   {
+   if (TR::Compiler->om.areFlattenableValueTypesEnabled() &&
+       !TR::Compiler->cls.isArrayNullRestricted(comp(), arrayClass) && // If the array is null-restricted array, we know it is a fixed class
+       TR::Compiler->cls.isValueTypeClass(componentClass))
+      return false;
+
+   return true;
+   }
+
+bool J9::ValuePropagation::canClassBeTrustedAsFixedClass(TR::SymbolReference *symRef, TR_OpaqueClassBlock *classObject)
+   {
+   if (!TR::Compiler->om.areFlattenableValueTypesEnabled())
+      return true;
+
+   if (!classObject && symRef && symRef->getSymbol()->isClassObject())
+      {
+      if (!symRef->isUnresolved())
+         {
+         classObject = (TR_OpaqueClassBlock*)symRef->getSymbol()->getStaticSymbol()->getStaticAddress();
+         }
+      else
+         {
+         int32_t len;
+         const char *name = TR::Compiler->cls.classNameChars(comp(), symRef, len);
+         char *sig = TR::Compiler->cls.classNameToSignature(name, len, comp());
+         classObject = fe()->getClassFromSignature(sig, len, symRef->getOwningMethod(comp()));
+         }
+      }
+
+   if (classObject)
+      {
+      // If null-restricted array is enabled and the class is an array class, the null-restricted array
+      // class and the nullable array class share the same signature. The null-restricted array can be
+      // viewed as a sub-type of the nullable array. Therefore, if the array is not a null-restricted array,
+      // it can't be trusted as a fixed class.
+      int32_t numDims = 0;
+      TR_OpaqueClassBlock *klass = comp()->fej9()->getBaseComponentClass(classObject, numDims);
+
+      if ((numDims > 0) &&
+          !TR::Compiler->cls.isArrayNullRestricted(comp(), classObject) && // If the array is null-restricted array, we know it is a fixed class
+          TR::Compiler->cls.isValueTypeClass(klass))
+         return false;
+      }
 
    return true;
    }
