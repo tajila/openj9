@@ -212,7 +212,6 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 					&& (0 != maxStringLength)
 					&& !J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodName), "<init>")
 				) {
-					
 					PORT_ACCESS_FROM_VMC(thr);
 					char utf8Buffer[RAS_MAX_STRING_LENGTH_LIMIT + 1];
 					char outputString[RAS_MAX_STRING_LENGTH_LIMIT + 1];
@@ -227,7 +226,7 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 							utf8Buffer,
 							sizeof(utf8Buffer),
 							&utf8Length);
-					
+
 					if (NULL == utf8String) {
 						sprintf(outputString, "(String)<Memory allocation error>");
 					} else if (utf8Length > maxStringLength) {
@@ -235,16 +234,15 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 					} else {
 						sprintf(outputString, "(String)\"%.*s\"", (U_32)utf8Length, utf8String);
 					}
-					
+
 					Trc_MethodEntry(thr, J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodSignature), J9UTF8_DATA(methodSignature), J9UTF8_LENGTH(outputString),  outputString, receiver);
-					
+
 					if (utf8Buffer != utf8String) {
 						j9mem_free_memory(utf8String);
 					}
-					
 				}
 				Trc_MethodArguments(
-						thr, 
+						thr,
 						(U_32)J9UTF8_LENGTH(receiverClassName),
 						J9UTF8_DATA(receiverClassName),
 						receiver,
@@ -537,9 +535,9 @@ traceMethodArgObject(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 			if (NULL == utf8String) {
 				j9str_printf(PORTLIB, cursor, length, "(String)<Memory allocation error>");
 			} else if (utf8Length > maxStringLength) {
-				j9str_printf(PORTLIB, cursor, length, "(String)\"%.*s\"...", (U_32)maxStringLength, utf8String);
+				j9str_printf(PORTLIB, cursor, length, "(String)\"%.*s\"...@%p", (U_32)maxStringLength, utf8String, object);
 			} else {
-				j9str_printf(PORTLIB, cursor, length, "(String)\"%.*s\"", (U_32)utf8Length, utf8String);
+				j9str_printf(PORTLIB, cursor, length, "(String)\"%.*s\"@%p", (U_32)utf8Length, utf8String, object);
 			}
 
 			if (utf8Buffer != utf8String) {
