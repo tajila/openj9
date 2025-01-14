@@ -31,15 +31,15 @@
 #include "ut_mt.h"
 
 static void hookRAMClassLoad(J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData);
-static void traceMethodArgInt (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length, char* type); 
+static void traceMethodArgInt (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length, char* type);
 static void traceMethodArgDouble (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length);
 static void traceMethodExit (J9VMThread *thr, J9Method *method, UDATA isCompiled, void* returnValuePtr, UDATA doParameters);
 static void traceMethodExitX (J9VMThread *thr, J9Method *method, UDATA isCompiled, void* exceptionPtr, UDATA doParameters);
-static void traceMethodArgFloat (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length); 
+static void traceMethodArgFloat (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length);
 static void traceMethodArgObject (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length);
-static char* traceMethodArguments (J9VMThread* thr, J9UTF8* signature, UDATA* arg0EA, char* buf, const char* endOfBuf); 
+static char* traceMethodArguments (J9VMThread* thr, J9UTF8* signature, UDATA* arg0EA, char* buf, const char* endOfBuf);
 static char* traceMethodReturnVal(J9VMThread* thr, J9UTF8* signature, void* returnValuePtr, char* buf, const char* endOfBuf);
-static void traceMethodArgBoolean (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length); 
+static void traceMethodArgBoolean (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length);
 static void traceMethodEnter (J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA isCompiled, UDATA doParameters);
 static void traceMethodArgLong (J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length);
 static U_8 checkMethod (J9VMThread *thr, J9Method *method);
@@ -71,7 +71,7 @@ matchMethod(RasMethodTable * methodTable, J9Method *method)
 			 */
 			className = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass);
 			return wildcardMatch(
-				methodTable->classMatchFlag, 
+				methodTable->classMatchFlag,
 				(const char *)J9UTF8_DATA(methodTable->className), J9UTF8_LENGTH(methodTable->className),
 				(const char *)J9UTF8_DATA(className), J9UTF8_LENGTH(className));
 		}
@@ -165,7 +165,7 @@ U_8 checkMethod(J9VMThread *thr, J9Method *method)
  * returns     - none
  *************************************************************************/
 
-static void 
+static void
 traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA isCompiled, UDATA doParameters)
 {
 	J9UTF8* className = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass);
@@ -210,7 +210,6 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
 				if ((NULL != receiver)
 					&& (receiverClazz == J9VMJAVALANGSTRING_OR_NULL(vm))
 					&& (0 != maxStringLength)
-					&& !J9UTF8_LITERAL_EQUALS(J9UTF8_DATA(methodName), J9UTF8_LENGTH(methodName), "<init>")
 				) {
 					PORT_ACCESS_FROM_VMC(thr);
 					char utf8Buffer[RAS_MAX_STRING_LENGTH_LIMIT + 1];
@@ -261,7 +260,7 @@ traceMethodEnter(J9VMThread *thr, J9Method *method, void *receiverAddress, UDATA
  *               being formatted.
  * returns     - none
  *************************************************************************/
-static void 
+static void
 traceMethodExit(J9VMThread *thr, J9Method *method, UDATA isCompiled, void* returnValuePtr, UDATA doParameters)
 {
 	J9UTF8* className = J9ROMCLASS_CLASSNAME(J9_CLASS_FROM_METHOD(method)->romClass);
@@ -448,7 +447,7 @@ enableMethodTraceHooks(J9JavaVM *vm)
 /*
  * Trigger the appropriate tracepoints for an double-type method argument
  */
-static void 
+static void
 traceMethodArgDouble(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 {
 	jdouble data;
@@ -463,7 +462,7 @@ traceMethodArgDouble(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 /*
  * Trigger the appropriate tracepoints for an float-type method argument
  */
-static void 
+static void
 traceMethodArgFloat(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 {
 	jfloat data = *(jfloat*)arg0EA;
@@ -475,7 +474,7 @@ traceMethodArgFloat(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 /*
  * Trigger the appropriate tracepoints for an int-type method argument
  */
-static void 
+static void
 traceMethodArgInt(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length, char* type)
 {
 	jint data = *(jint*)arg0EA;
@@ -487,7 +486,7 @@ traceMethodArgInt(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length, ch
 /*
  * Trigger the appropriate tracepoints for an long-type method argument
  */
-static void 
+static void
 traceMethodArgLong(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 {
 	jlong data;
@@ -502,7 +501,7 @@ traceMethodArgLong(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 /*
  * Trigger the appropriate tracepoints for an object-type method argument
  */
-static void 
+static void
 traceMethodArgObject(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 {
 	j9object_t object = *(j9object_t*)arg0EA;
@@ -553,7 +552,7 @@ traceMethodArgObject(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 	}
 }
 
-static char* 
+static char*
 traceMethodArguments(J9VMThread* thr, J9UTF8* signature, UDATA* arg0EA, char* buf, const char* endOfBuf)
 {
 	char* cursor = buf;
@@ -693,7 +692,7 @@ traceMethodReturnVal(J9VMThread* thr, J9UTF8* signature, void* returnValuePtr, c
 /*
  * Trigger the appropriate tracepoints for an boolean-type method argument
  */
-static void 
+static void
 traceMethodArgBoolean(J9VMThread *thr, UDATA* arg0EA, char* cursor, UDATA length)
 {
 	jint data = *(jint*)arg0EA;
