@@ -2164,8 +2164,12 @@ internalCreateRAMClassDone(J9VMThread *vmThread, J9ClassLoader *classLoader, J9C
 		UDATA failed = FALSE;
 		J9Class * alreadyLoadedClass = NULL;
 
+
 		if (J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_ANON)) {
+			printf("anonclass=%p\n", state->ramClass);
 			javaVM->anonClassCount += 1;
+		} else {
+			printf("regular class=%p\n", state->ramClass);
 		}
 
 #if defined(J9VM_OPT_JFR)
@@ -2392,7 +2396,6 @@ nativeOOM:
 		/* Put the new class in the table or arrayClass field. */
 		if ((!fastHCR)
 			&& (0 == J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(romClass))
-			&& J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_ANON)
 		) {
 			if (hashClassTableAtPut(vmThread, classLoader, J9UTF8_DATA(className), J9UTF8_LENGTH(className), state->ramClass)) {
 				if (hotswapping) {

@@ -50,13 +50,13 @@ void classLoaderLoadHook(J9HookInterface** hook, uintptr_t eventNum, void *event
 
 MM_ClassLoaderManager *
 MM_ClassLoaderManager::newInstance(MM_EnvironmentBase *env, MM_GlobalCollector *globalCollector)
-{	
+{
 	MM_ClassLoaderManager *classLoaderManager = (MM_ClassLoaderManager *)env->getForge()->allocate(sizeof(MM_ClassLoaderManager), MM_AllocationCategory::FIXED, J9_GET_CALLSITE());
 	if (classLoaderManager) {
 		new (classLoaderManager) MM_ClassLoaderManager(env, globalCollector);
 		if (!classLoaderManager->initialize(env)) {
 			classLoaderManager->kill(env);
-			classLoaderManager = NULL;   			
+			classLoaderManager = NULL;
 		}
 	}
 	return classLoaderManager;
@@ -73,17 +73,17 @@ void
 MM_ClassLoaderManager::tearDown(MM_EnvironmentBase *env)
 {
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
-	if (_undeadSegmentListMonitor) {		
+	if (_undeadSegmentListMonitor) {
 		omrthread_monitor_destroy(_undeadSegmentListMonitor);
 		_undeadSegmentListMonitor = NULL;
 	}
 #endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
-	
+
 	if (_classLoaderListMonitor) {
 		omrthread_monitor_destroy(_classLoaderListMonitor);
 		_classLoaderListMonitor = NULL;
 	}
-	
+
 #if defined(J9VM_GC_REALTIME)
 	if (MM_GCExtensions::getExtensions(env)->isMetronomeGC()) {
 		J9HookInterface **vmHookInterface = _javaVM->internalVMFunctions->getVMHookInterface(_javaVM);
@@ -105,21 +105,21 @@ MM_ClassLoaderManager::initialize(MM_EnvironmentBase *env)
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
 	_firstUndeadSegment = NULL;
 	_undeadSegmentsTotalSize = 0;
-	
-	if (0 != omrthread_monitor_init_with_name(&_undeadSegmentListMonitor, 0, "Undead Segment List Monitor")) {		
+
+	if (0 != omrthread_monitor_init_with_name(&_undeadSegmentListMonitor, 0, "Undead Segment List Monitor")) {
 		return false;
 	}
 #endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
-	
-	if (0 != omrthread_monitor_init_with_name(&_classLoaderListMonitor, 0, "Class Loader List Monitor")) {		
+
+	if (0 != omrthread_monitor_init_with_name(&_classLoaderListMonitor, 0, "Class Loader List Monitor")) {
 		return false;
 	}
-	
+
 	J9HookInterface **vmHookInterface = _javaVM->internalVMFunctions->getVMHookInterface(_javaVM);
 	if (NULL == vmHookInterface) {
 		return false;
 	}
-	
+
 #if defined(J9VM_GC_REALTIME)
 	/* TODO CRGTMP Remove if once non-realtime collectors use classLoaderManager during
 	 * unloadDeadClassLoaders.  This was added to fix CMVC 127599 until stability week is over
@@ -130,7 +130,7 @@ MM_ClassLoaderManager::initialize(MM_EnvironmentBase *env)
 		}
 	}
 #endif /* defined(J9VM_GC_REALTIME) */
-	
+
 	return true;
 }
 
@@ -140,7 +140,7 @@ MM_ClassLoaderManager::enqueueUndeadClassSegments(J9MemorySegment *listRoot)
 {
 	if (NULL != listRoot) {
 		omrthread_monitor_enter(_undeadSegmentListMonitor);
-		
+
 		while (NULL != listRoot) {
 			_undeadSegmentsTotalSize += listRoot->size;
 			J9MemorySegment *nextSegment = listRoot->nextSegmentInClassLoader;
@@ -161,7 +161,7 @@ MM_ClassLoaderManager::flushUndeadSegments(MM_EnvironmentBase *env)
 	_firstUndeadSegment = NULL;
 	_undeadSegmentsTotalSize = 0;
 	omrthread_monitor_exit(_undeadSegmentListMonitor);
-	
+
 	while (NULL != walker) {
 		J9MemorySegment *thisWalk = walker;
 		walker = thisWalk->nextSegmentInClassLoader;
@@ -171,7 +171,7 @@ MM_ClassLoaderManager::flushUndeadSegments(MM_EnvironmentBase *env)
 }
 
 void
-MM_ClassLoaderManager::setLastUnloadNumOfClassLoaders() 
+MM_ClassLoaderManager::setLastUnloadNumOfClassLoaders()
 {
 	_lastUnloadNumOfClassLoaders =  (uintptr_t)pool_numElements(_javaVM->classLoaderBlocks);
 }
@@ -189,7 +189,7 @@ MM_ClassLoaderManager::unlinkClassLoader(J9ClassLoader *classLoader)
 	omrthread_monitor_enter(_classLoaderListMonitor);
 	J9_LINEAR_LINKED_LIST_REMOVE(gcLinkNext, gcLinkPrevious, _classLoaders, classLoader);
 	omrthread_monitor_exit(_classLoaderListMonitor);
-	
+
 }
 
 void
@@ -237,7 +237,7 @@ MM_ClassLoaderManager::isTimeForClassUnloading(MM_EnvironmentBase *env)
 		}
 		result = recentlyLoaded >= _extensions->dynamicClassUnloadingThreshold;
 	}
-	
+
 	Trc_MM_GlobalCollector_isTimeForClassUnloading_Exit(result ? "true" : "false");
 
 #endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
@@ -249,7 +249,7 @@ J9ClassLoader *
 MM_ClassLoaderManager::identifyClassLoadersToUnload(MM_EnvironmentBase *env, MM_HeapMap *markMap, MM_ClassUnloadStats *classUnloadStats)
 {
 	Trc_MM_identifyClassLoadersToUnload_Entry(env->getLanguageVMThread());
-	
+
 	Assert_MM_true(NULL != markMap);
 	J9ClassLoader *unloadLink = NULL;
 	classUnloadStats->_classLoaderCandidates = 0;
@@ -260,11 +260,11 @@ MM_ClassLoaderManager::identifyClassLoadersToUnload(MM_EnvironmentBase *env, MM_
 		classUnloadStats->_classLoaderCandidates += 1;
 		/* Check if the class loader is already DEAD - ignore if it is */
 		if (J9_GC_CLASS_LOADER_DEAD == (classLoader->gcFlags & J9_GC_CLASS_LOADER_DEAD)) {
-			/* If the class loader is already dead, it should be enqueued or unloading by now */  
+			/* If the class loader is already dead, it should be enqueued or unloading by now */
 			Assert_MM_true(0 != (classLoader->gcFlags & (J9_GC_CLASS_LOADER_UNLOADING | J9_GC_CLASS_LOADER_ENQ_UNLOAD)));
 			Assert_MM_true(0 == (classLoader->gcFlags & J9_GC_CLASS_LOADER_SCANNED));
 		} else {
-			/* If the class loader isn't already dead, it must not be enqueued or unloading */  
+			/* If the class loader isn't already dead, it must not be enqueued or unloading */
 			Assert_MM_true(0 == (classLoader->gcFlags & (J9_GC_CLASS_LOADER_UNLOADING | J9_GC_CLASS_LOADER_ENQ_UNLOAD)));
 			Assert_MM_true(NULL == classLoader->unloadLink);
 
@@ -281,7 +281,7 @@ MM_ClassLoaderManager::identifyClassLoadersToUnload(MM_EnvironmentBase *env, MM_
 			} else {
 				if (MM_GCExtensions::getExtensions(env)->isVLHGC()) {
 					/* we don't use the SCANNED flag in VLHGC */
-					Assert_MM_true(0 == (classLoader->gcFlags & J9_GC_CLASS_LOADER_SCANNED)); 
+					Assert_MM_true(0 == (classLoader->gcFlags & J9_GC_CLASS_LOADER_SCANNED));
 				} else {
 					/* TODO: Once SE stops using the SCANNED flag this path can be removed */
 					/* Anonymous classloader might not have SCANNED flag set */
@@ -295,7 +295,7 @@ MM_ClassLoaderManager::identifyClassLoadersToUnload(MM_EnvironmentBase *env, MM_
 	}
 
 	Trc_MM_identifyClassLoadersToUnload_Exit(env->getLanguageVMThread());
-	
+
 	return unloadLink;
 }
 
@@ -309,9 +309,9 @@ MM_ClassLoaderManager::cleanUpClassLoadersStart(MM_EnvironmentBase *env, J9Class
 
 	J9Class *classUnloadList = NULL;
 	J9Class *anonymousClassUnloadList = NULL;
-	
+
 	Trc_MM_cleanUpClassLoadersStart_Entry(env->getLanguageVMThread());
-	
+
 	/*
 	 * Verify that boolean array class has been marked. Assertion is done to ensure correctness
 	 * of an optimization in ClassIteratorClassSlots that only checks booleanArrayClass Interfaces
@@ -416,6 +416,8 @@ MM_ClassLoaderManager::addDyingClassesToList(MM_EnvironmentBase *env, J9ClassLoa
 					/* add class to dying classes link list */
 					clazz->gcLink = classUnloadList;
 					classUnloadList = clazz;
+					printf("unloading class=%p\n", clazz);
+					fflush(stdout);
 				}
 			}
 		}
@@ -430,7 +432,7 @@ MM_ClassLoaderManager::cleanUpClassLoadersEnd(MM_EnvironmentBase *env, J9ClassLo
 {
 	J9VMThread *vmThread = (J9VMThread *)env->getLanguageVMThread();
 	J9MemorySegment *reclaimedSegments = NULL;
-	
+
 	Trc_MM_cleanUpClassLoadersEnd_Entry(vmThread);
 
 	/* Unload classes in the unload link and pass back any RAM Classes that we encounter so the caller can decide when to free them */
@@ -586,10 +588,10 @@ MM_ClassLoaderManager::removeFromSubclassHierarchy(MM_EnvironmentBase *env, J9Cl
 {
 	J9Class *nextLink = clazzPtr->subclassTraversalLink;
 	J9Class *reverseLink = clazzPtr->subclassTraversalReverseLink;
-	
+
 	reverseLink->subclassTraversalLink = nextLink;
 	nextLink->subclassTraversalReverseLink = reverseLink;
-	
+
 	/* link this obsolete class to itself so that it won't have dangling pointers into the subclass traversal list */
 	clazzPtr->subclassTraversalLink = clazzPtr;
 	clazzPtr->subclassTraversalReverseLink = clazzPtr;
@@ -607,7 +609,7 @@ MM_ClassLoaderManager::cleanUpClassLoaders(MM_EnvironmentBase *env, J9ClassLoade
 	if (0 < classUnloadStats->_anonymousClassesUnloadedCount) {
 		cleanUpSegmentsInAnonymousClassLoader(env, reclaimedSegments);
 	}
-	
+
 	/* For each classLoader that is not already unloading, not scanned and not enqueued for finalization:
 	 * perform classLoader-specific clean up, if it died on the current collection cycle; and either enqueue it for
 	 * finalization, if it needs any shared libraries to be unloaded, or add it to the list of classLoaders to be
@@ -618,7 +620,7 @@ MM_ClassLoaderManager::cleanUpClassLoaders(MM_EnvironmentBase *env, J9ClassLoade
 		/* fetch the next loader immediately, since we will re-use the unloadLink in this loop */
 		J9ClassLoader* classLoader = classLoadersUnloadedList;
 		classLoadersUnloadedList = classLoader->unloadLink;
-		
+
 		Assert_MM_true(0 == (classLoader->gcFlags & J9_GC_CLASS_LOADER_SCANNED)); /* we don't use the SCANNED flag in VLHGC */
 		Assert_MM_true(J9_GC_CLASS_LOADER_DEAD == (classLoader->gcFlags & J9_GC_CLASS_LOADER_DEAD));
 		Assert_MM_true(0 == (classLoader->gcFlags & (J9_GC_CLASS_LOADER_UNLOADING | J9_GC_CLASS_LOADER_ENQ_UNLOAD)));
@@ -653,7 +655,7 @@ MM_ClassLoaderManager::cleanUpClassLoaders(MM_EnvironmentBase *env, J9ClassLoade
 
 		/* we are taking responsibility for cleaning these here so free them */
 		classLoader->classSegments = NULL;
-		
+
 		/* perform any configuration specific clean up */
 		if (_extensions->isVLHGC()) {
 			MM_ClassLoaderRememberedSet *classLoaderRememberedSet = _extensions->classLoaderRememberedSet;
@@ -713,7 +715,7 @@ MM_ClassLoaderManager::enterClassUnloadMutex(MM_EnvironmentBase *env)
 	}
 	return quiesceTime;
 }
-	
+
 void
 MM_ClassLoaderManager::exitClassUnloadMutex(MM_EnvironmentBase *env)
 {
@@ -735,7 +737,7 @@ MM_ClassLoaderManager::exitClassUnloadMutex(MM_EnvironmentBase *env)
  * unloadDeadClassLoaders.  This was added to fix CMVC 127599 until stability week is over
  */
 extern "C" {
-	
+
 void classLoaderLoadHook(J9HookInterface** hook, uintptr_t eventNum, void *eventData, void *userData)
 {
 	J9VMClassLoaderInitializedEvent *event = (J9VMClassLoaderInitializedEvent *)eventData;
