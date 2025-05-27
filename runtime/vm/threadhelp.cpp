@@ -133,6 +133,9 @@ monitorWaitImpl(J9VMThread *vmThread, j9object_t object, I_64 millis, I_32 nanos
 		case J9THREAD_PRIORITY_INTERRUPTED:
 			/* Trc_JCL_wait_PriorityInterrupted(vmThread); */
 			/* just return and allow #checkAsyncEvents:checkForContextSwitch: to do its job */
+			if (omrthread_interrupted(vmThread->osThread)) {
+				printf("#### no error wait: mismatch with native vmthread=%p ###\n", vmThread);
+			}
 			rc = 0;
 			break;
 
@@ -141,6 +144,11 @@ monitorWaitImpl(J9VMThread *vmThread, j9object_t object, I_64 millis, I_32 nanos
 			setCurrentException(vmThread, J9VMCONSTANTPOOL_JAVALANGINTERRUPTEDEXCEPTION, NULL);
 #if JAVA_SPEC_VERSION >= 19
 			J9VMJAVALANGTHREAD_SET_DEADINTERRUPT(vmThread, vmThread->threadObject, JNI_FALSE);
+			if (omrthread_interrupted(vmThread->osThread)) {
+				printf("#### wait mismatch with native vmthread=%p ###\n", vmThread);
+			} else {
+				printf("wait same with native vmthread=%p\n", vmThread);
+			}
 #endif /* JAVA_SPEC_VERSION >= 19 */
 #if defined(J9VM_OPT_SIDECAR) && ( defined (WIN32) || defined(WIN64))
 			/* Since the interrupt status was consumed by interrupting the Wait or Sleep
@@ -197,11 +205,19 @@ threadSleepImpl(J9VMThread *vmThread, I_64 millis, I_32 nanos)
 		if (0 == rc) {
 			/* Trc_JCL_sleep_Exit(vmThread); */
 			/* omrthread_sleep_interruptable returned on success */
+			if (omrthread_interrupted(vmThread->osThread)) {
+				printf("#### no error sleep: mismatch with native vmthread=%p ###\n", vmThread);
+			}
 		} else if (J9THREAD_INTERRUPTED == rc) {
 			/* Trc_JCL_sleep_Interrupted(vmThread); */
 			setCurrentException(vmThread, J9VMCONSTANTPOOL_JAVALANGINTERRUPTEDEXCEPTION, NULL);
 #if JAVA_SPEC_VERSION >= 19
 			J9VMJAVALANGTHREAD_SET_DEADINTERRUPT(vmThread, vmThread->threadObject, JNI_FALSE);
+			if (omrthread_interrupted(vmThread->osThread)) {
+				printf("#### sleep: mismatch with native vmthread=%p ###\n", vmThread);
+			} else {
+				printf("sleep: same with native vmthread=%p\n", vmThread);
+			}
 #endif /* JAVA_SPEC_VERSION >= 19 */
 #if defined(J9VM_OPT_SIDECAR) && ( defined (WIN32) || defined(WIN64))
 			/* Since the interrupt status was consumed by interrupting the Wait or Sleep

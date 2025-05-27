@@ -1443,7 +1443,7 @@ done:
 			result = J9VMJAVALANGTHREAD_DEADINTERRUPT(currentThread, threadObject);
 		}
 #endif /* JAVA_SPEC_VERSION >= 14 */
-
+		printf("isInterruptedImpl vmthread=%p\n", currentThread);
 		return result;
 	}
 
