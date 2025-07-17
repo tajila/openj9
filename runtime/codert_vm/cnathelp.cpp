@@ -1833,7 +1833,8 @@ fast_jitMonitorExitImpl(J9VMThread *currentThread, j9object_t syncObject, bool f
 	currentThread->floatTemp2 = (void*)J9THREAD_WOULD_BLOCK;
 	J9JavaVM *vm = currentThread->javaVM;
 	/*  If there is a possibility that a hook will be reported from the helper, we need to build a frame */
-	if (!J9_EVENT_IS_RESERVED(vm->hookInterface, J9HOOK_VM_MONITOR_CONTENDED_EXIT)) {
+	//if (!J9_EVENT_IS_RESERVED(vm->hookInterface, J9HOOK_VM_MONITOR_CONTENDED_EXIT)) {
+	if (false) {
 		IDATA monstatus = vm->internalVMFunctions->objectMonitorExit(currentThread, syncObject);
 		if (0 == monstatus) {
 			slowPathRequired = false;
