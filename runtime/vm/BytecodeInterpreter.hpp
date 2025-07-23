@@ -1851,7 +1851,7 @@ obj:
 #endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
 #if JAVA_SPEC_VERSION >= 24
 					case J9_OBJECT_MONITOR_YIELD_VIRTUAL: {
-						rc = yieldPinnedContinuation(REGISTER_ARGS, JAVA_LANG_VIRTUALTHREAD_BLOCKING, J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD);
+						rc = yieldPinnedContinuation(REGISTER_ARGS, JAVA_LANG_VIRTUALTHREAD_BLOCKING, j2i ? J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD_J2I : J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD);
 						break;
 					}
 #endif /* JAVA_SPEC_VERSION >= 24 */
@@ -5816,6 +5816,7 @@ ffi_OOM:
 			returnSingleFromINL(REGISTER_ARGS, JNI_TRUE, 1);
 			break;
 		case J9VM_CONTINUATION_RETURN_FROM_MONITOR_ENTER:
+			printf("J9VM_CONTINUATION_RETURN_FROM_MONITOR_ENTER thread=%p sp=%p\n", _currentThread, _sp);
 			break;
 		case J9VM_CONTINUATION_RETURN_FROM_OBJECT_WAIT: {
 			rc = tryEnterBlockingMonitor(REGISTER_ARGS, syncObject, J9VM_CONTINUATION_RETURN_FROM_OBJECT_WAIT);
@@ -5857,6 +5858,7 @@ ffi_OOM:
 			break;
 		}
 		case J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD_JNI: {
+			printf("J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD_JNI thread=%p sp=%p\n", _currentThread, _sp);
 			UDATA *bp = (UDATA *)_sp + 4;
 			_sendMethod = *(J9Method **)_sp;
 			restoreSpecialStackFrameLeavingArgs(REGISTER_ARGS, bp);
@@ -5864,6 +5866,7 @@ ffi_OOM:
 			break;
 		}
 		case J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD: {
+			printf("J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD thread=%p sp=%p\n", _currentThread, _sp);
 			/* Reset interpreter state to what it would have been upon entry to inline send target. */
 			J9SFStackFrame *bytecodeFrame = (J9SFStackFrame *)_sp;
 			J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_literals);
@@ -5876,9 +5879,28 @@ ffi_OOM:
 			rc = inlineSendTarget(REGISTER_ARGS, VM_MAYBE, VM_MAYBE, VM_MAYBE, VM_MAYBE, false, false, true);
 			break;
 		}
+		case J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD_J2I: {
+			/* Reset interpreter state to what it would have been upon entry to inline send target. */
+			J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(_literals);
+			J9SFJ2IFrame *j2iFrame = (J9SFJ2IFrame *)_sp;
+			restoreJ2IValues(j2iFrame);
+			_sendMethod = _literals;
+			_literals = (J9Method *)j2iFrame->exitPoint;
+			_pc = (U_8 *)j2iFrame->returnAddress;
+			j2iFrame->taggedReturnSP = (UDATA *)((UDATA)j2iFrame->taggedReturnSP & ~((UDATA)J9SF_A0_INVISIBLE_TAG));
+			_arg0EA = (UDATA *)j2iFrame->taggedReturnSP;
+			_sp = (UDATA *)((J9SFJ2IFrame *)_sp + 1) + (romMethod->tempCount + 1);
+
+			printf("J9VM_CONTINUATION_RETURN_FROM_SYNC_METHOD_J2I thread=%p sp=%p\n", _currentThread, j2iFrame);
+
+
+			rc = inlineSendTarget(REGISTER_ARGS, VM_MAYBE, VM_MAYBE, VM_MAYBE, VM_MAYBE, true, false, true);
+			break;
+		}
 		case J9VM_CONTINUATION_RETURN_FROM_JIT_MONITOR_ENTER: {
 			rc = tryEnterBlockingMonitor(REGISTER_ARGS, syncObject, J9VM_CONTINUATION_RETURN_FROM_JIT_MONITOR_ENTER);
 			if ((NULL != _currentThread->currentContinuation) && (EXECUTE_BYTECODE == rc)) {
+				printf("J9VM_CONTINUATION_RETURN_FROM_JIT_MONITOR_ENTER thread=%p sp=%p\n", _currentThread, _sp);
 				J9SFJITResolveFrame *resolveFrame = (J9SFJITResolveFrame*)_currentThread->sp;
 				void *returnAddress = NULL;
 				J9JITDecompilationInfo *decompilationStack = _currentThread->decompilationStack;
@@ -5900,6 +5922,7 @@ ffi_OOM:
 		}
 		}
 #endif /* JAVA_SPEC_VERSION >= 24 */
+		fflush(stdout);
 		return rc;
 	}
 
