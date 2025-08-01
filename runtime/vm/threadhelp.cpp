@@ -432,6 +432,12 @@ freeTLS(J9VMThread *currentThread, j9object_t threadObj)
 }
 #endif /* JAVA_SPEC_VERSION >= 19 */
 
+static void
+callback(void *userData)
+{
+	printf("called by thread=%p\n", userData);
+}
+
 IDATA
 timeCompensationHelper(J9VMThread *vmThread, U_8 threadHelperType, omrthread_monitor_t monitor, I_64 millis, I_32 nanos)
 {
@@ -458,7 +464,7 @@ continueTimeCompensation:
 		rc = omrthread_monitor_wait_interruptable(monitor, millis, nanos);
 		break;
 	case HELPER_TYPE_MONITOR_WAIT_TIMED:
-		rc = omrthread_monitor_wait_timed(monitor, millis, nanos);
+		rc = omrthread_monitor_wait_timed_with_callback(monitor, millis, nanos, callback, vmThread);
 		break;
 	case HELPER_TYPE_THREAD_PARK:
 		rc = omrthread_park(millis, nanos);
