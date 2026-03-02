@@ -1010,6 +1010,52 @@ arbitratedLoadClass(J9VMThread* vmThread, U_8* className, UDATA classNameLength,
 }
 
 #if defined(J9VM_OPT_SNAPSHOTS)
+static BOOLEAN
+loadStaticRefFieldsFromSnapshot(J9VMThread *vmThread, J9Class *ramClazz)
+{
+	J9ROMClass *romClass = ramClazz->romClass;
+	UDATA ramConstantPoolCount = romClass->ramConstantPoolCount;
+
+	if (0 != ramConstantPoolCount) {
+		J9ConstantPool *ramConstantPool = J9_CP_FROM_CLASS(ramClazz);
+		U_32 *cpShapeDescription = J9ROMCLASS_CPSHAPEDESCRIPTION(romClass);
+		UDATA descriptionCount = 0;
+		U_32 description = 0;
+		UDATA i;
+
+		for (i = 0; i < ramConstantPoolCount; ++i) {
+			if (descriptionCount == 0) {
+				description = *cpShapeDescription++;
+				descriptionCount = J9_CP_DESCRIPTIONS_PER_U32;
+			}
+
+			if (J9CPTYPE_FIELD == (description & J9_CP_DESCRIPTION_MASK)) {
+				if ((IDATA) ((J9RAMFieldRef *) ramConstantPool)[i].valueOffset < -1
+					&& (0 != ((J9RAMFieldRef *) ramConstantPool)[i].flags)
+				) {
+					J9RAMStaticFieldRef *ramStaticFieldRef = (J9RAMStaticFieldRef *) &ramConstantPool[i];
+					IDATA classAndFlags = J9CLASSANDFLAGS_FROM_FLAGSANDCLASS(ramStaticFieldRef->flagsAndClass);
+					J9Class *fieldClass = (J9Class*)(classAndFlags & ~(UDATA)J9StaticFieldRefFlagBits);
+
+					if (J9_ARE_ANY_BITS_SET(fieldClass->classFlags, J9ClassIsFrozen)
+						&& (fieldClass != ramClazz)
+						&& (J9StaticFieldRefTypeObject == (classAndFlags & J9StaticFieldRefTypeMask))
+					) {
+						if (!loadWarmClassFromSnapshot(vmThread, fieldClass)) {
+							return FALSE;
+						}
+					}
+				}
+			}
+
+			description >>= J9_CP_BITS_PER_DESCRIPTION;
+			--descriptionCount;
+		}
+	}
+
+	return TRUE;
+}
+
 BOOLEAN
 loadWarmClassFromSnapshotInternal(J9VMThread *vmThread, J9Class *clazz)
 {
@@ -1041,7 +1087,6 @@ loadWarmClassFromSnapshotInternal(J9VMThread *vmThread, J9Class *clazz)
 			}
 			itable = itable->next;
 		}
-
 		initializeSnapshotJ9Class(vm, clazz);
 		TRIGGER_J9HOOK_VM_INTERNAL_CLASS_LOAD(vm->hookInterface, vmThread, clazz, failed);
 		TRIGGER_J9HOOK_VM_CLASS_LOAD(vm->hookInterface, vmThread, clazz);
@@ -1052,6 +1097,12 @@ loadWarmClassFromSnapshotInternal(J9VMThread *vmThread, J9Class *clazz)
 			Trc_VM_snapshot_loadWarmClassFromSnapshot_ClassLoadHookFailed(vmThread, clazz, className);
 			goto done;
 		}
+		if (J9_ARE_ANY_BITS_SET(clazz->classFlags, J9ClassInitClassInWarmLoad)) {
+			if (!loadStaticRefFieldsFromSnapshot(vmThread, clazz)) {
+				goto done;
+			}
+			clazz->classFlags &= ~J9ClassInitClassInWarmLoad;
+		}
 
 		/* TODO: This is only a temporary fix for arrays.
 		 * Pre-emptively load arrays to ensure that clazz->arrayClass returns a valid class.
@@ -1061,12 +1112,10 @@ loadWarmClassFromSnapshotInternal(J9VMThread *vmThread, J9Class *clazz)
 				goto done;
 			}
 		}
-		if (J9_ARE_ANY_BITS_SET(vmThread->javaVM->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_CLASS_OBJECT_ASSIGNED)) {
-			Assert_VM_Null(clazz->classObject);
-			clazz = initializeSnapshotClassObject(vm, clazz->classLoader, clazz);
-			if (NULL == clazz) {
-				goto done;
-			}
+		Assert_VM_Null(clazz->classObject);
+		clazz = initializeSnapshotClassObject(vm, clazz->classLoader, clazz);
+		if (NULL == clazz) {
+			goto done;
 		}
 
 		/* TODO: Handle/trace error/NULL paths. */
@@ -1082,11 +1131,16 @@ loadWarmClassFromSnapshotInternal(J9VMThread *vmThread, J9Class *clazz)
 				/* Unnamed module. */
 				J9VMJAVALANGCLASS_SET_MODULE(vmThread, classObject, J9VMJAVALANGCLASSLOADER_UNNAMEDMODULE(vmThread, clazz->classLoader->classLoaderObject));
 			}
+		} else {
+			clazz->classFlags &= ~J9ClassIsLoadedFromSnapshot;
 		}
 
 		Trc_VM_snapshot_loadWarmClassFromSnapshot_ClassInfo(vmThread, clazz, className);
 	}
-	clazz->classFlags &= ~J9ClassIsFrozen;
+	if (NULL != clazz->classObject) {
+		clazz->classFlags &= ~J9ClassIsFrozen;
+	}
+
 	rc = TRUE;
 
 done:
