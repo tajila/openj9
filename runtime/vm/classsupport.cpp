@@ -1329,6 +1329,8 @@ internalFindClassInModule(J9VMThread* vmThread, J9Module *j9module, U_8* classNa
 			UDATA superClassNameLength = vmThread->superClassNameLength;
 			Assert_VM_notNull(superClassNameBytes);
 			Assert_VM_Null(vmThread->currentException);
+			Assert_VM_notNull(NULL);
+			*(UDATA*) 0x8 = -1;
 			vmThread->privateFlags2 &= ~J9_PRIVATE_FLAGS2_SUPERCLASS_REQUIRED_FIRST;
 			vmThread->superClassNameBytes = NULL;
 			vmThread->superClassNameLength = 0;

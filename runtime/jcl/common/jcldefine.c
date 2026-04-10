@@ -159,6 +159,8 @@ retry:
 		UDATA superClassNameLength = currentThread->superClassNameLength;
 		J9Class *superClass = NULL;
 		Assert_JCL_notNull(superClassNameBytes);
+		Assert_JCL_true(FALSE);
+		*(UDATA*) 0x8 = -1;
 		Assert_JCL_true(NULL == currentThread->currentException);
 		currentThread->privateFlags2 &= ~J9_PRIVATE_FLAGS2_SUPERCLASS_REQUIRED_FIRST;
 		currentThread->superClassNameBytes = NULL;
@@ -284,6 +286,8 @@ retry:
 		vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
 	} else if (J9_ARE_ALL_BITS_SET(currentThread->privateFlags2, J9_PRIVATE_FLAGS2_SUPERCLASS_REQUIRED_FIRST)) {
 		loadSuperFirst = TRUE;
+		Assert_JCL_true(FALSE);
+		*(UDATA*) 0x8 = -1;
 		goto retry;
 	}
 

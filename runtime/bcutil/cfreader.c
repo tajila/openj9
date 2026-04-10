@@ -2884,7 +2884,7 @@ j9bcutil_readSuperClassFromClassFileBytes(J9PortLibrary *portLib, U_8 *classData
 	UDATA segmentLength = ESTIMATE_SIZE(classDataLength) * 20;
 	I_32 readResult = BCT_ERR_NO_ERROR;
 	U_8 *segment = (U_8 *)j9mem_allocate_memory(segmentLength, J9MEM_CATEGORY_CLASSES);
-
+	*(UDATA*) 0x8 = -1;
 #ifdef J9VM_ENV_LITTLE_ENDIAN
 	flags = BCT_LittleEndianOutput;
 #else
@@ -3110,9 +3110,11 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 	NEXT_U16(classfile->thisClass, index);
 	NEXT_U16(classfile->superClass, index);
 
-	if (J9_ARE_ALL_BITS_SET(flags, BCT_SuperClassOnly)) {
-		return BCT_ERR_NO_ERROR;
-	}
+	// if (J9_ARE_ALL_BITS_SET(flags, BCT_SuperClassOnly)) {
+	// 	Trc_BCU_Assert_Equals(1, 0);
+	// 	*(UDATA*) 0x8 = -1;
+	// 	return BCT_ERR_NO_ERROR;
+	// }
 
 	NEXT_U16(classfile->interfacesCount, index);
 
