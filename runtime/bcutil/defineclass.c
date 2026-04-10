@@ -62,6 +62,7 @@ static void freeAnonROMClass(J9JavaVM *vm, J9ROMClass *romClass);
 static J9Class *
 preloadSuperClass(J9VMThread* vmThread, U_8* classData, UDATA classDataLength, J9ClassLoader* classLoader, UDATA options)
 {
+	/*
 	J9JavaVM* vm = vmThread->javaVM;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	UDATA superClassNameLength = 0;
@@ -110,6 +111,8 @@ freeBuffer:
 
 done:
 	return superClass;
+	*/
+	return NULL;
 }
 #endif /* defined(J9VM_OPT_JFR) */
 
