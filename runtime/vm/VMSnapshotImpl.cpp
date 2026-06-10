@@ -843,14 +843,19 @@ VMSnapshotImpl::fixupConstantPool(J9Class *ramClass)
 				*((U_32 *) &(((J9RAMSingleSlotConstantRef *) ramConstantPool)[i].value)) = ((J9ROMSingleSlotConstantRef *) romConstantPool)[i].data;
 				break;
 			case J9CPTYPE_FIELD:
-				if ((IDATA) ((J9RAMFieldRef *) ramConstantPool)[i].valueOffset < -1
-					&& (0 != ((J9RAMFieldRef *) ramConstantPool)[i].flags)
-				) {
-					J9RAMStaticFieldRef *ramStaticFieldRef = (J9RAMStaticFieldRef *) &ramConstantPool[i];
-					IDATA classAndFlags = J9CLASSANDFLAGS_FROM_FLAGSANDCLASS(ramStaticFieldRef->flagsAndClass);
-					J9Class *fieldClass = (J9Class*)(classAndFlags & ~(UDATA)J9StaticFieldRefFlagBits);
-					if (fieldClass != ramClass) {
-						ramClass->classFlags |= J9ClassInitClassInWarmLoad;
+				if (J9_ARE_ALL_BITS_SET(ramClass->classFlags, J9ClassNoEarlyInit)) {
+					((J9RAMFieldRef *) ramConstantPool)[i].valueOffset = -1;
+					break;
+				} else {
+					if ((IDATA) ((J9RAMFieldRef *) ramConstantPool)[i].valueOffset < -1
+						&& (0 != ((J9RAMFieldRef *) ramConstantPool)[i].flags)
+					) {
+						J9RAMStaticFieldRef *ramStaticFieldRef = (J9RAMStaticFieldRef *) &ramConstantPool[i];
+						IDATA classAndFlags = J9CLASSANDFLAGS_FROM_FLAGSANDCLASS(ramStaticFieldRef->flagsAndClass);
+						J9Class *fieldClass = (J9Class*)(classAndFlags & ~(UDATA)J9StaticFieldRefFlagBits);
+						if (fieldClass != ramClass) {
+							ramClass->classFlags |= J9ClassInitClassInWarmLoad;
+						}
 					}
 				}
 				break;
