@@ -327,7 +327,7 @@ allocateMemoryForSegment(J9JavaVM *javaVM,J9MemorySegment *segment, J9PortVmemPa
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
 		{
 			if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)
-				&& J9_ARE_ANY_BITS_SET(segment->type, MEMORY_TYPE_RAM_CLASS_SUB4G)
+				&& J9_ARE_ANY_BITS_SET(segment->type, MEMORY_TYPE_RAM_CLASS_SUB4G | MEMORY_TYPE_DISCLAIMABLE_TO_FILE)
 			) {
 				tmpAddr = j9mem_allocate_memory32(segment->size, memoryCategory);
 			} else {
