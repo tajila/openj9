@@ -33,15 +33,6 @@ final class JFRClassTransformer {
     /*[IF JAVA_SPEC_VERSION == 17]*/
     private static Method bytesForEagerInstrumentation;
 
-    static {
-        try {
-            Class<?> jfrUpCallClass = Class.forName("jdk.jfr.internal.JVMUpcalls");
-            bytesForEagerInstrumentation = jfrUpCallClass.getDeclaredMethod("bytesForEagerInstrumentation", long.class, boolean.class, Class.class, byte[].class);
-            bytesForEagerInstrumentation.setAccessible(true);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
     /*[ENDIF] JAVA_SPEC_VERSION == 17 */
 
     private static final String EVENT_HANDLER_FIELD = "eventHandler";
@@ -182,25 +173,35 @@ final class JFRClassTransformer {
 
     /*[IF JAVA_SPEC_VERSION == 17]*/
     static byte[] transformJFREventClass(byte[] classBytes) {
-        ClassReader reader = new ClassReader(classBytes);
-        ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
+        try {
+            ClassReader reader = new ClassReader(classBytes);
+            ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
 
-        ClassVisitor visitor = new ClassVisitor(Opcodes.ASM7, writer) {
-            @Override
-            public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                // Remove the ACC_FINAL flag from the method access modifiers
-                int modifiedAccess = access & ~Opcodes.ACC_FINAL;
-                return super.visitMethod(modifiedAccess, name, descriptor, signature, exceptions);
-            }
-        };
+            ClassVisitor visitor = new ClassVisitor(Opcodes.ASM7, writer) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                    // Remove the ACC_FINAL flag from the method access modifiers
+                    int modifiedAccess = access & ~Opcodes.ACC_FINAL;
+                    return super.visitMethod(modifiedAccess, name, descriptor, signature, exceptions);
+                }
+            };
 
-        reader.accept(visitor, 0);
-        return writer.toByteArray();
+            reader.accept(visitor, 0);
+            return writer.toByteArray();
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return null;
+        }
     }
 
     static byte[] transformClassAndInvokebytesForEagerInstrumentation(long traceId, boolean forceInstrumentation, Class<?> superClass, byte[] oldBytes) throws ReflectiveOperationException {
         try {
             oldBytes = transformClass(oldBytes);
+            if (bytesForEagerInstrumentation == null) {
+                Class<?> jfrUpCallClass = Class.forName("jdk.jfr.internal.JVMUpcalls");
+                bytesForEagerInstrumentation = jfrUpCallClass.getDeclaredMethod("bytesForEagerInstrumentation", long.class, boolean.class, Class.class, byte[].class);
+                bytesForEagerInstrumentation.setAccessible(true);
+            }
             return (byte[])bytesForEagerInstrumentation.invoke(null, traceId, forceInstrumentation, superClass, oldBytes);
         } catch (Throwable t) {
             t.printStackTrace();
