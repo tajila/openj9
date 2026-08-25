@@ -83,6 +83,7 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<echo>===destdir:                      ${DEST}</echo>
 		<javac srcdir="${src}" destdir="${build}" debug="true" fork="true" executable="${compiler.javac}" includeAntRuntime="false" encoding="ISO-8859-1">
 			<compilerarg line="--add-exports java.base/com.ibm.oti.vm=ALL-UNNAMED" />
+			<compilerarg line="--add-exports jdk.jfr/jdk.jfr.internal=ALL-UNNAMED" />
 			<src path="${src}" />
 			<src path="${TestUtilities}" />
 			<classpath>

@@ -148,4 +148,10 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<output type="success" caseSensitive="yes" regex="no">All runs complete</output>
 		<output type="required" caseSensitive="yes" regex="no">0 / 100 complete</output>
 	</test>
+
+	<test id="Test EventWriting">
+		<command>$EXE$ -XX:+EnableOpenJ9ExperimentalFlightRecording -XX:StartFlightRecording -Xshare:off --add-opens jdk.jfr/jdk.jfr.internal=ALL-UNNAMED -cp $RESJAR$ org.openj9.test.EventWriterTests</command>
+		<output type="success" caseSensitive="yes" regex="no">All EventWriterNatives tests passed.</output>
+		<output type="failure" caseSensitive="yes" regex="no">Exception</output>
+	</test>
 </suite>
