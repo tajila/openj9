@@ -210,11 +210,6 @@ recycleVMThread(J9VMThread * vmThread)
 	/* Free Java JFR buffer. */
 	j9mem_free_memory((void *)vmThread->jfrJavaEventBuffer.bufferStart);
 	memset(&vmThread->jfrJavaEventBuffer, 0, sizeof(vmThread->jfrJavaEventBuffer));
-
-	if (NULL != vmThread->eventWriterRef) {
-		vm->internalVMFunctions->j9jni_deleteGlobalRef((JNIEnv *)vmThread, vmThread->eventWriterRef, FALSE);
-		vmThread->eventWriterRef = NULL;
-	}
 #endif /* defined(J9VM_OPT_JFR) */
 
 }
@@ -297,11 +292,6 @@ deallocateVMThread(J9VMThread * vmThread, UDATA decrementZombieCount, UDATA send
 	/* Free Java JFR buffer. */
 	j9mem_free_memory((void *)vmThread->jfrJavaEventBuffer.bufferStart);
 	memset(&vmThread->jfrJavaEventBuffer, 0, sizeof(vmThread->jfrJavaEventBuffer));
-
-	if (NULL != vmThread->eventWriterRef) {
-		vm->internalVMFunctions->j9jni_deleteGlobalRef((JNIEnv *)vmThread, vmThread->eventWriterRef, FALSE);
-		vmThread->eventWriterRef = NULL;
-	}
 #endif /* defined(J9VM_OPT_JFR) */
 
 	/* freeing the per thread buffers in the portlibrary */
