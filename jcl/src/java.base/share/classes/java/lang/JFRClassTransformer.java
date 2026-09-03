@@ -113,8 +113,7 @@ final class JFRClassTransformer {
             public void visit(int version, int access, String name, String signature,
                               String superName, String[] interfaces) {
                 className[0] = name;
-                shouldNotInject[0] = (access & Opcodes.ACC_ABSTRACT) != 0
-                    || name.startsWith("jdk/");
+                shouldNotInject[0] = (access & Opcodes.ACC_ABSTRACT) != 0;
                 super.visit(version, access, name, signature, superName, interfaces);
             }
 
