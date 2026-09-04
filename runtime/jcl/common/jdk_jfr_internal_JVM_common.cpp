@@ -396,8 +396,8 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 		classesPtr[i] = (jclass)env->GetObjectArrayElement(classes, i);
 	}
 
-	if (JVMTI_ERROR_NONE != (*jvmtiAgent)->RetransformClasses(jvmtiAgent, arrayLength, classesPtr)) {
-		throwNewInternalError(env, "Unable to retransform JFR event classes.");
+	if (JVMTI_ERROR_NONE != jvmtiAgent->RetransformClasses(arrayLength, classesPtr)) {
+		throwNewInternalError(env, (char *)"Unable to retransform JFR event classes.");
 	}
 }
 
@@ -569,7 +569,7 @@ setupJFRAgent(JNIEnv *env)
 	capabilities.can_redefine_classes = 1;
 	capabilities.can_retransform_classes = 1;
 
-	if (JVMTI_ERROR_NONE != (*jvmtiAgent)->AddCapabilities(jvmtiAgent, &capabilities)) {
+	if (JVMTI_ERROR_NONE != jvmtiAgent->AddCapabilities(&capabilities)) {
 		result = false;
 		goto done;
 	}
@@ -577,7 +577,7 @@ setupJFRAgent(JNIEnv *env)
 	memset(&callbacks, 0, sizeof(jvmtiEventCallbacks));
 	callbacks.ClassFileLoadHook = &jfrClassFileLoadHook;
 
-	if (JVMTI_ERROR_NONE != (*jvmtiAgent)->SetEventCallbacks(jvmtiAgent, &callbacks, sizeof(jvmtiEventCallbacks))) {
+	if (JVMTI_ERROR_NONE != jvmtiAgent->SetEventCallbacks(&callbacks, sizeof(jvmtiEventCallbacks))) {
 		result = false;
 		goto done;
 	}

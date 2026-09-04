@@ -2187,7 +2187,7 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
             jint *newClassDataLen,
             unsigned char **newClassData)
 {
-	J9VMThread *currentThread = (JNIEnv *)jniEnv;
+	J9VMThread *currentThread = (J9VMThread *)jniEnv;
 	J9JavaVM *vm = currentThread->javaVM;
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
 	J9MemoryManagerFunctions *mmfns = vm->memoryManagerFunctions;
@@ -2195,7 +2195,13 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 	jlong traceID = 0;
 	j9object_t inputByteArray = NULL;
 	j9object_t outputByteArray = NULL;
-	J9Classloader *loader = J9VMJAVALANGCLASSLOADER_VMREF(currentThread, J9_JNI_UNWRAP_REFERENCE(classLoaderRef));
+	UDATA args[5];
+	BOOLEAN freeName = FALSE;
+	jint classNameLength = (jint)strlen(name);
+	const char *className = name;
+	jint classDataLength = classDataLen;
+	jint newClassDataLength = 0;
+	J9ClassLoader *loader = J9VMJAVALANGCLASSLOADER_VMREF(currentThread, J9_JNI_UNWRAP_REFERENCE(classLoaderRef));
 	U_8 buf[J9JFR_CLASSNAME_BUFFER_SIZE + sizeof(U_16)];
 	J9UTF8 *nameUTF8 = (J9UTF8 *)buf;
 
@@ -2227,7 +2233,7 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 		if (NULL == jvmUpCallsClass) {
 			goto popInputArrayAndDone;
 		}
-		vm->jfrState.onRetransformUpcallMethod = (J9Method *)vmFuncs->javaLookupMethodImpl(currentThread, jfrClassTransformerClass, (J9ROMNameAndSignature *)&onRetransformNAS, jvmUpCallsClass, J9_LOOK_STATIC | J9_LOOK_DIRECT_NAS, NULL);
+		vm->jfrState.onRetransformUpcallMethod = (J9Method *)vmFuncs->javaLookupMethodImpl(currentThread, jvmUpCallsClass, (J9ROMNameAndSignature *)&onRetransformNAS, jvmUpCallsClass, J9_LOOK_STATIC | J9_LOOK_DIRECT_NAS, NULL);
 		if (NULL == vm->jfrState.onRetransformUpcallMethod) {
 			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
 			goto popInputArrayAndDone;
@@ -2243,23 +2249,24 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 	args[0] = 0;
 	args[1] = (UDATA)traceID;
 	args[2] = (UDATA)FALSE;
-	args[3] = (UDATA)J9_JNI_UNWRAP_REFERENCE(classBeingRedefined)
+	args[3] = (UDATA)J9_JNI_UNWRAP_REFERENCE(classBeingRedefined);
 	args[4] = (UDATA)inputByteArray;
 
 	vmFuncs->internalRunStaticMethod(currentThread, vm->jfrState.bytesForEagerInstrumentation, TRUE, 5, args);
 	outputByteArray = (j9object_t)currentThread->returnValue;
 
-	*newClassDataLength = (jint)J9INDEXABLEOBJECT_SIZE(currentThread, outputByteArray);
-	*newClassData = (U_8 *)j9mem_allocate_memory(*newClassDataLength, OMRMEM_CATEGORY_VM);
+	newClassDataLength = (jint)J9INDEXABLEOBJECT_SIZE(currentThread, outputByteArray);
+	*newClassData = (U_8 *)j9mem_allocate_memory(newClassDataLength, OMRMEM_CATEGORY_VM);
 	if (NULL == *newClassData) {
 		vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
 		goto done;
 	}
+	*newClassDataLen = newClassDataLength;
 
-	VM_ArrayCopyHelpers::memcpyFromArray(currentThread, outputByteArray, (UDATA)0, (UDATA)0, *newClassDataLength, *newClassData);
+	VM_ArrayCopyHelpers::memcpyFromArray(currentThread, outputByteArray, (UDATA)0, (UDATA)0, newClassDataLength, *newClassData);
 
 done:
-	if (nameUTF8 != buf) {
+	if (nameUTF8 != (J9UTF8 *)buf) {
 		j9mem_free_memory(nameUTF8);
 	}
 
