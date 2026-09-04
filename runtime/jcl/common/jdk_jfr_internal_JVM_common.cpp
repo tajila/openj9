@@ -378,26 +378,26 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 	J9VMThread *currentThread = (J9VMThread *)env;
 	J9JavaVM *vm = currentThread->javaVM;
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
-	jvmtienv *jvmtiAgent = vm->jfrState.jvmtiAgent;
+	jvmtiEnv *jvmtiAgent = vm->jfrState.jvmtiAgent;
 	jclass buf[JFR_CLASS_BUFFER_SIZE];
-	jsize arrayLength = (*env)->GetArrayLength(env, classes);
-	jclass *classes = &buf;
+	jsize arrayLength = env->GetArrayLength(classes);
+	jclass *classesPtr = buf;
 
 	if (arrayLength > JFR_CLASS_BUFFER_SIZE) {
-		classes = (jclass *)j9mem_allocate_memory(arrayLength, J9MEM_CATEGORY_JFR);
-		if (NULL == classes) {
+		classesPtr = (jclass *)j9mem_allocate_memory(arrayLength, J9MEM_CATEGORY_JFR);
+		if (NULL == classesPtr) {
 			vmFuncs->internalEnterVMFromJNI(currentThread);
 			vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
 			vmFuncs->internalExitVMToJNI(currentThread);
 		}
 	}
 
-	for (jsize i; i < arrayLength; i++) {
-		classes[i] = (*env)->GetObjectArrayElement(env, classes, i);
+	for (jsize i = 0; i < arrayLength; i++) {
+		classesPtr[i] = (jclass)env->GetObjectArrayElement(classes, i);
 	}
 
-	if (JVMTI_ERROR_NONE != (*jvmtiAgent)->RetransformClasses(jvmtiAgent, arrayLength, &classes)) {
-		throwNewInternalError(env, "Unable to retransform JFR event classes.")
+	if (JVMTI_ERROR_NONE != (*jvmtiAgent)->RetransformClasses(jvmtiAgent, arrayLength, classesPtr)) {
+		throwNewInternalError(env, "Unable to retransform JFR event classes.");
 	}
 }
 
@@ -548,15 +548,17 @@ setupJFRAgent(JNIEnv *env)
 	J9JavaVM *vm = currentThread->javaVM;
 	jvmtiCapabilities capabilities;
 	jvmtiEventCallbacks callbacks;
-	JavaVM *jniVM = (*env)->GetJavaVM(env, &jniVM);
-	jvmtienv *jvmtiAgent = NULL;
+	JavaVM *jniVM = NULL;
+	jvmtiEnv *jvmtiAgent = NULL;
+
+	env->GetJavaVM(&jniVM);
 
 	if (NULL == jniVM) {
 		result = false;
 		goto done;
 	}
 
-	if (JNI_ERR == (*jniVM)->GetEnv((jniVM, (void **)jvmtiAgent, JVMTI_VERSION_1_2)) {
+	if (JNI_ERR == jniVM->GetEnv((void **)&jvmtiAgent, JVMTI_VERSION_1_2)) {
 		result = false;
 		goto done;
 	}
