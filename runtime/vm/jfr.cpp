@@ -63,7 +63,7 @@ J9_DECLARE_CONSTANT_UTF8(constructorEventWriterSigUTF8, "(JJJJZ)Ljava/lang/Objec
 J9_DECLARE_CONSTANT_NAS(constructorEventWriterNAS, constructorEventWriterUTF8, constructorEventWriterSigUTF8);
 J9_DECLARE_CONSTANT_UTF8(jvmUpcallClassUTF8, "jdk/jfr/internal/JVMUpcalls");
 J9_DECLARE_CONSTANT_UTF8(onRetransformUTF8, "onRetransform");
-J9_DECLARE_CONSTANT_UTF8(onRetransformSigUTF8, "(JZLjava/lang/Class;[B)[B]");
+J9_DECLARE_CONSTANT_UTF8(onRetransformSigUTF8, "(JZLjava/lang/Class;[B)[B");
 J9_DECLARE_CONSTANT_NAS(onRetransformNAS, onRetransformUTF8, onRetransformSigUTF8);
 
 
@@ -2200,9 +2200,13 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 	const char *className = name;
 	jint classDataLength = classDataLen;
 	jint newClassDataLength = 0;
-	J9ClassLoader *loader = J9VMJAVALANGCLASSLOADER_VMREF(currentThread, J9_JNI_UNWRAP_REFERENCE(classLoaderRef));
+	J9ClassLoader *loader = vm->systemClassLoader;
 	U_8 buf[J9JFR_CLASSNAME_BUFFER_SIZE + sizeof(U_16)];
 	J9UTF8 *nameUTF8 = (J9UTF8 *)buf;
+
+	if (NULL == classBeingRedefined) {
+		return;
+	}
 
 	if (classNameLength > J9JFR_CLASSNAME_BUFFER_SIZE) {
 		nameUTF8 = (J9UTF8 *)j9mem_allocate_memory(classNameLength + sizeof(U_16), OMRMEM_CATEGORY_VM);
@@ -2214,6 +2218,10 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 
 	J9UTF8_LENGTH(nameUTF8) = (U_16)classNameLength;
 	memcpy(J9UTF8_DATA(nameUTF8), className, classNameLength);
+
+	if (NULL != classLoaderRef) {
+		loader = J9VMJAVALANGCLASSLOADER_VMREF(currentThread, J9_JNI_UNWRAP_REFERENCE(classLoaderRef));
+	}
 
 	traceID = getTypeIdUTF8(currentThread, loader, nameUTF8, FALSE);
 
@@ -2250,7 +2258,7 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 	args[3] = (UDATA)J9_JNI_UNWRAP_REFERENCE(classBeingRedefined);
 	args[4] = (UDATA)inputByteArray;
 
-	vmFuncs->internalRunStaticMethod(currentThread, vm->jfrState.bytesForEagerInstrumentation, TRUE, 5, args);
+	vmFuncs->internalRunStaticMethod(currentThread, vm->jfrState.onRetransformUpcallMethod, TRUE, 5, args);
 	outputByteArray = (j9object_t)currentThread->returnValue;
 
 	newClassDataLength = (jint)J9INDEXABLEOBJECT_SIZE(currentThread, outputByteArray);

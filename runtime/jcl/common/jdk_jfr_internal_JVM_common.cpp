@@ -398,7 +398,7 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 	}
 
 	if (JVMTI_ERROR_NONE != jvmtiAgent->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) {
-		result = false;
+		throwNewInternalError(env, (char *)"Unable to retransform JFR event classes.");
 		goto done;
 	}
 
@@ -407,7 +407,7 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 	}
 
 	if (JVMTI_ERROR_NONE != jvmtiAgent->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) {
-		result = false;
+		throwNewInternalError(env, (char *)"Unable to retransform JFR event classes.");
 		goto done;
 	}
 
