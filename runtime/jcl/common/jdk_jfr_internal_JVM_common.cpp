@@ -378,6 +378,7 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 	J9VMThread *currentThread = (J9VMThread *)env;
 	J9JavaVM *vm = currentThread->javaVM;
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	PORT_ACCESS_FROM_JAVAVM(vm);
 	jvmtiEnv *jvmtiAgent = vm->jfrState.jvmtiAgent;
 	jclass buf[JFR_CLASS_BUFFER_SIZE];
 	jsize arrayLength = env->GetArrayLength(classes);
@@ -396,8 +397,23 @@ Java_jdk_jfr_internal_JVM_retransformClasses(JNIEnv *env, jobject obj, jobjectAr
 		classesPtr[i] = (jclass)env->GetObjectArrayElement(classes, i);
 	}
 
+	if (JVMTI_ERROR_NONE != jvmtiAgent->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) {
+		result = false;
+		goto done;
+	}
+
 	if (JVMTI_ERROR_NONE != jvmtiAgent->RetransformClasses(arrayLength, classesPtr)) {
 		throwNewInternalError(env, (char *)"Unable to retransform JFR event classes.");
+	}
+
+	if (JVMTI_ERROR_NONE != jvmtiAgent->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) {
+		result = false;
+		goto done;
+	}
+
+done:
+	if (classesPtr != buf) {
+		j9mem_free_memory(classesPtr);
 	}
 }
 
@@ -566,7 +582,6 @@ setupJFRAgent(JNIEnv *env)
 	vm->jfrState.jvmtiAgent = jvmtiAgent;
 
 	memset(&capabilities, 0, sizeof(jvmtiCapabilities));
-	capabilities.can_redefine_classes = 1;
 	capabilities.can_retransform_classes = 1;
 
 	if (JVMTI_ERROR_NONE != jvmtiAgent->AddCapabilities(&capabilities)) {

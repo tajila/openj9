@@ -2196,7 +2196,6 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 	j9object_t inputByteArray = NULL;
 	j9object_t outputByteArray = NULL;
 	UDATA args[5];
-	BOOLEAN freeName = FALSE;
 	jint classNameLength = (jint)strlen(name);
 	const char *className = name;
 	jint classDataLength = classDataLen;
@@ -2211,7 +2210,6 @@ jvmUpcallsOnRetransform(jvmtiEnv *jvmtiEnv,
 			vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
 			goto done;
 		}
-		freeName = TRUE;
 	}
 
 	J9UTF8_LENGTH(nameUTF8) = (U_16)classNameLength;
